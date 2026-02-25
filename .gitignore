@@ -1,0 +1,61 @@
+# ---- .NET (standard) ----
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Logs
+*.log
+
+# ---- local agentic artifacts (common) ----
+# Claude / Anthropic
+.claude/
+.claude-code/
+# Copilot / GitHub
+.github/copilot/
+.copilot/
+# Cursor
+.cursor/
+# Aider
+.aider*
+# Gemini
+.gemini/
+# GSD
+.gsd/
+get-shit-done/
+# MCP local configs
+.mcp/
+mcp.config.json
+# Local prompts / scratch
+.prompts/
+scratch/
+*.prompt.md
+*.prompt.txt
+# Secrets
+*.secrets.json
+.env
+.env.*
