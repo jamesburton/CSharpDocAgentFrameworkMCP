@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Domain | 3/3 | Complete   | 2026-02-26 |
-| 2. Ingestion Pipeline | 3/5 | In Progress|  |
+| 2. Ingestion Pipeline | 4/5 | In Progress|  |
 | 3. BM25 Search Index | 0/3 | Not started | - |
 | 4. Query Facade | 0/3 | Not started | - |
 | 5. MCP Server + Security | 0/5 | Not started | - |

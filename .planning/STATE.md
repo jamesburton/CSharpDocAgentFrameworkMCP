@@ -74,6 +74,9 @@ Recent decisions affecting current work:
 - [02-01]: NuGetAuditMode=direct on Ingestion and Tests projects to suppress transitive Microsoft.Build.Tasks.Core 17.7.2 vulnerability advisory (MSBuildWorkspace 4.12 transitive dep)
 - [Phase 02-ingestion-pipeline]: XmlDocParser uses per-symbol API (Parse(string?)) aligning with Roslyn ISymbol.GetDocumentationCommentXml() call pattern
 - [Phase 02-ingestion-pipeline]: Malformed XML recovery: wrap in <doc> first, then fall back to raw text with [Parse warning] prefix
+- [02-03]: CoreSymbolKind alias required — DocAgent.Core.SymbolKind conflicts with Microsoft.CodeAnalysis.SymbolKind in Ingestion namespace
+- [02-03]: MSBuildWorkspace created and disposed per project inside ProcessProjectAsync to bound Roslyn compilation memory
+- [02-03]: Accessibility.ProtectedOrInternal mapped to ProtectedInternal and included in accessibility filter
 - [02-04]: ContentHash computed over bytes with ContentHash=null to avoid circular dependency; final file stored with hash set
 - [02-04]: Atomic manifest update via temp file + File.Move(overwrite:true); duplicate hashes replace existing manifest entries
 
@@ -92,5 +95,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 02-04-PLAN.md — SnapshotStore with MessagePack serialization, XxHash128 hashing, manifest.json, 8 tests passing.
+Stopped at: Completed 02-03-PLAN.md — RoslynSymbolGraphBuilder, SymbolSorter, 8 integration tests passing (48 total).
 Resume file: None
