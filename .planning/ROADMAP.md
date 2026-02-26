@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Core Domain** - Lock SymbolId spec, snapshot schema, and all interface contracts (completed 2026-02-26)
 - [x] **Phase 2: Ingestion Pipeline** - Walk Roslyn symbols, parse XML docs, produce deterministic snapshots (completed 2026-02-26)
-- [ ] **Phase 3: BM25 Search Index** - Replace stub index with Lucene.Net BM25 and CamelCase tokenization
+- [x] **Phase 3: BM25 Search Index** - Replace stub index with Lucene.Net BM25 and CamelCase tokenization (completed 2026-02-26)
 - [ ] **Phase 4: Query Facade** - Wire IKnowledgeQueryService over index and snapshot store
 - [ ] **Phase 5: MCP Server + Security** - Expose all five MCP tools with path allowlist and audit logging
 - [ ] **Phase 6: Analysis + Hosting** - Roslyn analyzers, doc coverage policy, Aspire wiring, OpenTelemetry
@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Core Domain | 3/3 | Complete   | 2026-02-26 |
 | 2. Ingestion Pipeline | 5/5 | Complete   | 2026-02-26 |
-| 3. BM25 Search Index | 1/2 | In Progress|  |
+| 3. BM25 Search Index | 2/2 | Complete   | 2026-02-26 |
 | 4. Query Facade | 0/3 | Not started | - |
 | 5. MCP Server + Security | 0/5 | Not started | - |
 | 6. Analysis + Hosting | 0/5 | Not started | - |

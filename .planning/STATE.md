@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T14:42:33.953Z"
+last_updated: "2026-02-26T15:09:49.486Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 3 — BM25 Search Index
+**Current focus:** Phase 4 — Knowledge Query Service
 
 ## Current Position
 
-Phase: 3 of 6 (BM25 Search Index)
-Plan: 1 of 2 in current phase (03-01 complete)
-Status: Phase 3 in progress
-Last activity: 2026-02-26 — Completed 03-01 (BM25SearchIndex + CamelCaseAnalyzer, 7 new tests, 61 total passing)
+Phase: 3 of 6 (BM25 Search Index) — COMPLETE
+Plan: 2 of 2 in phase 3 (03-02 complete)
+Status: Phase 3 complete, Phase 4 ready
+Last activity: 2026-02-26 — Completed 03-02 (BM25 persistence + LoadIndexAsync, 6 new tests, 66 total passing)
 
-Progress: [████░░░░░░] 44% (8/18 plans complete across all phases)
+Progress: [████░░░░░░] 55% (10/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [████░░░░░░] 44% (8/18 plans complete across all p
 | Phase 01-core-domain P02 | 364 | 2 tasks | 7 files |
 | Phase 02-ingestion-pipeline P02 | 10 | 2 tasks | 5 files |
 | Phase 03-bm25-search-index P01 | 45 | 2 tasks | 5 files |
+| Phase 03-bm25-search-index P02 | 24 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [02-05]: Fix CreatedAt via with-expression after BuildAsync returns rather than modifying builder API — keeps ISymbolGraphBuilder interface minimal
 - [Phase 03-bm25-search-index]: Custom CamelCaseTokenizer (regex-based) instead of WordDelimiterFilter — beta00017 doesn't split XMLParser-style acronym boundaries
 - [Phase 03-bm25-search-index]: BM25 k1=2.0, b=0.5 for symbolName field for better symbol-name ranking
+- [Phase 03-02]: Two-commit protocol required for SetCommitData: first commit flushes documents, second commit stores snapshotHash in Lucene metadata
+- [Phase 03-02]: LoadIndexAsync throws DirectoryNotFoundException (missing) or InvalidOperationException (stale) for clear caller error handling
 
 ### Pending Todos
 
@@ -99,5 +102,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 03-01-PLAN.md — BM25SearchIndex + CamelCaseAnalyzer, 7 new tests, 61 total passing.
+Stopped at: Completed 03-02-PLAN.md — BM25 index persistence, LoadIndexAsync, 6 new tests, 66 total passing.
 Resume file: None
