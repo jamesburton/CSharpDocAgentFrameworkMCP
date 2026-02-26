@@ -54,4 +54,32 @@ public class InterfaceCompilationTests
         returnType.GetGenericTypeDefinition().Should().Be(typeof(IAsyncEnumerable<>));
         returnType.GetGenericArguments()[0].Should().Be(typeof(SymbolEdge));
     }
+
+    [Fact]
+    public void IKnowledgeQueryService_SearchAsync_has_richer_signature()
+    {
+        var method = typeof(IKnowledgeQueryService)
+            .GetMethod(nameof(IKnowledgeQueryService.SearchAsync));
+
+        method.Should().NotBeNull("IKnowledgeQueryService must have SearchAsync method");
+
+        // Verify return type is Task<QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>>
+        var returnType = method!.ReturnType;
+        returnType.IsGenericType.Should().BeTrue();
+        returnType.GetGenericTypeDefinition().Should().Be(typeof(Task<>));
+    }
+
+    [Fact]
+    public void QueryResult_Ok_and_Fail_factories_work()
+    {
+        var ok = QueryResult<string>.Ok("hello");
+        ok.Success.Should().BeTrue();
+        ok.Value.Should().Be("hello");
+        ok.Error.Should().BeNull();
+
+        var fail = QueryResult<string>.Fail(QueryErrorKind.NotFound, "missing");
+        fail.Success.Should().BeFalse();
+        fail.Error.Should().Be(QueryErrorKind.NotFound);
+        fail.ErrorMessage.Should().Be("missing");
+    }
 }

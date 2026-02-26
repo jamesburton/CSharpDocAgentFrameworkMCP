@@ -36,13 +36,24 @@ public interface ISearchIndex
 
 public sealed record SnapshotRef(string Id);
 
-public sealed record GraphDiff(IReadOnlyList<string> Findings);
-
 public interface IKnowledgeQueryService
 {
-    IAsyncEnumerable<SearchHit> SearchAsync(string query, CancellationToken ct = default);
-    Task<SymbolNode?> GetSymbolAsync(SymbolId id, CancellationToken ct);
-    Task<GraphDiff> DiffAsync(SnapshotRef a, SnapshotRef b, CancellationToken ct);
+    Task<QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>> SearchAsync(
+        string query,
+        SymbolKind? kindFilter = null,
+        int offset = 0,
+        int limit = 20,
+        string? snapshotVersion = null,
+        CancellationToken ct = default);
+
+    Task<QueryResult<ResponseEnvelope<SymbolDetail>>> GetSymbolAsync(
+        SymbolId id,
+        string? snapshotVersion = null,
+        CancellationToken ct = default);
+
+    Task<QueryResult<ResponseEnvelope<GraphDiff>>> DiffAsync(
+        SnapshotRef a, SnapshotRef b, CancellationToken ct = default);
+
     IAsyncEnumerable<SymbolEdge> GetReferencesAsync(SymbolId id, CancellationToken ct = default);
 }
 
