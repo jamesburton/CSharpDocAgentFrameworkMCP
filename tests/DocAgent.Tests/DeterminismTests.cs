@@ -12,6 +12,7 @@ namespace DocAgent.Tests;
 /// Determinism is a core project requirement: same input must always yield identical output.
 /// </summary>
 [Trait("Category", "Integration")]
+[Collection("Sequential")]
 public sealed class DeterminismTests
 {
     private static readonly string RepoRoot =
