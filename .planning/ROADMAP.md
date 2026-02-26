@@ -133,7 +133,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Domain | 0/3 | Not started | - |
+| 1. Core Domain | 1/3 | In Progress|  |
 | 2. Ingestion Pipeline | 0/5 | Not started | - |
 | 3. BM25 Search Index | 0/3 | Not started | - |
 | 4. Query Facade | 0/3 | Not started | - |
