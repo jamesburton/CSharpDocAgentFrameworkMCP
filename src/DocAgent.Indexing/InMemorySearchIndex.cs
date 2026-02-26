@@ -18,6 +18,7 @@ public sealed class InMemorySearchIndex : ISearchIndex
     public Task<SymbolNode?> GetAsync(SymbolId id, CancellationToken ct)
         => Task.FromResult(_nodes.TryGetValue(id, out var n) ? n : null);
 
+#pragma warning disable CS1998 // Async method lacks 'await' operators
     public async IAsyncEnumerable<SearchHit> SearchAsync(
         string query,
         [EnumeratorCancellation] CancellationToken ct = default)
@@ -31,6 +32,6 @@ public sealed class InMemorySearchIndex : ISearchIndex
                 yield return new SearchHit(n.Id, 1.0, n.DisplayName ?? string.Empty);
             }
         }
-        await Task.CompletedTask; // satisfy async requirement
     }
+#pragma warning restore CS1998
 }

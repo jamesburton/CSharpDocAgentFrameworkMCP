@@ -16,5 +16,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Verify.Xunit" />
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 </Project>
