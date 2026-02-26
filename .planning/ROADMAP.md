@@ -30,12 +30,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. `SymbolGraphSnapshot` roundtrips through deterministic serialization with a stable content hash
   3. All six domain interfaces (`IProjectSource`, `IDocSource`, `ISymbolGraphBuilder`, `ISearchIndex`, `IKnowledgeQueryService`, plus `IVectorIndex` stub) compile with zero warnings-as-errors
   4. `dotnet test` passes with no stub-only tests failing
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: SymbolId spec and rename tracking
-- [ ] 01-02: SymbolGraphSnapshot schema, schema version, content hash, deterministic serialization
-- [ ] 01-03: Domain interface contracts and IVectorIndex stub
+- [ ] 01-01-PLAN.md — Expand domain types (SymbolId, enums, records) + CORE-01 tests
+- [ ] 01-02-PLAN.md — MessagePack serialization, SerializationFormat enum, CORE-02 tests
+- [ ] 01-03-PLAN.md — Interface contracts (IAsyncEnumerable, IVectorIndex stub, extensions)
 
 ### Phase 2: Ingestion Pipeline
 **Goal**: A real .NET project can be ingested and produces a byte-identical SymbolGraphSnapshot across runs
