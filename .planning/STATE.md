@@ -8,7 +8,7 @@ progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 2 of 6 (Ingestion Pipeline)
-Plan: 4 of 5 in current phase (02-04 complete)
-Status: In progress
-Last activity: 2026-02-26 — Completed 02-04 (SnapshotStore, 8 tests passing)
+Plan: 5 of 5 in current phase (02-05 complete — Phase 2 DONE)
+Status: Phase 2 complete
+Last activity: 2026-02-26 — Completed 02-05 (DeterminismTests, 5 integration tests, 53 total passing)
 
-Progress: [████░░░░░░] 33% (6/18 plans complete across all phases)
+Progress: [████░░░░░░] 39% (7/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -79,6 +79,7 @@ Recent decisions affecting current work:
 - [02-03]: Accessibility.ProtectedOrInternal mapped to ProtectedInternal and included in accessibility filter
 - [02-04]: ContentHash computed over bytes with ContentHash=null to avoid circular dependency; final file stored with hash set
 - [02-04]: Atomic manifest update via temp file + File.Move(overwrite:true); duplicate hashes replace existing manifest entries
+- [02-05]: Fix CreatedAt via with-expression after BuildAsync returns rather than modifying builder API — keeps ISymbolGraphBuilder interface minimal
 
 ### Pending Todos
 
@@ -95,5 +96,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 02-03-PLAN.md — RoslynSymbolGraphBuilder, SymbolSorter, 8 integration tests passing (48 total).
+Stopped at: Completed 02-05-PLAN.md — DeterminismTests, 5 integration tests, all 53 tests green. Phase 2 complete.
 Resume file: None
