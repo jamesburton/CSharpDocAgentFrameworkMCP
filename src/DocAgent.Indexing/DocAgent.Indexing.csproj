@@ -2,7 +2,12 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+  <PropertyGroup>
+    <NoWarn>NU1701</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Lucene.Net" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" />
     <ProjectReference Include="..\DocAgent.Core\DocAgent.Core.csproj" />
   </ItemGroup>
 </Project>
