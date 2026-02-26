@@ -20,7 +20,7 @@ public class InMemorySearchIndexTests
             Edges: Array.Empty<SymbolEdge>());
 
         await idx.IndexAsync(snap, CancellationToken.None);
-        var hits = await idx.SearchAsync("Foo", CancellationToken.None);
+        var hits = await idx.SearchToListAsync("Foo", CancellationToken.None);
 
         hits.Should().HaveCount(1);
         hits[0].Id.Value.Should().Be("T:Foo");

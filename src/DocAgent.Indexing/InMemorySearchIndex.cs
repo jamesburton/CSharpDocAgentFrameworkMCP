@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using DocAgent.Core;
 
 namespace DocAgent.Indexing;
@@ -17,14 +18,19 @@ public sealed class InMemorySearchIndex : ISearchIndex
     public Task<SymbolNode?> GetAsync(SymbolId id, CancellationToken ct)
         => Task.FromResult(_nodes.TryGetValue(id, out var n) ? n : null);
 
-    public Task<IReadOnlyList<SearchHit>> SearchAsync(string query, CancellationToken ct)
+    public async IAsyncEnumerable<SearchHit> SearchAsync(
+        string query,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         // TODO: replace with BM25/inverted index
-        var hits = _nodes.Values
-            .Where(n => (n.DisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-                     || (n.Docs?.Summary?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
-            .Select(n => new SearchHit(n.Id, 1.0, n.DisplayName))
-            .ToList();
-        return Task.FromResult((IReadOnlyList<SearchHit>)hits);
+        foreach (var n in _nodes.Values)
+        {
+            if ((n.DisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (n.Docs?.Summary?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+            {
+                yield return new SearchHit(n.Id, 1.0, n.DisplayName ?? string.Empty);
+            }
+        }
+        await Task.CompletedTask; // satisfy async requirement
     }
 }
