@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T15:25:25.661Z"
+last_updated: "2026-02-26T19:24:53.662Z"
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 
 ## Current Position
 
-Phase: 3 of 6 (BM25 Search Index) — COMPLETE
-Plan: 2 of 2 in phase 3 (03-02 complete)
-Status: Phase 3 complete, Phase 4 ready
-Last activity: 2026-02-26 — Completed 03-02 (BM25 persistence + LoadIndexAsync, 6 new tests, 66 total passing)
+Phase: 4 of 6 (Query Facade) — IN PROGRESS
+Plan: 1 of 2 in phase 4 (04-01 complete)
+Status: 04-01 complete — QueryTypes, KnowledgeQueryService; 04-02 ready
+Last activity: 2026-02-26 — Completed 04-01 (QueryTypes, IKnowledgeQueryService update, KnowledgeQueryService, 8 new tests, 76 total passing)
 
-Progress: [████░░░░░░] 55% (10/18 plans complete across all phases)
+Progress: [████░░░░░░] 61% (11/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [████░░░░░░] 55% (10/18 plans complete across all 
 | Phase 02-ingestion-pipeline P02 | 10 | 2 tasks | 5 files |
 | Phase 03-bm25-search-index P01 | 45 | 2 tasks | 5 files |
 | Phase 03-bm25-search-index P02 | 24 | 2 tasks | 2 files |
+| Phase 04-query-facade P01 | 35 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,7 @@ Recent decisions affecting current work:
 - [Phase 03-bm25-search-index]: BM25 k1=2.0, b=0.5 for symbolName field for better symbol-name ranking
 - [Phase 03-02]: Two-commit protocol required for SetCommitData: first commit flushes documents, second commit stores snapshotHash in Lucene metadata
 - [Phase 03-02]: LoadIndexAsync throws DirectoryNotFoundException (missing) or InvalidOperationException (stale) for clear caller error handling
+- [Phase 04-query-facade]: KnowledgeQueryService resolves snapshots by IngestedAt sort; DiffAsync/GetReferencesAsync stubbed for Phase 5/6; NuGetAuditMode=direct added to DocAgent.Indexing for transitive advisory suppression
 
 ### Pending Todos
 
