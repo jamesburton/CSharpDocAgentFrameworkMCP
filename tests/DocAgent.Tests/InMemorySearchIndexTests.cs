@@ -12,9 +12,11 @@ public class InMemorySearchIndexTests
         var idx = new InMemorySearchIndex();
         var snap = new SymbolGraphSnapshot(
             SchemaVersion: "v1",
+            ProjectName: "test",
             SourceFingerprint: "fixture",
+            ContentHash: null,
             CreatedAt: DateTimeOffset.UtcNow,
-            Nodes: new[] { new SymbolNode(new SymbolId("T:Foo"), SymbolKind.Type, "Foo", "Foo", null, null) },
+            Nodes: new[] { new SymbolNode(new SymbolId("T:Foo"), SymbolKind.Type, "Foo", "Foo", [], Accessibility.Public, null, null) },
             Edges: Array.Empty<SymbolEdge>());
 
         await idx.IndexAsync(snap, CancellationToken.None);
