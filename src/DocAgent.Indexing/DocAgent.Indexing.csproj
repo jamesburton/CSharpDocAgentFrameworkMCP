@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <!-- DocAgent.Ingestion reference transitively brings Microsoft.Build.Tasks.Core 17.7.2
+         which has a known vulnerability advisory. Suppress as the advisory only applies
+         to the MSBuild host process, not library consumers. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
   <PropertyGroup>
     <NoWarn>NU1701</NoWarn>
@@ -9,5 +13,6 @@
     <PackageReference Include="Lucene.Net" />
     <PackageReference Include="Lucene.Net.Analysis.Common" />
     <ProjectReference Include="..\DocAgent.Core\DocAgent.Core.csproj" />
+    <ProjectReference Include="..\DocAgent.Ingestion\DocAgent.Ingestion.csproj" />
   </ItemGroup>
 </Project>
