@@ -1,0 +1,13 @@
+﻿{
+  Id: {
+    Value: T:MyNamespace.NewName
+  },
+  Kind: Type,
+  DisplayName: NewName,
+  FullyQualifiedName: MyNamespace.NewName,
+  PreviousIds: [
+    {
+      Value: T:MyNamespace.OldName
+    }
+  ]
+}
