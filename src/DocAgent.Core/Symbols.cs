@@ -73,3 +73,10 @@ public sealed record SymbolGraphSnapshot(
     DateTimeOffset CreatedAt,
     IReadOnlyList<SymbolNode> Nodes,
     IReadOnlyList<SymbolEdge> Edges);
+
+public enum SerializationFormat
+{
+    MessagePack,
+    Json,
+    Tron
+}
