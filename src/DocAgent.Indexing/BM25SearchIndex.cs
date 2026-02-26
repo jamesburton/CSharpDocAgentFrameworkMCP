@@ -149,6 +149,7 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
         while (stream.IncrementToken())
             tokens.Add(new string(attr.Buffer, 0, attr.Length));
         stream.End();
+        stream.Dispose();
         return tokens;
     }
 
