@@ -10,8 +10,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Core Domain
 
 - [x] **CORE-01**: Stable `SymbolId` spec with assembly-qualified identity and rename tracking (`PreviousIds`)
-- [ ] **CORE-02**: `SymbolGraphSnapshot` schema with version field, content hash, and deterministic serialization
-- [ ] **CORE-03**: Domain interfaces: `IProjectSource`, `IDocSource`, `ISymbolGraphBuilder`, `ISearchIndex`, `IKnowledgeQueryService`
+- [x] **CORE-02**: `SymbolGraphSnapshot` schema with version field, content hash, and deterministic serialization
+- [x] **CORE-03**: Domain interfaces: `IProjectSource`, `IDocSource`, `ISymbolGraphBuilder`, `ISearchIndex`, `IKnowledgeQueryService`
 
 ### Ingestion
 
@@ -102,8 +102,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CORE-01 | Phase 1 | Complete |
-| CORE-02 | Phase 1 | Pending |
-| CORE-03 | Phase 1 | Pending |
+| CORE-02 | Phase 1 | Complete |
+| CORE-03 | Phase 1 | Complete |
 | INGS-01 | Phase 2 | Pending |
 | INGS-02 | Phase 2 | Pending |
 | INGS-03 | Phase 2 | Pending |

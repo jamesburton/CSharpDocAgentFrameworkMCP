@@ -12,7 +12,7 @@ Six phases build the compiler-grade code documentation memory system from the gr
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Core Domain** - Lock SymbolId spec, snapshot schema, and all interface contracts
+- [x] **Phase 1: Core Domain** - Lock SymbolId spec, snapshot schema, and all interface contracts (completed 2026-02-26)
 - [ ] **Phase 2: Ingestion Pipeline** - Walk Roslyn symbols, parse XML docs, produce deterministic snapshots
 - [ ] **Phase 3: BM25 Search Index** - Replace stub index with Lucene.Net BM25 and CamelCase tokenization
 - [ ] **Phase 4: Query Facade** - Wire IKnowledgeQueryService over index and snapshot store
@@ -133,7 +133,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Domain | 1/3 | In Progress|  |
+| 1. Core Domain | 3/3 | Complete   | 2026-02-26 |
 | 2. Ingestion Pipeline | 0/5 | Not started | - |
 | 3. BM25 Search Index | 0/3 | Not started | - |
 | 4. Query Facade | 0/3 | Not started | - |
