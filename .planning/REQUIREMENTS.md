@@ -15,7 +15,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Ingestion
 
-- [ ] **INGS-01**: Roslyn symbol graph walker — namespaces, types, members with file spans and parent/child relationships
+- [x] **INGS-01**: Roslyn symbol graph walker — namespaces, types, members with file spans and parent/child relationships
 - [x] **INGS-02**: XML doc parser with proper symbol binding (summary, param, returns, remarks, exceptions)
 - [x] **INGS-03**: Handle XML doc edge cases: generics, partial types, overloads, operators, `inheritdoc` expansion
 - [ ] **INGS-04**: `SnapshotStore` — write/read versioned snapshots to `artifacts/snapshots/`
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-01 | Phase 1 | Complete |
 | CORE-02 | Phase 1 | Complete |
 | CORE-03 | Phase 1 | Complete |
-| INGS-01 | Phase 2 | Pending |
+| INGS-01 | Phase 2 | Complete |
 | INGS-02 | Phase 2 | Complete |
 | INGS-03 | Phase 2 | Complete |
 | INGS-04 | Phase 2 | Pending |

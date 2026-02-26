@@ -70,6 +70,8 @@ Recent decisions affecting current work:
 - [Phase 01-02]: System.IO.Hashing 9.0.0 required as explicit package (not auto-included in .NET 10)
 - [01-03]: [EnumeratorCancellation] attribute not valid on interface declarations — only on async-iterator method implementations
 - [01-03]: IVectorIndex left as empty stub (VCTR-01) — V2 concern, embeddings out of scope for V1
+- [02-01]: Action<string> logWarning used instead of ILogger to keep Ingestion free of Microsoft.Extensions.Logging dependency
+- [02-01]: NuGetAuditMode=direct on Ingestion and Tests projects to suppress transitive Microsoft.Build.Tasks.Core 17.7.2 vulnerability advisory (MSBuildWorkspace 4.12 transitive dep)
 - [Phase 02-ingestion-pipeline]: XmlDocParser uses per-symbol API (Parse(string?)) aligning with Roslyn ISymbol.GetDocumentationCommentXml() call pattern
 - [Phase 02-ingestion-pipeline]: Malformed XML recovery: wrap in <doc> first, then fall back to raw text with [Parse warning] prefix
 
@@ -88,5 +90,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 02-02-PLAN.md — XmlDocParser and InheritDocResolver with 13 passing tests.
+Stopped at: Completed 02-01-PLAN.md — LocalProjectSource with MSBuildWorkspace, 5 integration tests passing.
 Resume file: None
