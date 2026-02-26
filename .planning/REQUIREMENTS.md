@@ -32,7 +32,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **QURY-01**: `IKnowledgeQueryService` facade wired to `ISearchIndex` + `SnapshotStore`
 - [x] **QURY-02**: `SearchAsync` — ranked symbol search results
 - [x] **QURY-03**: `GetSymbolAsync` — full symbol detail by ID
-- [ ] **QURY-04**: `DiffAsync` — basic structural diff between snapshots
+- [x] **QURY-04**: `DiffAsync` — basic structural diff between snapshots
 
 ### MCP Serving
 
@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QURY-01 | Phase 4 | Complete |
 | QURY-02 | Phase 4 | Complete |
 | QURY-03 | Phase 4 | Complete |
-| QURY-04 | Phase 4 | Pending |
+| QURY-04 | Phase 4 | Complete |
 | MCPS-01 | Phase 5 | Pending |
 | MCPS-02 | Phase 5 | Pending |
 | MCPS-03 | Phase 5 | Pending |
