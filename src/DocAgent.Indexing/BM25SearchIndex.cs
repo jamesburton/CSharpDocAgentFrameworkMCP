@@ -15,60 +15,95 @@ namespace DocAgent.Indexing;
 
 /// <summary>
 /// ISearchIndex implementation backed by Lucene.Net with BM25 scoring and CamelCase-aware tokenization.
+/// Supports filesystem persistence: the Lucene index is stored at {artifactsDir}/{contentHash}.lucene/
+/// and reloaded without re-indexing when the snapshot hash matches the committed index.
 /// </summary>
 public sealed class BM25SearchIndex : ISearchIndex, IDisposable
 {
     private static readonly LuceneVersion LuceneVer = LuceneVersion.LUCENE_48;
 
-    private readonly LuceneDirectory _directory;
-    private readonly bool _ownsDirectory;
+    // Set when using an injected directory (test mode). Null when using FSDirectory.
+    private readonly LuceneDirectory? _injectedDirectory;
+
+    // Set when using filesystem mode (non-null artifactsDir constructor).
+    private readonly string? _artifactsDir;
+
     private readonly Dictionary<SymbolId, SymbolNode> _nodes = new();
+
+    // Tracks the active FSDirectory opened for searching (lifecycle managed by this class).
+    private FSDirectory? _activeFsDirectory;
     private bool _hasIndex;
 
-    /// <summary>Initialise with a filesystem-backed index at the given directory path.</summary>
+    /// <summary>Initialise with a filesystem-backed index. Each snapshot is stored at {artifactsDir}/{contentHash}.lucene/.</summary>
     public BM25SearchIndex(string artifactsDir)
     {
         System.IO.Directory.CreateDirectory(artifactsDir);
-        _directory = FSDirectory.Open(new System.IO.DirectoryInfo(artifactsDir));
-        _ownsDirectory = true;
+        _artifactsDir = artifactsDir;
     }
 
-    /// <summary>Initialise with an injected Lucene directory (e.g. RAMDirectory for tests).</summary>
+    /// <summary>Initialise with an injected Lucene directory (e.g. RAMDirectory for tests). Freshness check is skipped.</summary>
     public BM25SearchIndex(LuceneDirectory directory)
     {
-        _directory = directory;
-        _ownsDirectory = false;
+        _injectedDirectory = directory;
     }
 
     // --- ISearchIndex ---------------------------------------------------------
 
     public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct)
     {
-        _nodes.Clear();
-        foreach (var node in snapshot.Nodes)
-            _nodes[node.Id] = node;
-
-        var config = new IndexWriterConfig(LuceneVer, BuildAnalyzer())
+        if (_injectedDirectory is not null)
         {
-            OpenMode = OpenMode.CREATE,
-            Similarity = BuildSimilarity(),
-        };
-
-        using var writer = new IndexWriter(_directory, config);
-
-        foreach (var node in snapshot.Nodes)
-        {
-            var doc = new Document
-            {
-                new StringField("symbolId",           node.Id.Value,                              Field.Store.YES),
-                new TextField  ("symbolName",         node.DisplayName          ?? string.Empty,  Field.Store.YES),
-                new TextField  ("fullyQualifiedName", node.FullyQualifiedName   ?? string.Empty,  Field.Store.NO),
-                new TextField  ("docText",            node.Docs?.Summary        ?? string.Empty,  Field.Store.NO),
-            };
-            writer.AddDocument(doc);
+            // Test mode: always rebuild against injected directory.
+            return IndexIntoDirectoryAsync(_injectedDirectory, snapshot);
         }
 
-        writer.Commit();
+        // FSDirectory mode: require ContentHash for freshness tracking.
+        if (string.IsNullOrEmpty(snapshot.ContentHash))
+            throw new ArgumentException("Snapshot must have a ContentHash for persistent indexing.", nameof(snapshot));
+
+        var indexPath = GetIndexPath(snapshot.ContentHash!);
+        System.IO.Directory.CreateDirectory(indexPath);
+        var dir = FSDirectory.Open(new System.IO.DirectoryInfo(indexPath));
+
+        // Freshness check: skip rebuild if index already contains this hash.
+        if (IsIndexFresh(dir, snapshot.ContentHash!))
+        {
+            // Populate _nodes for GetAsync, reuse existing index directory.
+            PopulateNodes(snapshot);
+            SwapActiveFsDirectory(dir);
+            _hasIndex = true;
+            return Task.CompletedTask;
+        }
+
+        return IndexIntoFsDirectoryAsync(dir, snapshot);
+    }
+
+    /// <summary>
+    /// Loads a previously persisted index from {artifactsDir}/{contentHash}.lucene/ without re-indexing.
+    /// Populates _nodes from the snapshot for GetAsync. Throws if the persisted index is missing or stale.
+    /// </summary>
+    public Task LoadIndexAsync(string contentHash, SymbolGraphSnapshot snapshot, CancellationToken ct = default)
+    {
+        if (_artifactsDir is null)
+            throw new InvalidOperationException("LoadIndexAsync requires a filesystem-backed BM25SearchIndex (use the artifactsDir constructor).");
+
+        if (string.IsNullOrEmpty(contentHash))
+            throw new ArgumentException("contentHash must not be null or empty.", nameof(contentHash));
+
+        var indexPath = GetIndexPath(contentHash);
+        if (!System.IO.Directory.Exists(indexPath))
+            throw new DirectoryNotFoundException($"Persisted index directory not found: {indexPath}");
+
+        var dir = FSDirectory.Open(new System.IO.DirectoryInfo(indexPath));
+
+        if (!IsIndexFresh(dir, contentHash))
+        {
+            dir.Dispose();
+            throw new InvalidOperationException($"Persisted index at '{indexPath}' does not match content hash '{contentHash}'. Re-index required.");
+        }
+
+        PopulateNodes(snapshot);
+        SwapActiveFsDirectory(dir);
         _hasIndex = true;
         return Task.CompletedTask;
     }
@@ -80,11 +115,15 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
         if (!_hasIndex || string.IsNullOrWhiteSpace(query))
             yield break;
 
+        var directory = GetSearchDirectory();
+        if (directory is null)
+            yield break;
+
         var tokens = TokenizeQuery(query);
         if (tokens.Count == 0)
             yield break;
 
-        using var reader = DirectoryReader.Open(_directory);
+        using var reader = DirectoryReader.Open(directory);
         var searcher = new IndexSearcher(reader)
         {
             Similarity = BuildSimilarity(),
@@ -117,11 +156,116 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
 
     public void Dispose()
     {
-        if (_ownsDirectory)
-            _directory.Dispose();
+        _activeFsDirectory?.Dispose();
+        _activeFsDirectory = null;
     }
 
-    // --- Helpers --------------------------------------------------------------
+    // --- Private helpers ------------------------------------------------------
+
+    private string GetIndexPath(string contentHash)
+        => System.IO.Path.Combine(_artifactsDir!, $"{contentHash}.lucene");
+
+    /// <summary>Returns true if the Lucene directory exists and its committed snapshotHash matches contentHash.</summary>
+    private static bool IsIndexFresh(LuceneDirectory dir, string contentHash)
+    {
+        try
+        {
+            if (!DirectoryReader.IndexExists(dir))
+                return false;
+
+            using var reader = DirectoryReader.Open(dir);
+            var userData = reader.IndexCommit.UserData;
+            return userData.TryGetValue("snapshotHash", out var storedHash)
+                   && storedHash == contentHash;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private Task IndexIntoDirectoryAsync(LuceneDirectory dir, SymbolGraphSnapshot snapshot)
+    {
+        PopulateNodes(snapshot);
+
+        var config = new IndexWriterConfig(LuceneVer, BuildAnalyzer())
+        {
+            OpenMode = OpenMode.CREATE,
+            Similarity = BuildSimilarity(),
+        };
+
+        using var writer = new IndexWriter(dir, config);
+        WriteDocuments(writer, snapshot);
+        writer.Commit();
+
+        _hasIndex = true;
+        return Task.CompletedTask;
+    }
+
+    private Task IndexIntoFsDirectoryAsync(FSDirectory dir, SymbolGraphSnapshot snapshot)
+    {
+        PopulateNodes(snapshot);
+
+        var config = new IndexWriterConfig(LuceneVer, BuildAnalyzer())
+        {
+            OpenMode = OpenMode.CREATE,
+            Similarity = BuildSimilarity(),
+        };
+
+        using var writer = new IndexWriter(dir, config);
+        WriteDocuments(writer, snapshot);
+
+        // First commit to flush documents.
+        writer.Commit();
+
+        // Store snapshot hash in commit metadata, then commit again.
+        writer.SetCommitData(new Dictionary<string, string>
+        {
+            { "snapshotHash", snapshot.ContentHash! },
+        });
+        writer.Commit();
+
+        SwapActiveFsDirectory(dir);
+        _hasIndex = true;
+        return Task.CompletedTask;
+    }
+
+    private static void WriteDocuments(IndexWriter writer, SymbolGraphSnapshot snapshot)
+    {
+        foreach (var node in snapshot.Nodes)
+        {
+            var doc = new Document
+            {
+                new StringField("symbolId",           node.Id.Value,                              Field.Store.YES),
+                new TextField  ("symbolName",         node.DisplayName          ?? string.Empty,  Field.Store.YES),
+                new TextField  ("fullyQualifiedName", node.FullyQualifiedName   ?? string.Empty,  Field.Store.NO),
+                new TextField  ("docText",            node.Docs?.Summary        ?? string.Empty,  Field.Store.NO),
+            };
+            writer.AddDocument(doc);
+        }
+    }
+
+    private void PopulateNodes(SymbolGraphSnapshot snapshot)
+    {
+        _nodes.Clear();
+        foreach (var node in snapshot.Nodes)
+            _nodes[node.Id] = node;
+    }
+
+    private void SwapActiveFsDirectory(FSDirectory dir)
+    {
+        var old = _activeFsDirectory;
+        _activeFsDirectory = dir;
+        old?.Dispose();
+    }
+
+    private LuceneDirectory? GetSearchDirectory()
+    {
+        // Prefer injected directory (test mode), then active FSDirectory.
+        if (_injectedDirectory is not null)
+            return _injectedDirectory;
+        return _activeFsDirectory;
+    }
 
     private static Analyzer BuildAnalyzer()
     {
