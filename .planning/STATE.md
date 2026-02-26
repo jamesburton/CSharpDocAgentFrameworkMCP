@@ -8,7 +8,7 @@ progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 8
-  completed_plans: 4
+  completed_plans: 6
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 2 of 6 (Ingestion Pipeline)
-Plan: 2 of 5 in current phase (02-02 complete)
+Plan: 4 of 5 in current phase (02-04 complete)
 Status: In progress
-Last activity: 2026-02-26 — Completed 02-02 (XmlDocParser, InheritDocResolver, 13 tests)
+Last activity: 2026-02-26 — Completed 02-04 (SnapshotStore, 8 tests passing)
 
-Progress: [███░░░░░░░] 22% (4/18 plans complete across all phases)
+Progress: [████░░░░░░] 33% (6/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -74,6 +74,8 @@ Recent decisions affecting current work:
 - [02-01]: NuGetAuditMode=direct on Ingestion and Tests projects to suppress transitive Microsoft.Build.Tasks.Core 17.7.2 vulnerability advisory (MSBuildWorkspace 4.12 transitive dep)
 - [Phase 02-ingestion-pipeline]: XmlDocParser uses per-symbol API (Parse(string?)) aligning with Roslyn ISymbol.GetDocumentationCommentXml() call pattern
 - [Phase 02-ingestion-pipeline]: Malformed XML recovery: wrap in <doc> first, then fall back to raw text with [Parse warning] prefix
+- [02-04]: ContentHash computed over bytes with ContentHash=null to avoid circular dependency; final file stored with hash set
+- [02-04]: Atomic manifest update via temp file + File.Move(overwrite:true); duplicate hashes replace existing manifest entries
 
 ### Pending Todos
 
@@ -90,5 +92,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 02-01-PLAN.md — LocalProjectSource with MSBuildWorkspace, 5 integration tests passing.
+Stopped at: Completed 02-04-PLAN.md — SnapshotStore with MessagePack serialization, XxHash128 hashing, manifest.json, 8 tests passing.
 Resume file: None
