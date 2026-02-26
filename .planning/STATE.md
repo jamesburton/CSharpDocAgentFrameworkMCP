@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T19:24:53.662Z"
+last_updated: "2026-02-26T19:42:27.186Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 4 — Knowledge Query Service
+**Current focus:** Phase 5 — MCP Server Tools
 
 ## Current Position
 
-Phase: 4 of 6 (Query Facade) — IN PROGRESS
-Plan: 1 of 2 in phase 4 (04-01 complete)
-Status: 04-01 complete — QueryTypes, KnowledgeQueryService; 04-02 ready
-Last activity: 2026-02-26 — Completed 04-01 (QueryTypes, IKnowledgeQueryService update, KnowledgeQueryService, 8 new tests, 76 total passing)
+Phase: 4 of 6 (Query Facade) — COMPLETE
+Plan: 2 of 2 in phase 4 (both complete)
+Status: 04-02 complete — DiffAsync with rename detection, 8 new diff tests, 84 total passing
+Last activity: 2026-02-26 — Completed 04-02 (DiffAsync full implementation, 8 new tests, 84 total passing)
 
 Progress: [████░░░░░░] 61% (11/18 plans complete across all phases)
 
@@ -52,6 +52,7 @@ Progress: [████░░░░░░] 61% (11/18 plans complete across all 
 | Phase 03-bm25-search-index P01 | 45 | 2 tasks | 5 files |
 | Phase 03-bm25-search-index P02 | 24 | 2 tasks | 2 files |
 | Phase 04-query-facade P01 | 35 | 2 tasks | 6 files |
+| Phase 04-query-facade P02 | 15 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,7 @@ Recent decisions affecting current work:
 - [Phase 03-02]: Two-commit protocol required for SetCommitData: first commit flushes documents, second commit stores snapshotHash in Lucene metadata
 - [Phase 03-02]: LoadIndexAsync throws DirectoryNotFoundException (missing) or InvalidOperationException (stale) for clear caller error handling
 - [Phase 04-query-facade]: KnowledgeQueryService resolves snapshots by IngestedAt sort; DiffAsync/GetReferencesAsync stubbed for Phase 5/6; NuGetAuditMode=direct added to DocAgent.Indexing for transitive advisory suppression
+- [Phase 04-query-facade]: ResponseEnvelope SnapshotVersion uses snapshot B ContentHash on DiffAsync
 
 ### Pending Todos
 
@@ -104,5 +106,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 03-02-PLAN.md — BM25 index persistence, LoadIndexAsync, 6 new tests, 66 total passing.
+Stopped at: Completed 04-02-PLAN.md — DiffAsync with rename detection, 8 new diff tests, 84 total passing.
 Resume file: None
