@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T02:58:34.198Z"
+last_updated: "2026-02-26T10:49:56.407Z"
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 8
+  completed_plans: 4
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 1 — Core Domain
+**Current focus:** Phase 2 — Ingestion Pipeline
 
 ## Current Position
 
-Phase: 1 of 6 (Core Domain)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-26 — Completed 01-03 (interface contract finalization, IAsyncEnumerable, IVectorIndex, InterfaceCompilationTests)
+Phase: 2 of 6 (Ingestion Pipeline)
+Plan: 2 of 5 in current phase (02-02 complete)
+Status: In progress
+Last activity: 2026-02-26 — Completed 02-02 (XmlDocParser, InheritDocResolver, 13 tests)
 
-Progress: [██░░░░░░░░] 17% (3/18 plans complete across all phases)
+Progress: [███░░░░░░░] 22% (4/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [██░░░░░░░░] 17% (3/18 plans complete across all p
 
 *Updated after each plan completion*
 | Phase 01-core-domain P02 | 364 | 2 tasks | 7 files |
+| Phase 02-ingestion-pipeline P02 | 10 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Recent decisions affecting current work:
 - [Phase 01-02]: System.IO.Hashing 9.0.0 required as explicit package (not auto-included in .NET 10)
 - [01-03]: [EnumeratorCancellation] attribute not valid on interface declarations — only on async-iterator method implementations
 - [01-03]: IVectorIndex left as empty stub (VCTR-01) — V2 concern, embeddings out of scope for V1
+- [Phase 02-ingestion-pipeline]: XmlDocParser uses per-symbol API (Parse(string?)) aligning with Roslyn ISymbol.GetDocumentationCommentXml() call pattern
+- [Phase 02-ingestion-pipeline]: Malformed XML recovery: wrap in <doc> first, then fall back to raw text with [Parse warning] prefix
 
 ### Pending Todos
 
@@ -85,5 +88,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 01-03-PLAN.md — interface contract finalization. Phase 1 complete. Ready for Phase 2.
+Stopped at: Completed 02-02-PLAN.md — XmlDocParser and InheritDocResolver with 13 passing tests.
 Resume file: None
