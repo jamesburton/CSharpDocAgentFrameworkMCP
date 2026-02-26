@@ -65,12 +65,11 @@ Plans:
   2. CamelCase query `getRef` resolves to symbols containing `GetReferences` (case-insensitive token split)
   3. The index is persisted alongside its snapshot and reloaded without re-ingesting the source project
   4. `InMemorySearchIndex` is no longer used in any non-test code path
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Lucene.Net BM25 ISearchIndex implementation
-- [ ] 03-02: CamelCase-aware tokenizer and analyzer
-- [ ] 03-03: Index persistence alongside snapshot artifacts
+- [ ] 03-01-PLAN.md — BM25SearchIndex + CamelCaseAnalyzer implementation and unit tests (INDX-01, INDX-02)
+- [ ] 03-02-PLAN.md — Index persistence with FSDirectory and freshness check (INDX-03)
 
 ### Phase 4: Query Facade
 **Goal**: All query operations are testable through IKnowledgeQueryService without a running MCP server
