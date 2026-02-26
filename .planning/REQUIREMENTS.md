@@ -101,41 +101,41 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | — | Pending |
-| CORE-02 | — | Pending |
-| CORE-03 | — | Pending |
-| INGS-01 | — | Pending |
-| INGS-02 | — | Pending |
-| INGS-03 | — | Pending |
-| INGS-04 | — | Pending |
-| INGS-05 | — | Pending |
-| INDX-01 | — | Pending |
-| INDX-02 | — | Pending |
-| INDX-03 | — | Pending |
-| QURY-01 | — | Pending |
-| QURY-02 | — | Pending |
-| QURY-03 | — | Pending |
-| QURY-04 | — | Pending |
-| MCPS-01 | — | Pending |
-| MCPS-02 | — | Pending |
-| MCPS-03 | — | Pending |
-| MCPS-04 | — | Pending |
-| MCPS-05 | — | Pending |
-| MCPS-06 | — | Pending |
-| SECR-01 | — | Pending |
-| SECR-02 | — | Pending |
-| SECR-03 | — | Pending |
-| ANLY-01 | — | Pending |
-| ANLY-02 | — | Pending |
-| ANLY-03 | — | Pending |
-| HOST-01 | — | Pending |
-| HOST-02 | — | Pending |
+| CORE-01 | Phase 1 | Pending |
+| CORE-02 | Phase 1 | Pending |
+| CORE-03 | Phase 1 | Pending |
+| INGS-01 | Phase 2 | Pending |
+| INGS-02 | Phase 2 | Pending |
+| INGS-03 | Phase 2 | Pending |
+| INGS-04 | Phase 2 | Pending |
+| INGS-05 | Phase 2 | Pending |
+| INDX-01 | Phase 3 | Pending |
+| INDX-02 | Phase 3 | Pending |
+| INDX-03 | Phase 3 | Pending |
+| QURY-01 | Phase 4 | Pending |
+| QURY-02 | Phase 4 | Pending |
+| QURY-03 | Phase 4 | Pending |
+| QURY-04 | Phase 4 | Pending |
+| MCPS-01 | Phase 5 | Pending |
+| MCPS-02 | Phase 5 | Pending |
+| MCPS-03 | Phase 5 | Pending |
+| MCPS-04 | Phase 5 | Pending |
+| MCPS-05 | Phase 5 | Pending |
+| MCPS-06 | Phase 5 | Pending |
+| SECR-01 | Phase 5 | Pending |
+| SECR-02 | Phase 5 | Pending |
+| SECR-03 | Phase 5 | Pending |
+| ANLY-01 | Phase 6 | Pending |
+| ANLY-02 | Phase 6 | Pending |
+| ANLY-03 | Phase 6 | Pending |
+| HOST-01 | Phase 6 | Pending |
+| HOST-02 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 29 total
-- Mapped to phases: 0
-- Unmapped: 29 ⚠️
+- Mapped to phases: 29
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after initial definition*
+*Last updated: 2026-02-26 after roadmap creation — all 29 requirements mapped*
