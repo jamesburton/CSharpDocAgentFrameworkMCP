@@ -4,6 +4,9 @@
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Suppress transitive vulnerability from Microsoft.Build.Tasks.Core 17.7.2
+         brought in by Microsoft.CodeAnalysis.Workspaces.MSBuild via DocAgent.Ingestion -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DocAgent.Core\DocAgent.Core.csproj" />
