@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T13:13:14.210Z"
+last_updated: "2026-02-26T14:42:33.953Z"
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 2 — Ingestion Pipeline
+**Current focus:** Phase 3 — BM25 Search Index
 
 ## Current Position
 
-Phase: 2 of 6 (Ingestion Pipeline)
-Plan: 5 of 5 in current phase (02-05 complete — Phase 2 DONE)
-Status: Phase 2 complete
-Last activity: 2026-02-26 — Completed 02-05 (DeterminismTests, 5 integration tests, 53 total passing)
+Phase: 3 of 6 (BM25 Search Index)
+Plan: 1 of 2 in current phase (03-01 complete)
+Status: Phase 3 in progress
+Last activity: 2026-02-26 — Completed 03-01 (BM25SearchIndex + CamelCaseAnalyzer, 7 new tests, 61 total passing)
 
-Progress: [████░░░░░░] 39% (7/18 plans complete across all phases)
+Progress: [████░░░░░░] 44% (8/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [████░░░░░░] 39% (7/18 plans complete across all p
 *Updated after each plan completion*
 | Phase 01-core-domain P02 | 364 | 2 tasks | 7 files |
 | Phase 02-ingestion-pipeline P02 | 10 | 2 tasks | 5 files |
+| Phase 03-bm25-search-index P01 | 45 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Recent decisions affecting current work:
 - [02-04]: ContentHash computed over bytes with ContentHash=null to avoid circular dependency; final file stored with hash set
 - [02-04]: Atomic manifest update via temp file + File.Move(overwrite:true); duplicate hashes replace existing manifest entries
 - [02-05]: Fix CreatedAt via with-expression after BuildAsync returns rather than modifying builder API — keeps ISymbolGraphBuilder interface minimal
+- [Phase 03-bm25-search-index]: Custom CamelCaseTokenizer (regex-based) instead of WordDelimiterFilter — beta00017 doesn't split XMLParser-style acronym boundaries
+- [Phase 03-bm25-search-index]: BM25 k1=2.0, b=0.5 for symbolName field for better symbol-name ranking
 
 ### Pending Todos
 
@@ -96,5 +99,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 02-05-PLAN.md — DeterminismTests, 5 integration tests, all 53 tests green. Phase 2 complete.
+Stopped at: Completed 03-01-PLAN.md — BM25SearchIndex + CamelCaseAnalyzer, 7 new tests, 61 total passing.
 Resume file: None

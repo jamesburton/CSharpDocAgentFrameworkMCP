@@ -23,8 +23,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Indexing
 
-- [ ] **INDX-01**: BM25 search index over symbol names and doc text replacing `InMemorySearchIndex`
-- [ ] **INDX-02**: CamelCase-aware tokenization for symbol name search
+- [x] **INDX-01**: BM25 search index over symbol names and doc text replacing `InMemorySearchIndex`
+- [x] **INDX-02**: CamelCase-aware tokenization for symbol name search
 - [ ] **INDX-03**: Index persistence alongside snapshots
 
 ### Query
@@ -109,8 +109,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INGS-03 | Phase 2 | Complete |
 | INGS-04 | Phase 2 | Complete |
 | INGS-05 | Phase 2 | Complete |
-| INDX-01 | Phase 3 | Pending |
-| INDX-02 | Phase 3 | Pending |
+| INDX-01 | Phase 3 | Complete |
+| INDX-02 | Phase 3 | Complete |
 | INDX-03 | Phase 3 | Pending |
 | QURY-01 | Phase 4 | Pending |
 | QURY-02 | Phase 4 | Pending |
