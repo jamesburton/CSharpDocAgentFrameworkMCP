@@ -128,14 +128,85 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
     }
 
     // -------------------------------------------------------------------------
-    // DiffAsync (stub — Phase 5/6 concern)
+    // DiffAsync
     // -------------------------------------------------------------------------
 
-    public Task<QueryResult<ResponseEnvelope<GraphDiff>>> DiffAsync(
+    public async Task<QueryResult<ResponseEnvelope<GraphDiff>>> DiffAsync(
         SnapshotRef a, SnapshotRef b, CancellationToken ct = default)
-        => Task.FromResult(
-            QueryResult<ResponseEnvelope<GraphDiff>>.Fail(
-                QueryErrorKind.InvalidInput, "DiffAsync is not implemented in V1."));
+    {
+        var sw = Stopwatch.StartNew();
+
+        var snapshotA = await _snapshotStore.LoadAsync(a.Id, ct).ConfigureAwait(false);
+        if (snapshotA is null)
+            return QueryResult<ResponseEnvelope<GraphDiff>>.Fail(QueryErrorKind.SnapshotMissing, $"Snapshot '{a.Id}' not found.");
+
+        var snapshotB = await _snapshotStore.LoadAsync(b.Id, ct).ConfigureAwait(false);
+        if (snapshotB is null)
+            return QueryResult<ResponseEnvelope<GraphDiff>>.Fail(QueryErrorKind.SnapshotMissing, $"Snapshot '{b.Id}' not found.");
+
+        var nodesA = snapshotA.Nodes.ToDictionary(n => n.Id);
+        var nodesB = snapshotB.Nodes.ToDictionary(n => n.Id);
+
+        var removedIds = nodesA.Keys.Except(nodesB.Keys).ToHashSet();
+        var addedIds = nodesB.Keys.Except(nodesA.Keys).ToHashSet();
+        var commonIds = nodesA.Keys.Intersect(nodesB.Keys).ToList();
+
+        var entries = new List<DiffEntry>();
+
+        // Rename detection via PreviousIds
+        foreach (var id in addedIds.ToList())
+        {
+            var prevId = nodesB[id].PreviousIds.FirstOrDefault(p => removedIds.Contains(p));
+            if (prevId != default)
+            {
+                entries.Add(new DiffEntry(id, DiffChangeKind.Modified, $"renamed from {prevId.Value}"));
+                removedIds.Remove(prevId);
+                addedIds.Remove(id);
+            }
+        }
+
+        // Removed
+        foreach (var id in removedIds)
+            entries.Add(new DiffEntry(id, DiffChangeKind.Removed, "symbol removed"));
+
+        // Added
+        foreach (var id in addedIds)
+            entries.Add(new DiffEntry(id, DiffChangeKind.Added, "symbol added"));
+
+        // Modified (common symbols with changes)
+        foreach (var id in commonIds)
+        {
+            var na = nodesA[id];
+            var nb = nodesB[id];
+            var changes = new List<string>();
+
+            if (na.DisplayName != nb.DisplayName)
+                changes.Add($"name: {na.DisplayName} \u2192 {nb.DisplayName}");
+            if (na.FullyQualifiedName != nb.FullyQualifiedName)
+                changes.Add($"fqn: {na.FullyQualifiedName} \u2192 {nb.FullyQualifiedName}");
+            if (na.Accessibility != nb.Accessibility)
+                changes.Add($"accessibility: {na.Accessibility} \u2192 {nb.Accessibility}");
+            if (na.Kind != nb.Kind)
+                changes.Add($"kind: {na.Kind} \u2192 {nb.Kind}");
+            if (na.Docs?.Summary != nb.Docs?.Summary)
+                changes.Add("doc changed");
+
+            if (changes.Count > 0)
+                entries.Add(new DiffEntry(id, DiffChangeKind.Modified, string.Join("; ", changes)));
+        }
+
+        sw.Stop();
+
+        var diff = new GraphDiff(entries);
+        var envelope = new ResponseEnvelope<GraphDiff>(
+            Payload: diff,
+            SnapshotVersion: snapshotB.ContentHash ?? string.Empty,
+            Timestamp: DateTimeOffset.UtcNow,
+            IsStale: false,
+            QueryDuration: sw.Elapsed);
+
+        return QueryResult<ResponseEnvelope<GraphDiff>>.Ok(envelope);
+    }
 
     // -------------------------------------------------------------------------
     // GetReferencesAsync (stub — MCPS-03, Phase 5/6 concern)

@@ -256,4 +256,150 @@ public class KnowledgeQueryServiceTests : IDisposable
         result.Success.Should().BeFalse();
         result.Error.Should().Be(QueryErrorKind.NotFound);
     }
+
+    // ---------- DiffAsync tests -----------------------------------------------
+
+    /// <summary>
+    /// Creates a second SnapshotStore and service for diff tests that need two separate snapshots.
+    /// </summary>
+    private async Task<(KnowledgeQueryService service, SymbolGraphSnapshot savedA, SymbolGraphSnapshot savedB)>
+        CreateDiffServiceAsync(SymbolNode[] nodesA, SymbolNode[] nodesB)
+    {
+        var dir = CreateTempDir();
+        var store = new SnapshotStore(dir);
+
+        var savedA = await store.SaveAsync(MakeSnapshot(nodesA, createdAt: DateTimeOffset.UtcNow.AddMinutes(-5)));
+        var savedB = await store.SaveAsync(MakeSnapshot(nodesB, createdAt: DateTimeOffset.UtcNow));
+
+        var ramDir = new RAMDirectory();
+        var index = new BM25SearchIndex(ramDir);
+        await index.IndexAsync(savedB, CancellationToken.None);
+
+        var service = new KnowledgeQueryService(index, store);
+        return (service, savedA, savedB);
+    }
+
+    [Fact]
+    public async Task DiffAsync_DetectsAddedSymbols()
+    {
+        var nodeX = MakeNode("M:X", "X");
+        var nodeY = MakeNode("M:Y", "Y");
+        var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeX], [nodeX, nodeY]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedB.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        var entries = result.Value!.Payload.Entries;
+        entries.Should().Contain(e => e.Id == new SymbolId("M:Y") && e.ChangeKind == DiffChangeKind.Added);
+        entries.Should().NotContain(e => e.Id == new SymbolId("M:X"));
+    }
+
+    [Fact]
+    public async Task DiffAsync_DetectsRemovedSymbols()
+    {
+        var nodeX = MakeNode("M:X", "X");
+        var nodeY = MakeNode("M:Y", "Y");
+        var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeX, nodeY], [nodeX]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedB.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        var entries = result.Value!.Payload.Entries;
+        entries.Should().Contain(e => e.Id == new SymbolId("M:Y") && e.ChangeKind == DiffChangeKind.Removed);
+        entries.Should().NotContain(e => e.Id == new SymbolId("M:X"));
+    }
+
+    [Fact]
+    public async Task DiffAsync_DetectsModifiedSymbols()
+    {
+        var nodeA = MakeNode("M:X", "OldName");
+        var nodeB = MakeNode("M:X", "NewName");
+        var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeA], [nodeB]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedB.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        var entries = result.Value!.Payload.Entries;
+        var modified = entries.Should().ContainSingle(e => e.Id == new SymbolId("M:X") && e.ChangeKind == DiffChangeKind.Modified).Subject;
+        modified.Summary.Should().Contain("OldName").And.Contain("NewName");
+    }
+
+    [Fact]
+    public async Task DiffAsync_DetectsRenamesViaPreviousIds()
+    {
+        var nodeY = MakeNode("M:Y", "Y");
+
+        // Node Z in snapshot B claims M:Y as its previous identity
+        var nodeZ = new SymbolNode(
+            Id: new SymbolId("M:Z"),
+            Kind: SymbolKind.Method,
+            DisplayName: "Z",
+            FullyQualifiedName: "Z",
+            PreviousIds: [new SymbolId("M:Y")],
+            Accessibility: Accessibility.Public,
+            Docs: null,
+            Span: null);
+
+        var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeY], [nodeZ]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedB.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        var entries = result.Value!.Payload.Entries;
+        // Should see a Modified entry for M:Z (renamed from M:Y), not separate Remove+Add
+        entries.Should().Contain(e => e.Id == new SymbolId("M:Z") && e.ChangeKind == DiffChangeKind.Modified && e.Summary.Contains("M:Y"));
+        entries.Should().NotContain(e => e.ChangeKind == DiffChangeKind.Removed);
+        entries.Should().NotContain(e => e.Id == new SymbolId("M:Z") && e.ChangeKind == DiffChangeKind.Added);
+    }
+
+    [Fact]
+    public async Task DiffAsync_ReturnsErrorForMissingSnapshot()
+    {
+        var (svc, savedA, _) = await CreateDiffServiceAsync([MakeNode("M:X", "X")], [MakeNode("M:X", "X")]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef("nonexistent-hash"));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Be(QueryErrorKind.SnapshotMissing);
+    }
+
+    [Fact]
+    public async Task DiffAsync_ReturnsEmptyDiffForIdenticalSnapshots()
+    {
+        var (svc, savedA, _) = await CreateDiffServiceAsync([MakeNode("M:X", "X")], [MakeNode("M:X", "X")]);
+
+        // Compare A to itself
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedA.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        result.Value!.Payload.Entries.Should().BeEmpty("identical snapshots produce no diff entries");
+    }
+
+    [Fact]
+    public async Task DiffAsync_DetectsDocChanges()
+    {
+        var nodeA = MakeNode("M:X", "X", docSummary: "Original docs");
+        var nodeB = MakeNode("M:X", "X", docSummary: "Updated docs");
+        var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeA], [nodeB]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedB.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        var entries = result.Value!.Payload.Entries;
+        var modified = entries.Should().ContainSingle(e => e.Id == new SymbolId("M:X") && e.ChangeKind == DiffChangeKind.Modified).Subject;
+        modified.Summary.Should().Contain("doc changed");
+    }
+
+    [Fact]
+    public async Task DiffAsync_ResponseEnvelopeUsesSnapshotBVersion()
+    {
+        var nodeX = MakeNode("M:X", "X");
+        var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeX], [nodeX]);
+
+        var result = await svc.DiffAsync(new SnapshotRef(savedA.ContentHash!), new SnapshotRef(savedB.ContentHash!));
+
+        result.Success.Should().BeTrue();
+        result.Value!.SnapshotVersion.Should().Be(savedB.ContentHash, "envelope SnapshotVersion must be snapshot B's ContentHash");
+        result.Value!.QueryDuration.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
+    }
 }
