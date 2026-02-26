@@ -47,14 +47,14 @@ Plans:
   3. Edge cases produce tracked failures rather than silent drops: generics, partial types, overloads, operators, and `inheritdoc` expansion are each covered by a test
   4. Versioned snapshots are readable from and written to `artifacts/snapshots/` by `SnapshotStore`
   5. Roslyn `Compilation` objects are released after snapshot build (no unbounded memory retention)
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 02-01: LocalProjectSource, LocalDocSource, MSBuildWorkspace isolation (AssemblyLoadContext boundary)
-- [ ] 02-02: RoslynSymbolGraphBuilder — namespace/type/member walk with file spans
-- [ ] 02-03: XmlDocParser — symbol binding, generics/partial/overload edge cases, inheritdoc expansion
-- [ ] 02-04: SnapshotStore — artifacts/ read/write, versioning
-- [ ] 02-05: Determinism test suite
+- [ ] 02-01-PLAN.md — LocalProjectSource + MSBuildWorkspace package setup (Wave 1)
+- [ ] 02-02-PLAN.md — XmlDocParser + InheritDocResolver full implementation (Wave 1)
+- [ ] 02-03-PLAN.md — RoslynSymbolGraphBuilder + SymbolSorter (Wave 2)
+- [ ] 02-04-PLAN.md — SnapshotStore with manifest.json (Wave 2)
+- [ ] 02-05-PLAN.md — Determinism test suite + full regression (Wave 3)
 
 ### Phase 3: BM25 Search Index
 **Goal**: Symbol and documentation text is searchable with BM25 ranking and CamelCase-aware tokenization
