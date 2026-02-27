@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T19:50:33.912Z"
+last_updated: "2026-02-27T04:07:00Z"
 progress:
-  total_phases: 4
+  total_phases: 6
   completed_phases: 4
-  total_plans: 12
+  total_plans: 18
   completed_plans: 12
 ---
 
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 
 ## Current Position
 
-Phase: 4 of 6 (Query Facade) — COMPLETE
-Plan: 2 of 2 in phase 4 (both complete)
-Status: 04-02 complete — DiffAsync with rename detection, 8 new diff tests, 84 total passing
-Last activity: 2026-02-26 — Completed 04-02 (DiffAsync full implementation, 8 new tests, 84 total passing)
+Phase: 5 of 6 (MCP Server Security) — IN PROGRESS
+Plan: 1 of 3 in phase 5 (05-01 complete)
+Status: 05-01 complete — 5 MCP tools, PathAllowlist, AuditLogger, AuditFilter, TronSerializer; MCP 1.0.0 upgrade
+Last activity: 2026-02-27 — Completed 05-01 (MCP SDK upgrade, 5 tool handlers, security infrastructure)
 
-Progress: [████░░░░░░] 61% (11/18 plans complete across all phases)
+Progress: [███████░░░] 67% (12/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [████░░░░░░] 61% (11/18 plans complete across all 
 | Phase 03-bm25-search-index P02 | 24 | 2 tasks | 2 files |
 | Phase 04-query-facade P01 | 35 | 2 tasks | 6 files |
 | Phase 04-query-facade P02 | 15 | 1 tasks | 2 files |
+| Phase 05-mcp-server-security P01 | 52 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,11 @@ Recent decisions affecting current work:
 - [Phase 03-02]: LoadIndexAsync throws DirectoryNotFoundException (missing) or InvalidOperationException (stale) for clear caller error handling
 - [Phase 04-query-facade]: KnowledgeQueryService resolves snapshots by IngestedAt sort; DiffAsync/GetReferencesAsync stubbed for Phase 5/6; NuGetAuditMode=direct added to DocAgent.Indexing for transitive advisory suppression
 - [Phase 04-query-facade]: ResponseEnvelope SnapshotVersion uses snapshot B ContentHash on DiffAsync
+- [05-01]: MCP 1.0.0 breaking change — [McpTool]/[McpToolMethod] replaced by [McpServerToolType]/[McpServerTool]
+- [05-01]: AddCallToolFilter via WithRequestFilters on IMcpRequestFilterBuilder (not directly on IMcpServerBuilder)
+- [05-01]: CallToolResult + TextContentBlock in ModelContextProtocol.Protocol namespace; RequestContext<T>.Services via MessageContext inheritance
+- [05-01]: SymbolId has no Parse method — construct via new SymbolId(string); Arguments in CallToolRequestParams are IReadOnlyDictionary<string, JsonElement>
+- [05-01]: Research flag RESOLVED — MCP SDK 1.0.0 [McpServerTool] API verified and implemented
 
 ### Pending Todos
 
@@ -98,13 +104,13 @@ None.
 ### Blockers/Concerns
 
 - [Research flag] Phase 2: MSBuildLocator isolation and AssemblyLoadContext boundary strategy needs confirmation during planning
-- [Research flag] Phase 5: MCP SDK 1.0.0 released 2026-02-25 — verify exact `[McpServerTool]` attribute API and schema validation before plan-phase
+- [RESOLVED] Phase 5: MCP SDK 1.0.0 [McpServerTool] attribute API verified and implemented in 05-01
 - [Research flag] Phase 6: Semantic diff risk classification model for Analysis layer
 - [Dependency] Roslyn version: current pin is 4.12.0, research recommends upgrade to 5.0.0 for C# 14 semantic APIs — confirm in Phase 2 plan
 - [RESOLVED] FluentAssertions v7+ license change — kept at 6.12.1 (Apache 2.0) in Directory.Packages.props
 
 ## Session Continuity
 
-Last session: 2026-02-26
-Stopped at: Completed 04-02-PLAN.md — DiffAsync with rename detection, 8 new diff tests, 84 total passing.
+Last session: 2026-02-27
+Stopped at: Completed 05-01-PLAN.md — 5 MCP tools, security infrastructure, MCP 1.0.0 upgrade.
 Resume file: None

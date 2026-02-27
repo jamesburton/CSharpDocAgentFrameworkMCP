@@ -136,5 +136,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Ingestion Pipeline | 5/5 | Complete   | 2026-02-26 |
 | 3. BM25 Search Index | 2/2 | Complete   | 2026-02-26 |
 | 4. Query Facade | 2/2 | Complete   | 2026-02-26 |
-| 5. MCP Server + Security | 0/5 | Not started | - |
+| 5. MCP Server + Security | 1/3 | In Progress|  |
 | 6. Analysis + Hosting | 0/5 | Not started | - |
