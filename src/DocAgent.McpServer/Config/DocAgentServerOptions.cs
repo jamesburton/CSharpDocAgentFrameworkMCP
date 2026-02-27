@@ -4,30 +4,30 @@ namespace DocAgent.McpServer.Config;
 public sealed class DocAgentServerOptions
 {
     /// <summary>Glob patterns for allowed file paths. Empty means default to cwd.</summary>
-    public string[] AllowedPaths { get; init; } = [];
+    public string[] AllowedPaths { get; set; } = [];
 
     /// <summary>Glob patterns for denied file paths. Deny takes precedence over allow.</summary>
-    public string[] DeniedPaths { get; init; } = [];
+    public string[] DeniedPaths { get; set; } = [];
 
     /// <summary>When true, error responses include path and allowlist details instead of opaque messages.</summary>
-    public bool VerboseErrors { get; init; } = false;
+    public bool VerboseErrors { get; set; } = false;
 
     /// <summary>Root directory for snapshot and index artifacts. Default: ./artifacts</summary>
-    public string? ArtifactsDir { get; init; }
+    public string? ArtifactsDir { get; set; }
 
     /// <summary>Audit logging configuration.</summary>
-    public AuditOptions Audit { get; init; } = new();
+    public AuditOptions Audit { get; set; } = new();
 }
 
 /// <summary>Audit logging configuration options.</summary>
 public sealed class AuditOptions
 {
     /// <summary>When true, logs full request and response bodies in addition to metadata.</summary>
-    public bool Verbose { get; init; } = false;
+    public bool Verbose { get; set; } = false;
 
     /// <summary>Optional path to append JSONL audit entries. Null disables file output.</summary>
-    public string? FilePath { get; init; }
+    public string? FilePath { get; set; }
 
     /// <summary>Optional regex patterns to redact from audit log entries before writing.</summary>
-    public string[]? RedactionPatterns { get; init; }
+    public string[]? RedactionPatterns { get; set; }
 }
