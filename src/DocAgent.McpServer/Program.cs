@@ -5,9 +5,12 @@ using DocAgent.McpServer;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Filters;
 using DocAgent.McpServer.Security;
+using DocAgent.McpServer.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -29,6 +32,31 @@ builder.Services.Configure<DocAgentServerOptions>(
 // Security services
 builder.Services.AddSingleton<PathAllowlist>();
 builder.Services.AddSingleton<AuditLogger>();
+
+// OpenTelemetry tracing + metrics + logging
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing =>
+    {
+        tracing.AddSource(DocAgentTelemetry.SourceName);
+        tracing.AddOtlpExporter(); // reads OTEL_EXPORTER_OTLP_ENDPOINT env var
+    })
+    .WithMetrics(metrics =>
+    {
+        metrics.AddRuntimeInstrumentation();
+        metrics.AddOtlpExporter();
+    });
+
+// Wire logs through OTel for Aspire dashboard visibility
+builder.Logging.AddOpenTelemetry(logging =>
+{
+    logging.IncludeFormattedMessage = true;
+    logging.IncludeScopes = true;
+});
+
+// Set verbose mode from environment (default on in Development)
+DocAgentTelemetry.VerboseMode =
+    builder.Environment.IsDevelopment() ||
+    Environment.GetEnvironmentVariable("DOCAGENT_TELEMETRY_VERBOSE") == "true";
 
 // Core DI: SnapshotStore (singleton), BM25SearchIndex as ISearchIndex (singleton), KnowledgeQueryService (scoped)
 builder.Services.AddDocAgent();
