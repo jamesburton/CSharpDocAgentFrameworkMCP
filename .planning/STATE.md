@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-27T13:59:26.290Z"
+last_updated: "2026-02-27T19:32:09.338Z"
 progress:
-  total_phases: 6
+  total_phases: 8
   completed_phases: 6
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 21
+  completed_plans: 19
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 7 — Runtime Integration Wiring
+**Current focus:** Phase 6 — Analysis & Hosting (gap closure)
 
 ## Current Position
 
-Phase: 7 of 7 (Runtime Integration Wiring) — COMPLETE
-Plan: 3 of 3 in phase 7 (07-03 complete)
-Status: 07-03 complete — E2E integration tests proving full pipeline through real DI container; 6 integration tests pass; 123 total tests passing
-Last activity: 2026-02-27 — Completed 07-03 (2 files, 1 task, 123 tests passing)
+Phase: 6 of 8 (Analysis & Hosting)
+Plan: 2 of 3 in phase 6 (06-02 complete)
+Status: 06-02 complete — OpenTelemetry instrumentation with per-tool Activity spans, OTLP export, and verbose mode
+Last activity: 2026-02-27 — Completed 06-02 (5 files, 2 tasks, 148 tests passing)
 
-Progress: [██████████] 100% (18/18 plans complete across all phases)
+Progress: [█████████▒] 95% (20/21 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100% (18/18 plans complete across all
 | Phase 05-mcp-server-security P02 | 23 | 2 tasks | 6 files |
 | Phase 07-runtime-integration-wiring P02 | 7 | 2 tasks | 3 files |
 | Phase 07-runtime-integration-wiring P03 | 12 | 1 tasks | 2 files |
+| Phase 06-analysis-hosting P02 | 624 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,7 @@ Recent decisions affecting current work:
 - [07-01]: Startup uses IndexAsync (idempotent BM25 freshness check) rather than LoadIndexAsync for warm-up
 - [Phase 07-02]: GetReferencesAsync returns ALL edge types bidirectionally; SymbolNotFoundException thrown before first yield; DocTools maps to NotFound error response
 - [07-03]: DocAgentServerOptions init->set required — init accessors cannot be assigned in services.Configure<T>() lambdas (IOptions pattern)
+- [Phase 06-02]: Per-signal AddOtlpExporter() instead of UseOtlpExporter() for OTel 1.15.0 API compatibility
 
 ### Pending Todos
 
@@ -124,5 +126,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 07-03-PLAN.md — E2E integration tests proving full pipeline through real DI container; DocAgentServerOptions init->set fix; 6 E2E tests + 123 total tests passing. Phase 7 COMPLETE.
+Stopped at: Completed 06-02-PLAN.md — OpenTelemetry instrumentation with per-tool Activity spans, OTLP export, verbose mode for all 5 MCP tools
 Resume file: None
