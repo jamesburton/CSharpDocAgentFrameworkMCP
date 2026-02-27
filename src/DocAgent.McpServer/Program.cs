@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // ALL logs must go to stderr — never stdout (stdout is reserved for MCP JSON-RPC framing)
 builder.Logging.AddConsole(o =>
@@ -32,6 +32,9 @@ builder.Services.Configure<DocAgentServerOptions>(
 // Security services
 builder.Services.AddSingleton<PathAllowlist>();
 builder.Services.AddSingleton<AuditLogger>();
+
+// Health checks for Aspire probing
+builder.Services.AddHealthChecks();
 
 // OpenTelemetry tracing + metrics + logging
 builder.Services.AddOpenTelemetry()
@@ -68,6 +71,9 @@ builder.Services
     .AddAuditFilter();          // From Filters/AuditFilter.cs — wraps every tool call
 
 var app = builder.Build();
+
+// Map health endpoint for Aspire dashboard probing
+app.MapHealthChecks("/health");
 
 // Startup: load existing index if snapshot exists on disk
 var store = app.Services.GetRequiredService<SnapshotStore>();

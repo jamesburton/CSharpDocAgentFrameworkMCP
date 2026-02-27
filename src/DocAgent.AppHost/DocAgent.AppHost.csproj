@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <IsAspireHost>true</IsAspireHost>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Placeholder: in a real Aspire host you'd use Aspire.AppHost.Sdk -->
     <ProjectReference Include="..\DocAgent.McpServer\DocAgent.McpServer.csproj" />
   </ItemGroup>
 </Project>
