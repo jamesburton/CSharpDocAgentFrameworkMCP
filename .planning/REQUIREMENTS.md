@@ -58,7 +58,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Hosting
 
-- [ ] **HOST-01**: Aspire app host with DI extension methods (`AddDocAgentCore`, etc.)
+- [x] **HOST-01**: Aspire app host with DI extension methods (`AddDocAgentCore`, etc.)
 - [x] **HOST-02**: OpenTelemetry wiring for tool call observation
 
 ## v2 Requirements
@@ -129,7 +129,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANLY-01 | Phase 6 | Complete |
 | ANLY-02 | Phase 6 | Complete |
 | ANLY-03 | Phase 6 | Complete |
-| HOST-01 | Phase 6 | Pending |
+| HOST-01 | Phase 6 | Complete |
 | HOST-02 | Phase 6 | Complete |
 | INGS-06 | Phase 8 | Pending |
 
