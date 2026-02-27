@@ -135,14 +135,12 @@ Plans:
   3. Doc coverage drops below the configured threshold causes the policy build gate to fail
   4. `dotnet run --project src/DocAgent.AppHost` starts the MCP server and surfaces tool call spans in the Aspire dashboard
   5. OpenTelemetry traces show per-tool-call spans with input/output metadata
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: Roslyn DiagnosticAnalyzer — public API changes without doc updates (ANLY-01)
-- [ ] 06-02: Roslyn DiagnosticAnalyzer — suspicious edits without doc/test updates (ANLY-02)
-- [ ] 06-03: Doc coverage policy enforcement gate (ANLY-03)
-- [ ] 06-04: DocAgent.AppHost DI extension methods and Aspire wiring (HOST-01)
-- [ ] 06-05: OpenTelemetry tool call observation (HOST-02)
+- [ ] 06-01-PLAN.md — DocAgent.Analyzers project: DocParityAnalyzer, SuspiciousEditAnalyzer, DocCoverageAnalyzer + tests (ANLY-01, ANLY-02, ANLY-03)
+- [ ] 06-02-PLAN.md — OpenTelemetry instrumentation: ActivitySource, tool spans, OTLP exporter (HOST-02)
+- [ ] 06-03-PLAN.md — Aspire AppHost upgrade + health endpoint wiring (HOST-01)
 
 ### Phase 8: Ingestion Runtime Trigger
 **Goal**: The full pipeline (discover → parse → snapshot → index → query → response) can be invoked at runtime through an MCP tool, closing the integration and flow gaps
@@ -173,5 +171,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6 → 8
 | 4. Query Facade | 2/2 | Complete   | 2026-02-26 |
 | 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
 | 7. Runtime Integration Wiring | 3/3 | Complete   | 2026-02-27 |
-| 6. Analysis + Hosting | 0/5 | Not started | - |
+| 6. Analysis + Hosting | 0/3 | Not started | - |
 | 8. Ingestion Runtime Trigger | 0/2 | Not started | - |
