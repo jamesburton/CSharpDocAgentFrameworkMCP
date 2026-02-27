@@ -20,6 +20,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **INGS-03**: Handle XML doc edge cases: generics, partial types, overloads, operators, `inheritdoc` expansion
 - [x] **INGS-04**: `SnapshotStore` — write/read versioned snapshots to `artifacts/snapshots/`
 - [x] **INGS-05**: Determinism test: same input produces byte-identical `SymbolGraphSnapshot` across runs
+- [ ] **INGS-06**: Runtime ingestion trigger — MCP tool to invoke full pipeline (discover → parse → snapshot → index) at runtime
 
 ### Indexing
 
@@ -130,10 +131,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANLY-03 | Phase 6 | Pending |
 | HOST-01 | Phase 6 | Pending |
 | HOST-02 | Phase 6 | Pending |
+| INGS-06 | Phase 8 | Pending |
 
 **Coverage:**
-- v1 requirements: 29 total
-- Mapped to phases: 29
+- v1 requirements: 30 total
+- Mapped to phases: 30
 - Unmapped: 0 ✓
 
 ---

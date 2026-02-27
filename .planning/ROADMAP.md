@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: MCP Server + Security** - Expose all five MCP tools with path allowlist and audit logging (completed 2026-02-27)
 - [x] **Phase 7: Runtime Integration Wiring** - DI registration, ArtifactsDir config, GetReferencesAsync impl, E2E pipeline fix (completed 2026-02-27)
 - [ ] **Phase 6: Analysis + Hosting** - Roslyn analyzers, doc coverage policy, Aspire wiring, OpenTelemetry
+- [ ] **Phase 8: Ingestion Runtime Trigger** - MCP tool or CLI to invoke ingestion pipeline at runtime, closing integration/flow gaps
 
 ## Phase Details
 
@@ -143,10 +144,26 @@ Plans:
 - [ ] 06-04: DocAgent.AppHost DI extension methods and Aspire wiring (HOST-01)
 - [ ] 06-05: OpenTelemetry tool call observation (HOST-02)
 
+### Phase 8: Ingestion Runtime Trigger
+**Goal**: The full pipeline (discover → parse → snapshot → index → query → response) can be invoked at runtime through an MCP tool, closing the integration and flow gaps
+**Depends on**: Phase 6
+**Requirements**: INGS-06
+**Gap Closure:** Closes integration gap (ingestion → MCP server) and flow gap (full pipeline) from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. An `ingest_project` MCP tool accepts a solution/project path and triggers the full ingestion pipeline
+  2. After ingestion, the new snapshot is immediately queryable via existing MCP tools (search_symbols, get_symbol, etc.)
+  3. The ingestion trigger respects the PathAllowlist security boundary
+  4. E2E test: tool call → discover → parse → snapshot → index → query succeeds in a single session
+**Plans**: TBD
+
+Plans:
+- [ ] 08-01: ingest_project MCP tool wiring IProjectSource → ISymbolGraphBuilder → SnapshotStore → ISearchIndex
+- [ ] 08-02: Security integration (PathAllowlist check on project path) + E2E test
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -157,3 +174,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6
 | 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
 | 7. Runtime Integration Wiring | 3/3 | Complete   | 2026-02-27 |
 | 6. Analysis + Hosting | 0/5 | Not started | - |
+| 8. Ingestion Runtime Trigger | 0/2 | Not started | - |
