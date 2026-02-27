@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DocAgent.Analyzers/DocAgent.Analyzers.csproj" />
+    <Project Path="src/DocAgent.AppHost/DocAgent.AppHost.csproj" />
+    <Project Path="src/DocAgent.Core/DocAgent.Core.csproj" />
+    <Project Path="src/DocAgent.Indexing/DocAgent.Indexing.csproj" />
+    <Project Path="src/DocAgent.Ingestion/DocAgent.Ingestion.csproj" />
+    <Project Path="src/DocAgent.McpServer/DocAgent.McpServer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DocAgent.Tests/DocAgent.Tests.csproj" />
+  </Folder>
+</Solution>
