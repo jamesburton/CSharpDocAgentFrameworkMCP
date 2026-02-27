@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 
 ## Current Position
 
-Phase: 7 of 7 (Runtime Integration Wiring) — IN PROGRESS
-Plan: 2 of 3 in phase 7 (07-02 complete)
-Status: 07-02 complete — GetReferencesAsync bidirectional edge traversal, SymbolNotFoundException, DocTools error handling
-Last activity: 2026-02-27 — Completed 07-02 (3 files, 2 tasks, 117 tests passing)
+Phase: 7 of 7 (Runtime Integration Wiring) — COMPLETE
+Plan: 3 of 3 in phase 7 (07-03 complete)
+Status: 07-03 complete — E2E integration tests proving full pipeline through real DI container; 6 integration tests pass; 123 total tests passing
+Last activity: 2026-02-27 — Completed 07-03 (2 files, 1 task, 123 tests passing)
 
-Progress: [████████░░] 78% (14/18 plans complete across all phases)
+Progress: [██████████] 100% (18/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 78% (14/18 plans complete across all 
 | Phase 05-mcp-server-security P03 | 32 | 2 tasks | 3 files |
 | Phase 05-mcp-server-security P02 | 23 | 2 tasks | 6 files |
 | Phase 07-runtime-integration-wiring P02 | 7 | 2 tasks | 3 files |
+| Phase 07-runtime-integration-wiring P03 | 12 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,7 @@ Recent decisions affecting current work:
 - [07-01]: DOCAGENT_ARTIFACTS_DIR env var injected into IConfiguration before Configure<DocAgentServerOptions>() to ensure env var precedence
 - [07-01]: Startup uses IndexAsync (idempotent BM25 freshness check) rather than LoadIndexAsync for warm-up
 - [Phase 07-02]: GetReferencesAsync returns ALL edge types bidirectionally; SymbolNotFoundException thrown before first yield; DocTools maps to NotFound error response
+- [07-03]: DocAgentServerOptions init->set required — init accessors cannot be assigned in services.Configure<T>() lambdas (IOptions pattern)
 
 ### Pending Todos
 
@@ -122,5 +124,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 07-02-PLAN.md — GetReferencesAsync bidirectional edge traversal; SymbolNotFoundException thrown for unknown IDs; DocTools error handling; 117 tests passing.
+Stopped at: Completed 07-03-PLAN.md — E2E integration tests proving full pipeline through real DI container; DocAgentServerOptions init->set fix; 6 E2E tests + 123 total tests passing. Phase 7 COMPLETE.
 Resume file: None
