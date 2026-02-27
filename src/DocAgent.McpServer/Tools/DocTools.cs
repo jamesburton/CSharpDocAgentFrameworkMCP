@@ -193,8 +193,15 @@ public sealed class DocTools
 
         // Buffer the async enumerable into a list
         var edges = new List<SymbolEdge>();
-        await foreach (var edge in _query.GetReferencesAsync(id, cancellationToken))
-            edges.Add(edge);
+        try
+        {
+            await foreach (var edge in _query.GetReferencesAsync(id, cancellationToken))
+                edges.Add(edge);
+        }
+        catch (SymbolNotFoundException)
+        {
+            return ErrorResponse(QueryErrorKind.NotFound, $"Symbol '{symbolId}' not found.");
+        }
 
         bool hasInjectionWarning = false; // edges have no doc content
 

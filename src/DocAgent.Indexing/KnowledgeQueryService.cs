@@ -216,8 +216,22 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
         SymbolId id,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        await Task.CompletedTask.ConfigureAwait(false);
-        yield break;
+        var (snapshot, _, error) = await ResolveSnapshotAsync(null, ct).ConfigureAwait(false);
+        if (error is not null || snapshot is null)
+            yield break;
+
+        // Verify symbol exists in the graph — throw if not found
+        bool symbolExists = snapshot.Nodes.Any(n => n.Id == id);
+        if (!symbolExists)
+            throw new SymbolNotFoundException(id);
+
+        // Bidirectional: return edges where symbol appears at either end
+        foreach (var edge in snapshot.Edges)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (edge.From == id || edge.To == id)
+                yield return edge;
+        }
     }
 
     // -------------------------------------------------------------------------
