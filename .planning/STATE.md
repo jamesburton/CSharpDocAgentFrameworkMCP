@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-27T03:59:47.749Z"
+last_updated: "2026-02-27T04:02:50.648Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -55,6 +55,7 @@ Progress: [███████░░░] 67% (12/18 plans complete across all 
 | Phase 04-query-facade P02 | 15 | 1 tasks | 2 files |
 | Phase 05-mcp-server-security P01 | 52 | 2 tasks | 10 files |
 | Phase 05-mcp-server-security P03 | 32 | 2 tasks | 3 files |
+| Phase 05-mcp-server-security P02 | 23 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,7 @@ Recent decisions affecting current work:
 - [05-01]: Research flag RESOLVED — MCP SDK 1.0.0 [McpServerTool] API verified and implemented
 - [Phase 05-03]: Integration tests marked [Trait Category Integration] for CI filter separation — subprocess-spawning tests must run separately from unit tests
 - [Phase 05-03]: Path denial behaviour is spansRedacted=true with span=null (not error response) — tests match actual DocTools implementation from 05-01
+- [Phase 05-02]: PathAllowlist.MatchesAny fixed: FileSystemGlobbing Matcher.Match(string) returns false for absolute paths — must strip path root and use Match(root, relativePath)
 
 ### Pending Todos
 
@@ -115,5 +117,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 05-01-PLAN.md — 5 MCP tools, security infrastructure, MCP 1.0.0 upgrade.
+Stopped at: Completed 05-02-PLAN.md — 45 new unit tests (PathAllowlist, AuditLogger, PromptInjectionScanner, McpTools); PathAllowlist glob-match bug fixed; 131 total tests passing.
 Resume file: None

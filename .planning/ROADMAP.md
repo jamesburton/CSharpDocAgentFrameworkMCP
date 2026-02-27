@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Ingestion Pipeline** - Walk Roslyn symbols, parse XML docs, produce deterministic snapshots (completed 2026-02-26)
 - [x] **Phase 3: BM25 Search Index** - Replace stub index with Lucene.Net BM25 and CamelCase tokenization (completed 2026-02-26)
 - [x] **Phase 4: Query Facade** - Wire IKnowledgeQueryService over index and snapshot store (completed 2026-02-26)
-- [ ] **Phase 5: MCP Server + Security** - Expose all five MCP tools with path allowlist and audit logging
+- [x] **Phase 5: MCP Server + Security** - Expose all five MCP tools with path allowlist and audit logging (completed 2026-02-27)
 - [ ] **Phase 6: Analysis + Hosting** - Roslyn analyzers, doc coverage policy, Aspire wiring, OpenTelemetry
 
 ## Phase Details
@@ -136,5 +136,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Ingestion Pipeline | 5/5 | Complete   | 2026-02-26 |
 | 3. BM25 Search Index | 2/2 | Complete   | 2026-02-26 |
 | 4. Query Facade | 2/2 | Complete   | 2026-02-26 |
-| 5. MCP Server + Security | 2/3 | In Progress|  |
+| 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
 | 6. Analysis + Hosting | 0/5 | Not started | - |
