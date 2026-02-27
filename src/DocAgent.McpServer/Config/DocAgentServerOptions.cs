@@ -12,6 +12,9 @@ public sealed class DocAgentServerOptions
     /// <summary>When true, error responses include path and allowlist details instead of opaque messages.</summary>
     public bool VerboseErrors { get; init; } = false;
 
+    /// <summary>Root directory for snapshot and index artifacts. Default: ./artifacts</summary>
+    public string? ArtifactsDir { get; init; }
+
     /// <summary>Audit logging configuration.</summary>
     public AuditOptions Audit { get; init; } = new();
 }
