@@ -3,20 +3,14 @@ using ModelContextProtocol.Server;
 
 namespace DocAgent.McpServer.Tools;
 
-[McpTool]
-public static class DocTools
+// Placeholder stub using 1.0.0 API — full implementation in Task 2
+[McpServerToolType]
+public sealed class DocTools
 {
-    [McpToolMethod, Description("Search symbols and documentation by keyword.")]
-    public static Task<string> SearchSymbols(string query)
+    [McpServerTool(Name = "search_symbols"), Description("Search symbols and documentation by keyword.")]
+    public Task<string> SearchSymbols([Description("Search query")] string query)
     {
-        // TODO: wire to IKnowledgeQueryService
+        // TODO: wire to IKnowledgeQueryService (Task 2)
         return Task.FromResult($"stub: search '{query}'");
-    }
-
-    [McpToolMethod, Description("Get a symbol by its stable SymbolId.")]
-    public static Task<string> GetSymbol(string symbolId)
-    {
-        // TODO: wire to IKnowledgeQueryService
-        return Task.FromResult($"stub: get '{symbolId}'");
     }
 }

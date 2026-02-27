@@ -3,8 +3,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <!-- MCP server SDK (preview as of Apr 2025) -->
-    <PackageVersion Include="ModelContextProtocol" Version="0.0.0-preview.2" />
+    <!-- MCP server SDK (1.0.0 stable as of 2026-02-25) -->
+    <PackageVersion Include="ModelContextProtocol" Version="1.0.0" />
+    <!-- Path glob matching for security allowlist -->
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.2.25163.2" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.0-preview.2.25163.2" />
     <!-- Roslyn -->

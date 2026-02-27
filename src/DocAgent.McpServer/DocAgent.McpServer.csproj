@@ -2,6 +2,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <!-- Suppress transitive vulnerability advisories from Roslyn/MSBuild deps -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DocAgent.Core\DocAgent.Core.csproj" />
@@ -12,5 +14,6 @@
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
   </ItemGroup>
 </Project>
