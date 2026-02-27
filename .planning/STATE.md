@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-27T04:07:00Z"
+last_updated: "2026-02-27T03:59:47.749Z"
 progress:
-  total_phases: 6
+  total_phases: 5
   completed_phases: 4
-  total_plans: 18
-  completed_plans: 12
+  total_plans: 15
+  completed_plans: 14
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 5 of 6 (MCP Server Security) — IN PROGRESS
-Plan: 1 of 3 in phase 5 (05-01 complete)
-Status: 05-01 complete — 5 MCP tools, PathAllowlist, AuditLogger, AuditFilter, TronSerializer; MCP 1.0.0 upgrade
-Last activity: 2026-02-27 — Completed 05-01 (MCP SDK upgrade, 5 tool handlers, security infrastructure)
+Plan: 3 of 3 in phase 5 (05-01, 05-02, 05-03 complete)
+Status: 05-03 complete — StdoutContaminationTests + McpIntegrationTests; all 3 phase success criteria verified
+Last activity: 2026-02-27 — Completed 05-03 (6 integration tests, stdout purity + path denial + injection defence)
 
 Progress: [███████░░░] 67% (12/18 plans complete across all phases)
 
@@ -54,6 +54,7 @@ Progress: [███████░░░] 67% (12/18 plans complete across all 
 | Phase 04-query-facade P01 | 35 | 2 tasks | 6 files |
 | Phase 04-query-facade P02 | 15 | 1 tasks | 2 files |
 | Phase 05-mcp-server-security P01 | 52 | 2 tasks | 10 files |
+| Phase 05-mcp-server-security P03 | 32 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Recent decisions affecting current work:
 - [05-01]: CallToolResult + TextContentBlock in ModelContextProtocol.Protocol namespace; RequestContext<T>.Services via MessageContext inheritance
 - [05-01]: SymbolId has no Parse method — construct via new SymbolId(string); Arguments in CallToolRequestParams are IReadOnlyDictionary<string, JsonElement>
 - [05-01]: Research flag RESOLVED — MCP SDK 1.0.0 [McpServerTool] API verified and implemented
+- [Phase 05-03]: Integration tests marked [Trait Category Integration] for CI filter separation — subprocess-spawning tests must run separately from unit tests
+- [Phase 05-03]: Path denial behaviour is spansRedacted=true with span=null (not error response) — tests match actual DocTools implementation from 05-01
 
 ### Pending Todos
 

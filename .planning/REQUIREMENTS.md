@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **SECR-01**: Path allowlist — default-deny, only allowed directories accessible
 - [x] **SECR-02**: Audit logging — log every tool call with input/output
-- [ ] **SECR-03**: Input validation — defense against prompt injection via structured DTOs
+- [x] **SECR-03**: Input validation — defense against prompt injection via structured DTOs
 
 ### Analysis
 
@@ -124,7 +124,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPS-06 | Phase 5 | Complete |
 | SECR-01 | Phase 5 | Complete |
 | SECR-02 | Phase 5 | Complete |
-| SECR-03 | Phase 5 | Pending |
+| SECR-03 | Phase 5 | Complete |
 | ANLY-01 | Phase 6 | Pending |
 | ANLY-02 | Phase 6 | Pending |
 | ANLY-03 | Phase 6 | Pending |
