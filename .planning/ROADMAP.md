@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: BM25 Search Index** - Replace stub index with Lucene.Net BM25 and CamelCase tokenization (completed 2026-02-26)
 - [x] **Phase 4: Query Facade** - Wire IKnowledgeQueryService over index and snapshot store (completed 2026-02-26)
 - [x] **Phase 5: MCP Server + Security** - Expose all five MCP tools with path allowlist and audit logging (completed 2026-02-27)
+- [ ] **Phase 7: Runtime Integration Wiring** - DI registration, ArtifactsDir config, GetReferencesAsync impl, E2E pipeline fix
 - [ ] **Phase 6: Analysis + Hosting** - Roslyn analyzers, doc coverage policy, Aspire wiring, OpenTelemetry
 
 ## Phase Details
@@ -106,9 +107,26 @@ Plans:
 - [ ] 05-04: Stderr-only logging configuration and stdout contamination integration test
 - [ ] 05-05: Input validation DTOs and prompt injection defense
 
+### Phase 7: Runtime Integration Wiring
+**Goal**: The MCP server runs end-to-end at runtime — DI container resolves all services, artifact paths are configurable, and all five tools return real results
+**Depends on**: Phase 5
+**Requirements**: MCPS-03 (GetReferencesAsync), plus integration fixes for QURY-01, INDX-01, INDX-03, INGS-04, MCPS-01–05
+**Gap Closure:** Closes integration and flow gaps from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. `IKnowledgeQueryService`, `ISearchIndex` (BM25SearchIndex), and `SnapshotStore` are registered in Program.cs DI container
+  2. `DocAgentServerOptions.ArtifactsDir` is configurable and flows to SnapshotStore and BM25SearchIndex
+  3. `GetReferencesAsync` returns real edges from the snapshot graph (not empty)
+  4. E2E integration test: .sln → discover → parse → snapshot → index → search → MCP response succeeds
+**Plans**: TBD
+
+Plans:
+- [ ] 07-01: DI registrations + ArtifactsDir config property
+- [ ] 07-02: GetReferencesAsync real implementation
+- [ ] 07-03: E2E integration test + tech debt cleanup (InMemorySearchIndex removal)
+
 ### Phase 6: Analysis + Hosting
 **Goal**: Roslyn analyzers enforce doc parity in CI and the server runs under Aspire with observable telemetry
-**Depends on**: Phase 5
+**Depends on**: Phase 7
 **Requirements**: ANLY-01, ANLY-02, ANLY-03, HOST-01, HOST-02
 **Success Criteria** (what must be TRUE):
   1. Adding a public method without a `<summary>` doc comment triggers the doc parity analyzer as a build warning/error
@@ -128,7 +146,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -137,4 +155,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. BM25 Search Index | 2/2 | Complete   | 2026-02-26 |
 | 4. Query Facade | 2/2 | Complete   | 2026-02-26 |
 | 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
+| 7. Runtime Integration Wiring | 0/3 | Not started | - |
 | 6. Analysis + Hosting | 0/5 | Not started | - |
