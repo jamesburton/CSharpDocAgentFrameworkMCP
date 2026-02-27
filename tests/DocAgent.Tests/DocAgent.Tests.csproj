@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\src\DocAgent.Core\DocAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\DocAgent.Ingestion\DocAgent.Ingestion.csproj" />
     <ProjectReference Include="..\..\src\DocAgent.Indexing\DocAgent.Indexing.csproj" />
+    <ProjectReference Include="..\..\src\DocAgent.McpServer\DocAgent.McpServer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

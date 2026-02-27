@@ -59,11 +59,24 @@ public sealed class PathAllowlist
         if (patterns.Count == 0)
             return false;
 
+        // FileSystemGlobbing's Matcher requires relative paths.
+        // Strip the path root (e.g. "C:\") from both the file path and each pattern
+        // so that absolute glob patterns work correctly on all platforms.
+        var pathRoot = Path.GetPathRoot(path) ?? string.Empty;
+        var relativePath = path.Substring(pathRoot.Length);
+
         var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
         foreach (var pattern in patterns)
-            matcher.AddInclude(pattern);
+        {
+            // Strip the same root prefix from the pattern if it is rooted
+            var patternRoot = Path.GetPathRoot(pattern) ?? string.Empty;
+            var relativePattern = patternRoot.Length > 0
+                ? pattern.Substring(patternRoot.Length)
+                : pattern;
+            matcher.AddInclude(relativePattern);
+        }
 
-        // Matcher works with relative paths from a root; use the path as-is for absolute matching
-        return matcher.Match(path).HasMatches;
+        // Match using the path root as the directory base
+        return matcher.Match(pathRoot, relativePath).HasMatches;
     }
 }
