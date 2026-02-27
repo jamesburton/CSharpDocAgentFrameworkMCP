@@ -52,9 +52,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Analysis
 
-- [ ] **ANLY-01**: Roslyn analyzer: detect public API changes not reflected in documentation
-- [ ] **ANLY-02**: Roslyn analyzer: detect suspicious edits (semantic changes without doc/test updates)
-- [ ] **ANLY-03**: Doc coverage policy enforcement for public symbols (configurable threshold)
+- [x] **ANLY-01**: Roslyn analyzer: detect public API changes not reflected in documentation
+- [x] **ANLY-02**: Roslyn analyzer: detect suspicious edits (semantic changes without doc/test updates)
+- [x] **ANLY-03**: Doc coverage policy enforcement for public symbols (configurable threshold)
 
 ### Hosting
 
@@ -126,9 +126,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SECR-01 | Phase 5 | Complete |
 | SECR-02 | Phase 5 | Complete |
 | SECR-03 | Phase 5 | Complete |
-| ANLY-01 | Phase 6 | Pending |
-| ANLY-02 | Phase 6 | Pending |
-| ANLY-03 | Phase 6 | Pending |
+| ANLY-01 | Phase 6 | Complete |
+| ANLY-02 | Phase 6 | Complete |
+| ANLY-03 | Phase 6 | Complete |
 | HOST-01 | Phase 6 | Pending |
 | HOST-02 | Phase 6 | Complete |
 | INGS-06 | Phase 8 | Pending |
