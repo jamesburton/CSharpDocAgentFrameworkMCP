@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Text.Json;
 using DocAgent.Core;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Serialization;
+using DocAgent.McpServer.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
@@ -54,6 +56,14 @@ public sealed class DocTools
         [Description("Output format: json|markdown|tron")] string format = "json",
         CancellationToken cancellationToken = default)
     {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.search_symbols", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "search_symbols");
+        if (DocAgentTelemetry.VerboseMode)
+            activity?.SetTag("tool.input.query", query);
+
+        try
+        {
         // Parse optional kind filter
         SymbolKind? kind = null;
         if (kindFilter is not null)
@@ -82,6 +92,8 @@ public sealed class DocTools
             return item with { Snippet = sanitizedSnippet };
         }).ToList();
 
+        activity?.SetTag("tool.result_count", sanitizedItems.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
         return FormatResponse(format, () =>
         {
             var payload = new
@@ -102,6 +114,12 @@ public sealed class DocTools
         },
         () => TronSerializer.SerializeSearchResults(sanitizedItems),
         () => RenderSearchMarkdown(sanitizedItems, envelope));
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -115,6 +133,14 @@ public sealed class DocTools
         [Description("Output format: json|markdown|tron")] string format = "json",
         CancellationToken cancellationToken = default)
     {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.get_symbol", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "get_symbol");
+        if (DocAgentTelemetry.VerboseMode)
+            activity?.SetTag("tool.input.symbolId", symbolId);
+
+        try
+        {
         if (string.IsNullOrWhiteSpace(symbolId))
             return ErrorResponse(QueryErrorKind.InvalidInput, "symbolId is required.");
 
@@ -122,7 +148,10 @@ public sealed class DocTools
         var result = await _query.GetSymbolAsync(id, ct: cancellationToken);
 
         if (!result.Success)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "NotFound");
             return ErrorResponse(result.Error!.Value, result.ErrorMessage);
+        }
 
         var envelope = result.Value!;
         var detail = envelope.Payload;
@@ -148,6 +177,8 @@ public sealed class DocTools
             hasInjectionWarning = warn;
         }
 
+        activity?.SetTag("tool.result_count", 1);
+        activity?.SetStatus(ActivityStatusCode.Ok);
         return FormatResponse(format, () =>
         {
             var node = detail.Node;
@@ -173,6 +204,12 @@ public sealed class DocTools
         },
         () => TronSerializer.SerializeSymbolDetail(detail),
         () => RenderSymbolMarkdown(detail, sanitizedSummary, includeSourceSpans && !spansRedacted));
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -186,6 +223,14 @@ public sealed class DocTools
         [Description("Output format: json|markdown|tron")] string format = "json",
         CancellationToken cancellationToken = default)
     {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.get_references", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "get_references");
+        if (DocAgentTelemetry.VerboseMode)
+            activity?.SetTag("tool.input.symbolId", symbolId);
+
+        try
+        {
         if (string.IsNullOrWhiteSpace(symbolId))
             return ErrorResponse(QueryErrorKind.InvalidInput, "symbolId is required.");
 
@@ -200,11 +245,14 @@ public sealed class DocTools
         }
         catch (SymbolNotFoundException)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, "NotFound");
             return ErrorResponse(QueryErrorKind.NotFound, $"Symbol '{symbolId}' not found.");
         }
 
         bool hasInjectionWarning = false; // edges have no doc content
 
+        activity?.SetTag("tool.result_count", edges.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
         return FormatResponse(format, () =>
         {
             var payload = new
@@ -222,6 +270,12 @@ public sealed class DocTools
         },
         () => TronSerializer.SerializeReferences(edges),
         () => RenderReferencesMarkdown(edges));
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -236,6 +290,17 @@ public sealed class DocTools
         [Description("Output format: json|markdown|tron")] string format = "json",
         CancellationToken cancellationToken = default)
     {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.diff_snapshots", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "diff_snapshots");
+        if (DocAgentTelemetry.VerboseMode)
+        {
+            activity?.SetTag("tool.input.versionA", versionA);
+            activity?.SetTag("tool.input.versionB", versionB);
+        }
+
+        try
+        {
         if (string.IsNullOrWhiteSpace(versionA) || string.IsNullOrWhiteSpace(versionB))
             return ErrorResponse(QueryErrorKind.InvalidInput, "versionA and versionB are required.");
 
@@ -245,11 +310,16 @@ public sealed class DocTools
         var result = await _query.DiffAsync(a, b, cancellationToken);
 
         if (!result.Success)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "NotFound");
             return ErrorResponse(result.Error!.Value, result.ErrorMessage);
+        }
 
         var envelope = result.Value!;
         var diff = envelope.Payload;
 
+        activity?.SetTag("tool.result_count", diff.Entries.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
         return FormatResponse(format, () =>
         {
             var payload = new
@@ -267,6 +337,12 @@ public sealed class DocTools
         },
         () => TronSerializer.SerializeDiff(diff),
         () => RenderDiffMarkdown(diff, versionA, versionB));
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -281,6 +357,12 @@ public sealed class DocTools
         [Description("Output format: json|markdown|tron")] string format = "json",
         CancellationToken cancellationToken = default)
     {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.explain_project", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "explain_project");
+
+        try
+        {
         // Parse include/exclude section filters
         var includes = ParseSections(includeSections);
         var excludes = ParseSections(excludeSections);
@@ -366,10 +448,18 @@ public sealed class DocTools
         overview["promptInjectionWarning"] = hasInjectionWarning;
         overview["chainedEntityDepth"] = chainedEntityDepth;
 
+        activity?.SetTag("tool.result_count", allItems.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
         return FormatResponse(format, () =>
             JsonSerializer.Serialize(overview, s_jsonOptions),
         () => TronSerializer.SerializeProjectOverview(overview),
         () => RenderProjectMarkdown(overview));
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
