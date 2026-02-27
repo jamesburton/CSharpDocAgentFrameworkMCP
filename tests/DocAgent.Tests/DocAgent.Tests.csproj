@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\DocAgent.Ingestion\DocAgent.Ingestion.csproj" />
     <ProjectReference Include="..\..\src\DocAgent.Indexing\DocAgent.Indexing.csproj" />
     <ProjectReference Include="..\..\src\DocAgent.McpServer\DocAgent.McpServer.csproj" />
+    <ProjectReference Include="..\..\src\DocAgent.Analyzers\DocAgent.Analyzers.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -22,5 +23,7 @@
     <PackageReference Include="Verify.Xunit" />
     <PackageReference Include="MessagePack" />
     <PackageReference Include="System.IO.Hashing" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Testing.Verifiers.XUnit" />
   </ItemGroup>
 </Project>
