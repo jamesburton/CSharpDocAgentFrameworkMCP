@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 5 — MCP Server Tools
+**Current focus:** Phase 7 — Runtime Integration Wiring
 
 ## Current Position
 
-Phase: 5 of 6 (MCP Server Security) — IN PROGRESS
-Plan: 3 of 3 in phase 5 (05-01, 05-02, 05-03 complete)
-Status: 05-03 complete — StdoutContaminationTests + McpIntegrationTests; all 3 phase success criteria verified
-Last activity: 2026-02-27 — Completed 05-03 (6 integration tests, stdout purity + path denial + injection defence)
+Phase: 7 of 7 (Runtime Integration Wiring) — IN PROGRESS
+Plan: 1 of 3 in phase 7 (07-01 complete)
+Status: 07-01 complete — DI wiring: AddDocAgent(), ArtifactsDir config, SymbolNotFoundException, startup index loading
+Last activity: 2026-02-27 — Completed 07-01 (4 files, 2 tasks)
 
-Progress: [███████░░░] 67% (12/18 plans complete across all phases)
+Progress: [███████░░░] 70% (13/18 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -101,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 05-03]: Integration tests marked [Trait Category Integration] for CI filter separation — subprocess-spawning tests must run separately from unit tests
 - [Phase 05-03]: Path denial behaviour is spansRedacted=true with span=null (not error response) — tests match actual DocTools implementation from 05-01
 - [Phase 05-02]: PathAllowlist.MatchesAny fixed: FileSystemGlobbing Matcher.Match(string) returns false for absolute paths — must strip path root and use Match(root, relativePath)
+- [07-01]: AddDocAgent() uses closure-based GetDir() to prevent SnapshotStore/BM25SearchIndex path divergence
+- [07-01]: DOCAGENT_ARTIFACTS_DIR env var injected into IConfiguration before Configure<DocAgentServerOptions>() to ensure env var precedence
+- [07-01]: Startup uses IndexAsync (idempotent BM25 freshness check) rather than LoadIndexAsync for warm-up
 
 ### Pending Todos
 
@@ -117,5 +120,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 05-02-PLAN.md — 45 new unit tests (PathAllowlist, AuditLogger, PromptInjectionScanner, McpTools); PathAllowlist glob-match bug fixed; 131 total tests passing.
+Stopped at: Completed 07-01-PLAN.md — AddDocAgent() DI extension, SymbolNotFoundException, ArtifactsDir config, startup index loading; 111 tests passing.
 Resume file: None

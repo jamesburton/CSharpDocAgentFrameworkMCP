@@ -155,5 +155,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6
 | 3. BM25 Search Index | 2/2 | Complete   | 2026-02-26 |
 | 4. Query Facade | 2/2 | Complete   | 2026-02-26 |
 | 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
-| 7. Runtime Integration Wiring | 0/3 | Not started | - |
+| 7. Runtime Integration Wiring | 1/3 | In Progress|  |
 | 6. Analysis + Hosting | 0/5 | Not started | - |
