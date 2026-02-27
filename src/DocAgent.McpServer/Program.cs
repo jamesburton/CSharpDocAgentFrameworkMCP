@@ -1,20 +1,34 @@
+using DocAgent.McpServer.Config;
+using DocAgent.McpServer.Filters;
+using DocAgent.McpServer.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Server;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// ALL logs must go to stderr — never stdout (stdout is reserved for MCP JSON-RPC framing)
 builder.Logging.AddConsole(o =>
 {
-    // MCP servers often run as stdio helpers; keep logs on stderr
-    o.LogToStandardErrorThreshold = LogLevel.Information;
+    o.LogToStandardErrorThreshold = LogLevel.Trace; // MCPS-06: all log levels to stderr
 });
+
+// Strongly-typed configuration from appsettings.json section "DocAgent"
+builder.Services.Configure<DocAgentServerOptions>(
+    builder.Configuration.GetSection("DocAgent"));
+
+// Security services
+builder.Services.AddSingleton<PathAllowlist>();
+builder.Services.AddSingleton<AuditLogger>();
+
+// TODO: Register IKnowledgeQueryService, ISearchIndex, SnapshotStore from Phase 4 output.
+// The MCP server will fail at runtime if IKnowledgeQueryService is not registered.
+// Integration test wiring is handled in Plan 05-03.
 
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithToolsFromAssembly();
-
-// TODO: register DocAgent services (ingestion, indexing, query) here.
+    .WithToolsFromAssembly()    // Discovers [McpServerToolType] classes in this assembly
+    .AddAuditFilter();          // From Filters/AuditFilter.cs — wraps every tool call
 
 await builder.Build().RunAsync();
