@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using DocAgent.Core;
+using DocAgent.McpServer.Review;
 
 namespace DocAgent.McpServer.Serialization;
 
@@ -152,6 +153,65 @@ public static class TronSerializer
         WriteSchema(writer, ["section", "data"]);
         writer.WritePropertyName("overview");
         JsonSerializer.Serialize(writer, overview);
+        writer.WriteEndObject();
+        writer.Flush();
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    /// <summary>
+    /// Serialize change review report.
+    /// Schema: [symbolId, displayName, severity, category, description, remediation]
+    /// </summary>
+    public static string SerializeChangeReview(ChangeReviewReport report)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new Utf8JsonWriter(ms, s_writerOptions);
+
+        writer.WriteStartObject();
+        WriteSchema(writer, ["symbolId", "displayName", "severity", "category", "description", "remediation"]);
+        writer.WriteStartArray("data");
+        foreach (var f in report.Findings)
+        {
+            writer.WriteStartArray();
+            writer.WriteStringValue(f.SymbolId);
+            writer.WriteStringValue(f.DisplayName);
+            writer.WriteStringValue(f.Severity.ToString().ToLowerInvariant());
+            writer.WriteStringValue(f.Category);
+            writer.WriteStringValue(f.Description);
+            writer.WriteStringValue(f.Remediation ?? string.Empty);
+            writer.WriteEndArray();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.Flush();
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    /// <summary>
+    /// Serialize breaking changes for CI output.
+    /// Schema: [symbolId, displayName, description]
+    /// </summary>
+    public static string SerializeBreakingChanges(string beforeVersion, string afterVersion, IReadOnlyList<SymbolChange> breakingChanges)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new Utf8JsonWriter(ms, s_writerOptions);
+
+        writer.WriteStartObject();
+        WriteSchema(writer, ["symbolId", "displayName", "description"]);
+        writer.WriteString("beforeVersion", beforeVersion);
+        writer.WriteString("afterVersion", afterVersion);
+        writer.WriteStartArray("data");
+        foreach (var c in breakingChanges)
+        {
+            writer.WriteStartArray();
+            writer.WriteStringValue(c.SymbolId.Value);
+            writer.WriteStringValue(c.SymbolId.Value.Split('.').Last());
+            writer.WriteStringValue(c.Description);
+            writer.WriteEndArray();
+        }
+        writer.WriteEndArray();
         writer.WriteEndObject();
         writer.Flush();
 
