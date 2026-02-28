@@ -15,6 +15,9 @@ public sealed class DocAgentServerOptions
     /// <summary>Root directory for snapshot and index artifacts. Default: ./artifacts</summary>
     public string? ArtifactsDir { get; set; }
 
+    /// <summary>Maximum seconds allowed for the ingestion pipeline. Default 300 (5 minutes).</summary>
+    public int IngestionTimeoutSeconds { get; set; } = 300;
+
     /// <summary>Audit logging configuration.</summary>
     public AuditOptions Audit { get; set; } = new();
 }

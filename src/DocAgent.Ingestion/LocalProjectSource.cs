@@ -29,6 +29,11 @@ public sealed class LocalProjectSource : IProjectSource
             return await DiscoverFromCsprojAsync(path, ct).ConfigureAwait(false);
         }
 
+        if (path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase))
+        {
+            return await DiscoverFromSolutionAsync(path, ct).ConfigureAwait(false);
+        }
+
         if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
         {
             return await DiscoverFromSolutionAsync(path, ct).ConfigureAwait(false);
@@ -40,7 +45,7 @@ public sealed class LocalProjectSource : IProjectSource
         }
 
         throw new ArgumentException(
-            $"Path does not exist or is not a recognised type (.sln/.csproj/directory): {path}",
+            $"Path does not exist or is not a recognised type (.sln/.slnx/.csproj/directory): {path}",
             nameof(locator));
     }
 

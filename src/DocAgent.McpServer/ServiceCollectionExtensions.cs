@@ -2,6 +2,7 @@ using DocAgent.Core;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
 using DocAgent.McpServer.Config;
+using DocAgent.McpServer.Ingestion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -31,6 +32,7 @@ public static class DocAgentServiceCollectionExtensions
         services.AddSingleton<SnapshotStore>(sp => new SnapshotStore(GetDir(sp)));
         services.AddSingleton<ISearchIndex>(sp => new BM25SearchIndex(GetDir(sp)));
         services.AddScoped<IKnowledgeQueryService, KnowledgeQueryService>();
+        services.AddSingleton<IIngestionService, IngestionService>();
 
         return services;
     }
