@@ -12,20 +12,20 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Ingest XML documentation files and bind to stable symbol identifiers — v1.0
+- ✓ Walk Roslyn symbols (namespaces, types, members) with file spans and source anchors — v1.0
+- ✓ Normalize ingested data into a versioned `SymbolGraphSnapshot` with deterministic serialization — v1.0
+- ✓ Build a BM25/keyword search index over symbol graph snapshots — v1.0
+- ✓ Expose `search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project` MCP tools via stdio transport — v1.0
+- ✓ Secure MCP server with path allowlists, audit logging, and input validation — v1.0
+- ✓ Host via Aspire app host with configuration and telemetry wiring — v1.0
+- ✓ Roslyn analyzers that detect public API changes not reflected in docs — v1.0
+- ✓ Roslyn analyzers that detect suspicious edits (semantic changes without doc/test updates) — v1.0
+- ✓ Doc coverage policy enforcement for public symbols — v1.0
+- ✓ Runtime ingestion trigger via MCP tool — v1.0
 
 ### Active
 
-- [ ] Ingest XML documentation files (`GenerateDocumentationFile` output) and bind to stable symbol identifiers
-- [ ] Walk Roslyn symbols (namespaces, types, members) with file spans and source anchors
-- [ ] Normalize ingested data into a versioned `SymbolGraphSnapshot` with deterministic serialization
-- [ ] Build a BM25/keyword search index over symbol graph snapshots
-- [ ] Expose `search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project` MCP tools via stdio transport
-- [ ] Secure MCP server with path allowlists, audit logging, and input validation
-- [ ] Host via Aspire app host with configuration and telemetry wiring
-- [ ] Roslyn analyzers that detect public API changes not reflected in docs
-- [ ] Roslyn analyzers that detect suspicious edits (semantic changes without doc/test updates)
-- [ ] Doc coverage policy enforcement for public symbols
 - [ ] Symbol-level semantic diff engine (signature, nullability, constraints, accessibility, dependency changes)
 - [ ] Unusual Change Review skill: compare snapshots, flag suspicious diffs, propose worktree-based remediation
 - [ ] `review_changes` MCP tool returning structured findings
@@ -42,14 +42,13 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 ## Context
 
-- Scaffold repo exists with architecture docs, domain contracts in code, and stub implementations
-- Core types already defined: `SymbolId`, `SymbolNode`, `SymbolEdge`, `SymbolGraphSnapshot`, `DocComment`, `SourceSpan`
-- Interfaces defined: `IProjectSource`, `IDocSource`, `ISymbolGraphBuilder`, `ISearchIndex`, `IKnowledgeQueryService`
-- Stub MCP server running with `ModelContextProtocol` SDK (stdio transport, two stub tools)
-- `InMemorySearchIndex` has basic contains-match; needs BM25 replacement
-- `XmlDocParser` stores raw XML content; needs proper parsing and symbol binding
-- Test project exists with stub tests for parser and search index
-- Extended plans documented in `EXTENDED_PLANS/` for future tiers (live interrogation, polyglot, enterprise)
+Shipped v1.0 with 4,391 LOC source + 4,747 LOC tests (C#). 177 passing tests.
+
+Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, ModelContextProtocol SDK, Aspire, OpenTelemetry.
+
+Architecture: discover → parse → normalize → index → serve (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Tests).
+
+Full pipeline operational: `ingest_project` MCP tool → Roslyn symbol walk → XML doc parsing → deterministic snapshot → BM25 indexing → query via 5 MCP tools.
 
 ## Constraints
 
@@ -66,11 +65,13 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Non-generic `ISymbolGraphBuilder` for V1, refactor to generic when adding polyglot | Simpler V1 contract; generic needed only when multiple doc source types exist | — Pending |
-| Stdio-only MCP transport for V1+V2 | Simplest security model; non-stdio deferred | — Pending |
-| Package mapping deferred to V1.5 | Focus V1 on XML docs + Roslyn + MCP core pipeline | — Pending |
-| BM25 keyword index first, embeddings behind interface | Cheap/fast/deterministic; embeddings provider TBD | — Pending |
-| Snapshot artifacts written to `artifacts/` directory | Simple file-based storage for V1; SQLite optional | — Pending |
+| Non-generic `ISymbolGraphBuilder` for V1 | Simpler V1 contract; generic needed only when multiple doc source types exist | ✓ Good — clean single-type pipeline |
+| Stdio-only MCP transport for V1 | Simplest security model; non-stdio deferred | ✓ Good — stdio works well for local agent use |
+| BM25 keyword index first, embeddings behind interface | Cheap/fast/deterministic; embeddings provider TBD | ✓ Good — CamelCase tokenizer handles symbol search well |
+| Snapshot artifacts to `artifacts/` directory | Simple file-based storage for V1 | ✓ Good — content-addressed store with manifest.json |
+| MessagePack over JSON for snapshot serialization | Performance + determinism; contractless resolver | ✓ Good — byte-identical roundtrips verified |
+| Closure-based singleton path resolution | Prevent SnapshotStore/BM25SearchIndex path divergence | ✓ Good — single GetDir() shared by both |
+| DocAgentServerOptions `set` over `init` | Required for IOptions Configure lambda pattern | ✓ Good — discovered during E2E testing |
 
 ---
-*Last updated: 2026-02-25 after initialization*
+*Last updated: 2026-02-28 after v1.0 milestone*
