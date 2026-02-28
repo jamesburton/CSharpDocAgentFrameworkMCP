@@ -172,4 +172,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6 → 8
 | 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
 | 7. Runtime Integration Wiring | 3/3 | Complete   | 2026-02-27 |
 | 6. Analysis + Hosting | 0/3 | Not started | - |
-| 8. Ingestion Runtime Trigger | 0/2 | Not started | - |
+| 8. Ingestion Runtime Trigger | 1/2 | In Progress|  |
