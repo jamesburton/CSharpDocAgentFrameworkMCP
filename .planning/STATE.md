@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 9 of 11 — Semantic Diff Engine (complete)
-Plan: 3 plans created and completed (09-01, 09-02, 09-03)
-Status: Complete — all 3 plans executed
-Last activity: 2026-02-28 — Phase 9 plan 03 executed
+Phase: 10 of 11 — Incremental Ingestion (in progress)
+Plan: 1 of 3 plans executed (10-01 complete)
+Status: In progress — plan 01 executed
+Last activity: 2026-02-28 — Phase 10 plan 01 executed
 
 ## Accumulated Context
 
@@ -45,8 +45,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 09-03-PLAN.md
-Resume file: (phase 9 complete)
+Stopped at: Completed 10-01-PLAN.md
+Resume file: .planning/phases/10-incremental-ingestion/10-02-PLAN.md
 
 ### Decisions (09-01)
 
@@ -60,6 +60,12 @@ Resume file: (phase 9 complete)
 - Nullability heuristic: IsOnlyNullabilityDiff strips trailing '?' — prevents double-reporting with Signature
 - Added symbols always NonBreaking regardless of visibility (additive changes are safe)
 - Dependency edge grouping by (From,To) pair; Kind changes are modifications not remove+add
+
+### Decisions (10-01)
+
+- IngestionMetadata? added as last positional param of SymbolGraphSnapshot for ContractlessStandardResolver backward compatibility
+- FileHasher is a public static class (stateless utility); ManifestDiff record with HasChanges and ChangedFiles computed properties
+- SHA-256 via SHA256.HashDataAsync (streaming async); lowercase hex output
 
 ### Decisions (09-03)
 

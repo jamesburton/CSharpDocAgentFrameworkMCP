@@ -40,7 +40,7 @@ Full details: milestones/v1.0-ROADMAP.md
 | 6. Analysis + Hosting | v1.0 | 4/4 | Complete | 2026-02-28 |
 | 8. Ingestion Runtime Trigger | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 9. Semantic Diff Engine | v1.1 | 3/3 | Complete | 2026-02-28 |
-| 10. Incremental Ingestion | v1.1 | 0/3 | Planned | — |
+| 10. Incremental Ingestion | 1/3 | In Progress|  | — |
 | 11. Change Intelligence & Review | v1.1 | 0/? | Pending | — |
 
 ## Phase Details
@@ -59,7 +59,7 @@ Full details: milestones/v1.0-ROADMAP.md
 **Goal**: File change detection and partial re-ingestion — only re-process changed files with precise change tracking
 **Depends on**: Nothing (builds on v1.0 Ingestion pipeline)
 **Requirements**: R-INCR-INGEST
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 10-01-PLAN.md — Core types (IngestionMetadata, FileHashManifest) and unit tests
