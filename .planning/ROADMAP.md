@@ -39,8 +39,8 @@ Full details: milestones/v1.0-ROADMAP.md
 | 7. Runtime Integration Wiring | v1.0 | 3/3 | Complete | 2026-02-27 |
 | 6. Analysis + Hosting | v1.0 | 4/4 | Complete | 2026-02-28 |
 | 8. Ingestion Runtime Trigger | v1.0 | 2/2 | Complete | 2026-02-28 |
-| 9. Semantic Diff Engine | 3/3 | Complete   | 2026-02-28 | — |
-| 10. Incremental Ingestion | v1.1 | 0/? | Pending | — |
+| 9. Semantic Diff Engine | v1.1 | 3/3 | Complete | 2026-02-28 |
+| 10. Incremental Ingestion | v1.1 | 0/3 | Planned | — |
 | 11. Change Intelligence & Review | v1.1 | 0/? | Pending | — |
 
 ## Phase Details
@@ -59,6 +59,13 @@ Full details: milestones/v1.0-ROADMAP.md
 **Goal**: File change detection and partial re-ingestion — only re-process changed files with precise change tracking
 **Depends on**: Nothing (builds on v1.0 Ingestion pipeline)
 **Requirements**: R-INCR-INGEST
+**Plans:** 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Core types (IngestionMetadata, FileHashManifest) and unit tests
+- [ ] 10-02-PLAN.md — IncrementalIngestionEngine implementation and IngestionService integration
+- [ ] 10-03-PLAN.md — Correctness integration tests (incremental == full re-ingestion)
+
 **Success Criteria** (what must be TRUE):
   1. File change detection identifies added, modified, and removed source files between ingestion runs
   2. Only changed files are re-parsed and re-walked (unchanged symbols preserved from previous snapshot)
