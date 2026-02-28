@@ -23,7 +23,7 @@ Full details: milestones/v1.0-ROADMAP.md
 
 </details>
 
-- [ ] **Phase 9: Semantic Diff Engine** - Core diff types and algorithm for comparing two SymbolGraphSnapshots — detect signature, nullability, constraint, accessibility, and dependency changes
+- [x] **Phase 9: Semantic Diff Engine** - Core diff types and algorithm for comparing two SymbolGraphSnapshots — detect signature, nullability, constraint, accessibility, and dependency changes (completed 2026-02-28)
 - [ ] **Phase 10: Incremental Ingestion** - File change detection and partial re-ingestion — only re-process changed files with precise change tracking
 - [ ] **Phase 11: Change Intelligence & Review** - MCP tools (review_changes, find_breaking_changes, explain_change) and unusual change review skill with worktree-based remediation proposals (depends on Phase 9)
 
@@ -39,7 +39,7 @@ Full details: milestones/v1.0-ROADMAP.md
 | 7. Runtime Integration Wiring | v1.0 | 3/3 | Complete | 2026-02-27 |
 | 6. Analysis + Hosting | v1.0 | 4/4 | Complete | 2026-02-28 |
 | 8. Ingestion Runtime Trigger | v1.0 | 2/2 | Complete | 2026-02-28 |
-| 9. Semantic Diff Engine | 2/3 | In Progress|  | — |
+| 9. Semantic Diff Engine | 3/3 | Complete   | 2026-02-28 | — |
 | 10. Incremental Ingestion | v1.1 | 0/? | Pending | — |
 | 11. Change Intelligence & Review | v1.1 | 0/? | Pending | — |
 
