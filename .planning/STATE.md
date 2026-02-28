@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Semantic Diff & Change Intelligence
-status: defining_requirements
+status: planned
 last_updated: "2026-02-28T13:00:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 9 of 11 — Semantic Diff Engine (next to plan)
-Plan: —
-Status: Roadmap created, ready to plan
-Last activity: 2026-02-28 — v1.1 roadmap created (3 phases)
+Plan: 3 plans created (09-01, 09-02, 09-03)
+Status: In progress — 09-01 complete
+Last activity: 2026-02-28 — Phase 9 plan 01 executed
 
 ## Accumulated Context
 
@@ -45,5 +45,11 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-semantic-diff-engine/09-CONTEXT.md
+Stopped at: Completed 09-01-PLAN.md
+Resume file: .planning/phases/09-semantic-diff-engine/09-02-PLAN.md
+
+### Decisions (09-01)
+
+- SymbolNode extended with ReturnType, Parameters, GenericConstraints at end of record
+- DiffTypes.cs uses per-category nullable detail fields (MessagePack ContractlessStandardResolver safe)
+- RoslynSymbolGraphBuilder ExtractSignatureFields dispatches per Roslyn symbol type
