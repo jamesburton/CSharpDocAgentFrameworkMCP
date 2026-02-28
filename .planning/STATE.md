@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Semantic Diff & Change Intelligence
-status: planned
-last_updated: "2026-02-28T13:00:00.000Z"
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+last_updated: "2026-02-28T15:07:21.519Z"
 progress:
-  total_phases: 3
-  completed_phases: 0
+  total_phases: 1
+  completed_phases: 1
   total_plans: 3
   completed_plans: 3
 ---
