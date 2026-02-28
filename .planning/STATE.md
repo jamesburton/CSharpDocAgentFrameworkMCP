@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 8 of 8 (Ingestion Runtime Trigger)
-Plan: 1 of 2 in phase 8 (08-01 complete)
-Status: Phase 8 in progress (1/2 plans) — ingest_project MCP tool delivered
-Last activity: 2026-02-28 — Completed 08-01 (10 files, 2 tasks, 172 tests passing)
+Plan: 2 of 2 in phase 8 (08-02 complete)
+Status: Phase 8 COMPLETE (2/2 plans) — E2E integration tests, INGS-06 fully satisfied
+Last activity: 2026-02-28 — Completed 08-02 (1 file, 1 task, 175 tests passing)
 
-Progress: [█████████▓] 96% (22/23 plans complete across all phases)
+Progress: [██████████] 100% (23/23 plans complete across all phases)
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [█████████▓] 96% (22/23 plans complete across all 
 | Phase 06-analysis-hosting P01 | 1270 | 2 tasks | 11 files |
 | Phase 06-analysis-hosting P03 | 877 | 1 tasks | 4 files |
 | Phase 08-ingestion-runtime-trigger P01 | 887 | 2 tasks | 10 files |
+| Phase 08-ingestion-runtime-trigger P02 | 7 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,7 @@ Recent decisions affecting current work:
 - [Phase 06-03]: McpServer switched to Microsoft.NET.Sdk.Web for WebApplication health endpoint support
 - [Phase 08-01]: PipelineOverride internal test seam on IngestionService avoids real Roslyn/MSBuild in unit tests
 - [Phase 08-01]: requestContext?.Params?.Meta?[progressToken] for null-safe MCP SDK 1.0.0 progress token extraction (Meta is JsonObject)
+- [Phase 08-02]: Use existing DocAgent.Core.csproj as E2E ingestion target — avoids SDK resolution complexity of scratch temp projects, same pattern as RoslynSymbolGraphBuilderTests
 
 ### Pending Todos
 
@@ -134,5 +136,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 08-01-PLAN.md — ingest_project MCP tool, IngestionService orchestrator, IIngestionService, 172 tests passing
+Stopped at: Completed 08-02-PLAN.md — E2E integration tests, INGS-06 fully satisfied, 175 tests passing. ALL 23 PLANS COMPLETE.
 Resume file: None
