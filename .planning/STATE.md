@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 11 of 11 — Change Intelligence Review (in progress)
-Plan: 1 of 3 plans executed (11-01 complete)
-Status: Phase 11 in progress — plan 01 executed
-Last activity: 2026-02-28 — Phase 11 plan 01 executed
+Plan: 2 of 3 plans executed (11-02 complete)
+Status: Phase 11 in progress — plan 02 executed
+Last activity: 2026-02-28 — Phase 11 plan 02 executed
 
 ## Accumulated Context
 
@@ -45,8 +45,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 11-01-PLAN.md
-Resume file: .planning/phases/11-change-intelligence-review/11-02-PLAN.md
+Stopped at: Completed 11-02-PLAN.md
+Resume file: .planning/phases/11-change-intelligence-review/11-03-PLAN.md
 
 ### Decisions (09-01)
 
@@ -84,6 +84,12 @@ Resume file: .planning/phases/11-change-intelligence-review/11-02-PLAN.md
 - ContentHashedBuilder (BuildOverride fallback) used instead of real Roslyn — avoids MSBuild SDK resolution fragility per plan fallback guidance
 - Fresh artifacts directory per independent run prevents manifest cross-contamination between full and incremental paths in tests
 - Node ID encodes relPath + SHA-256 prefix — models real re-parse behavior (changed content yields different node IDs)
+
+### Decisions (11-02)
+
+- ExplainChangeDetail is a private sealed record inside ChangeTools — avoids leaking DTOs to public namespace
+- ImpactScope in review_changes uses all edges where To==symbolId; explain_change scopes to Calls edges only
+- Tron format for explain_change uses inline Utf8JsonWriter (not TronSerializer) since it serializes a different schema shape
 
 ### Decisions (11-01)
 
