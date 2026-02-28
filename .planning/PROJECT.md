@@ -26,12 +26,21 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 ### Active
 
-- [ ] Symbol-level semantic diff engine (signature, nullability, constraints, accessibility, dependency changes)
-- [ ] Unusual Change Review skill: compare snapshots, flag suspicious diffs, propose worktree-based remediation
-- [ ] `review_changes` MCP tool returning structured findings
+#### Current Milestone: v1.1 Semantic Diff & Change Intelligence
+
+**Goal:** Enable agents to detect, understand, and review code changes through symbol-level semantic diffing and incremental ingestion.
+
+**Target features:**
+- Symbol-level semantic diff engine (signature, nullability, constraints, accessibility, dependency changes)
+- Incremental ingestion (re-ingest only changed files, precise change tracking)
+- Unusual Change Review skill: compare snapshots, flag suspicious diffs, propose worktree-based remediation
+- `review_changes` MCP tool returning structured findings
+- New MCP tools driven by diff capabilities (e.g., `find_breaking_changes`, `explain_change`)
 
 ### Out of Scope
 
+- Multi-project / solution-level symbol graphs — deferred to v1.2
+- Cross-project queries and dependency linking (local/git/NuGet, tiered depth) — deferred to v1.2
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
 - Non-stdio MCP transports (HTTP, SSE) — deferred to later
@@ -74,4 +83,4 @@ Full pipeline operational: `ingest_project` MCP tool → Roslyn symbol walk → 
 | DocAgentServerOptions `set` over `init` | Required for IOptions Configure lambda pattern | ✓ Good — discovered during E2E testing |
 
 ---
-*Last updated: 2026-02-28 after v1.0 milestone*
+*Last updated: 2026-02-28 after v1.1 milestone start*

@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: milestone_complete
-last_updated: "2026-02-28T12:25:00.000Z"
+milestone: v1.1
+milestone_name: Semantic Diff & Change Intelligence
+status: defining_requirements
+last_updated: "2026-02-28T13:00:00.000Z"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 24
-  completed_plans: 24
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
@@ -18,12 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v1.1
 
 ## Current Position
 
-Milestone v1.0 MVP shipped 2026-02-28.
-All 8 phases, 24 plans, 177 tests complete.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-28 — Milestone v1.1 started
 
 ## Accumulated Context
 
@@ -38,10 +40,10 @@ None.
 
 ### Blockers/Concerns
 
-None — milestone complete.
+None.
 
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: v1.0 milestone completed and archived
+Stopped at: Starting v1.1 milestone
 Resume file: None
