@@ -40,7 +40,10 @@ public sealed class McpToolTests
             Examples: [],
             Exceptions: [],
             SeeAlso: []),
-        Span: new SourceSpan("C:/src/MyClass.cs", 1, 0, 50, 0));
+        Span: new SourceSpan("C:/src/MyClass.cs", 1, 0, 50, 0),
+        ReturnType: null,
+        Parameters: Array.Empty<ParameterInfo>(),
+        GenericConstraints: Array.Empty<GenericConstraint>());
 
     private static ResponseEnvelope<T> Wrap<T>(T payload) =>
         new(payload, "snap-v1", DateTimeOffset.UtcNow, false, TimeSpan.FromMilliseconds(5));

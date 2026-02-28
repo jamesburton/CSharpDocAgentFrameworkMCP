@@ -50,7 +50,10 @@ public class E2EIntegrationTests : IDisposable
             PreviousIds: [],
             Accessibility: Accessibility.Public,
             Docs: MakeDoc(summary),
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
     private static SymbolGraphSnapshot BuildSyntheticSnapshot()
     {

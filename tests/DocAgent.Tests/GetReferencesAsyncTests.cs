@@ -34,7 +34,10 @@ public class GetReferencesAsyncTests : IDisposable
             PreviousIds: [],
             Accessibility: Accessibility.Public,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
     private static SymbolGraphSnapshot MakeSnapshot(SymbolNode[] nodes, SymbolEdge[]? edges = null) =>
         new(

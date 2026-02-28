@@ -38,7 +38,10 @@ public class BM25SearchIndexTests
                                         Examples:   [],
                                         Exceptions: [],
                                         SeeAlso:    []),
-            Span:               null);
+            Span:               null,
+            ReturnType:         null,
+            Parameters:         Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
     private static BM25SearchIndex CreateIndex() => new(new RAMDirectory());
 
