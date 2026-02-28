@@ -5,7 +5,7 @@ milestone_name: Semantic Diff & Change Intelligence
 status: defining_requirements
 last_updated: "2026-02-28T13:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Defining requirements for v1.1
+**Current focus:** v1.1 Semantic Diff & Change Intelligence — 3 phases planned
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 9 of 11 — Semantic Diff Engine (next to plan)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-28 — Milestone v1.1 started
+Status: Roadmap created, ready to plan
+Last activity: 2026-02-28 — v1.1 roadmap created (3 phases)
 
 ## Accumulated Context
 
