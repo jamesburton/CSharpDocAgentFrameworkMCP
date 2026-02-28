@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Query Facade** - Wire IKnowledgeQueryService over index and snapshot store (completed 2026-02-26)
 - [x] **Phase 5: MCP Server + Security** - Expose all five MCP tools with path allowlist and audit logging (completed 2026-02-27)
 - [x] **Phase 7: Runtime Integration Wiring** - DI registration, ArtifactsDir config, GetReferencesAsync impl, E2E pipeline fix (completed 2026-02-27)
-- [ ] **Phase 6: Analysis + Hosting** - Roslyn analyzers, doc coverage policy, Aspire wiring, OpenTelemetry
+- [x] **Phase 6: Analysis + Hosting** - Roslyn analyzers, doc coverage policy, Aspire wiring, OpenTelemetry (completed 2026-02-28)
 - [x] **Phase 8: Ingestion Runtime Trigger** - MCP tool or CLI to invoke ingestion pipeline at runtime, closing integration/flow gaps (completed 2026-02-28)
 
 ## Phase Details
@@ -176,5 +176,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 7 → 6 → 8
 | 4. Query Facade | 2/2 | Complete   | 2026-02-26 |
 | 5. MCP Server + Security | 3/3 | Complete   | 2026-02-27 |
 | 7. Runtime Integration Wiring | 3/3 | Complete   | 2026-02-27 |
-| 6. Analysis + Hosting | 0/3 | Not started | - |
+| 6. Analysis + Hosting | 4/4 | Complete   | 2026-02-28 |
 | 8. Ingestion Runtime Trigger | 2/2 | Complete   | 2026-02-28 |
