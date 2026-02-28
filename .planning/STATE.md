@@ -8,7 +8,7 @@ progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 Phase: 9 of 11 — Semantic Diff Engine (next to plan)
 Plan: 3 plans created (09-01, 09-02, 09-03)
-Status: In progress — 09-01 complete
-Last activity: 2026-02-28 — Phase 9 plan 01 executed
+Status: In progress — 09-02 complete
+Last activity: 2026-02-28 — Phase 9 plan 02 executed
 
 ## Accumulated Context
 
@@ -45,11 +45,18 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 09-01-PLAN.md
-Resume file: .planning/phases/09-semantic-diff-engine/09-02-PLAN.md
+Stopped at: Completed 09-02-PLAN.md
+Resume file: .planning/phases/09-semantic-diff-engine/09-03-PLAN.md
 
 ### Decisions (09-01)
 
 - SymbolNode extended with ReturnType, Parameters, GenericConstraints at end of record
 - DiffTypes.cs uses per-category nullable detail fields (MessagePack ContractlessStandardResolver safe)
 - RoslynSymbolGraphBuilder ExtractSignatureFields dispatches per Roslyn symbol type
+
+### Decisions (09-02)
+
+- SymbolGraphDiffer is a public static class — stateless utility, no DI needed
+- Nullability heuristic: IsOnlyNullabilityDiff strips trailing '?' — prevents double-reporting with Signature
+- Added symbols always NonBreaking regardless of visibility (additive changes are safe)
+- Dependency edge grouping by (From,To) pair; Kind changes are modifications not remove+add
