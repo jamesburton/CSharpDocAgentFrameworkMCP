@@ -125,22 +125,27 @@ Plans:
 - [ ] 07-02: GetReferencesAsync real implementation
 - [ ] 07-03: E2E integration test + tech debt cleanup (InMemorySearchIndex removal)
 
-### Phase 6: Analysis + Hosting
-**Goal**: Roslyn analyzers enforce doc parity in CI and the server runs under Aspire with observable telemetry
+### Phase 6: Analysis + Hosting + Gap Closure
+**Goal**: Roslyn analyzers enforce doc parity in CI, the server runs under Aspire with observable telemetry, and v1.0 audit integration gaps are closed
 **Depends on**: Phase 7
 **Requirements**: ANLY-01, ANLY-02, ANLY-03, HOST-01, HOST-02
+**Gap Closure:** Closes integration gaps MISSING-01, MISSING-02 and ISearchIndex downcast tech debt from v1.0 audit
 **Success Criteria** (what must be TRUE):
   1. Adding a public method without a `<summary>` doc comment triggers the doc parity analyzer as a build warning/error
   2. A semantic change (signature change) without a corresponding doc or test update triggers the suspicious edit analyzer
   3. Doc coverage drops below the configured threshold causes the policy build gate to fail
   4. `dotnet run --project src/DocAgent.AppHost` starts the MCP server and surfaces tool call spans in the Aspire dashboard
   5. OpenTelemetry traces show per-tool-call spans with input/output metadata
-**Plans**: 3 plans
+  6. AppHost env var matches PathAllowlist expected name (MISSING-01 closed)
+  7. `forceReindex` parameter in IngestionService triggers reindex when true (MISSING-02 closed)
+  8. `Program.cs` resolves ISearchIndex without downcasting to BM25SearchIndex
+**Plans**: 4 plans
 
 Plans:
 - [ ] 06-01-PLAN.md — DocAgent.Analyzers project: DocParityAnalyzer, SuspiciousEditAnalyzer, DocCoverageAnalyzer + tests (ANLY-01, ANLY-02, ANLY-03)
 - [ ] 06-02-PLAN.md — OpenTelemetry instrumentation: ActivitySource, tool spans, OTLP exporter (HOST-02)
 - [ ] 06-03-PLAN.md — Aspire AppHost upgrade + health endpoint wiring (HOST-01)
+- [ ] 06-04-PLAN.md — Integration gap fixes: env var mismatch (MISSING-01), forceReindex no-op (MISSING-02), ISearchIndex downcast removal
 
 ### Phase 8: Ingestion Runtime Trigger
 **Goal**: The full pipeline (discover → parse → snapshot → index → query → response) can be invoked at runtime through an MCP tool, closing the integration and flow gaps
