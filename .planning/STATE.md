@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 10 of 11 — Incremental Ingestion (in progress)
-Plan: 1 of 3 plans executed (10-01 complete)
-Status: In progress — plan 01 executed
-Last activity: 2026-02-28 — Phase 10 plan 01 executed
+Plan: 2 of 3 plans executed (10-02 complete)
+Status: In progress — plan 02 executed
+Last activity: 2026-02-28 — Phase 10 plan 02 executed
 
 ## Accumulated Context
 
@@ -45,8 +45,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 10-01-PLAN.md
-Resume file: .planning/phases/10-incremental-ingestion/10-02-PLAN.md
+Stopped at: Completed 10-02-PLAN.md
+Resume file: .planning/phases/10-incremental-ingestion/10-03-PLAN.md
 
 ### Decisions (09-01)
 
@@ -66,6 +66,13 @@ Resume file: .planning/phases/10-incremental-ingestion/10-02-PLAN.md
 - IngestionMetadata? added as last positional param of SymbolGraphSnapshot for ContractlessStandardResolver backward compatibility
 - FileHasher is a public static class (stateless utility); ManifestDiff record with HasChanges and ChangedFiles computed properties
 - SHA-256 via SHA256.HashDataAsync (streaming async); lowercase hex output
+
+### Decisions (10-02)
+
+- RemovedFiles included in change detection set alongside ChangedFiles to trigger project re-parse for deleted .cs files
+- BuildOverride hook uses (ProjectInventory, DocInputSet, CancellationToken) signature matching ISymbolGraphBuilder.BuildAsync
+- SnapshotStore.ArtifactsDir exposed as public property to avoid constructor coupling
+- forceFullReingestion added as last default parameter to IIngestionService for backward compatibility
 
 ### Decisions (09-03)
 
