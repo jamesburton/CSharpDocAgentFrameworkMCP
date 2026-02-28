@@ -40,7 +40,7 @@ Full details: milestones/v1.0-ROADMAP.md
 | 6. Analysis + Hosting | v1.0 | 4/4 | Complete | 2026-02-28 |
 | 8. Ingestion Runtime Trigger | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 9. Semantic Diff Engine | v1.1 | 3/3 | Complete | 2026-02-28 |
-| 10. Incremental Ingestion | 3/3 | Complete   | 2026-02-28 | — |
+| 10. Incremental Ingestion | 3/3 | Complete    | 2026-02-28 | — |
 | 11. Change Intelligence & Review | v1.1 | 0/? | Pending | — |
 
 ## Phase Details
