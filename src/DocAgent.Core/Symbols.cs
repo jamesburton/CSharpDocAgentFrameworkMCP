@@ -90,7 +90,8 @@ public sealed record SymbolGraphSnapshot(
     string? ContentHash,
     DateTimeOffset CreatedAt,
     IReadOnlyList<SymbolNode> Nodes,
-    IReadOnlyList<SymbolEdge> Edges);
+    IReadOnlyList<SymbolEdge> Edges,
+    IngestionMetadata? IngestionMetadata = null);
 
 public enum SerializationFormat
 {
