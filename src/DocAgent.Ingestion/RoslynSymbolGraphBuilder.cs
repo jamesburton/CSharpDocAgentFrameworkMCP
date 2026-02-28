@@ -319,12 +319,16 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
             PreviousIds: Array.Empty<SymbolId>(),
             Accessibility: MapAccessibility(ns.DeclaredAccessibility),
             Docs: ResolveDoc(ns, docXmlById),
-            Span: ExtractSpan(ns));
+            Span: ExtractSpan(ns),
+            ReturnType: null,
+            Parameters: Array.Empty<Core.ParameterInfo>(),
+            GenericConstraints: Array.Empty<Core.GenericConstraint>());
     }
 
     private SymbolNode CreateSymbolNode(ISymbol symbol, IReadOnlyDictionary<string, string> docXmlById)
     {
         var id = GetSymbolId(symbol);
+        var (returnType, parameters, genericConstraints) = ExtractSignatureFields(symbol);
         return new SymbolNode(
             Id: id,
             Kind: MapKind(symbol),
@@ -333,7 +337,100 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
             PreviousIds: Array.Empty<SymbolId>(),
             Accessibility: MapAccessibility(symbol.DeclaredAccessibility),
             Docs: ResolveDoc(symbol, docXmlById),
-            Span: ExtractSpan(symbol));
+            Span: ExtractSpan(symbol),
+            ReturnType: returnType,
+            Parameters: parameters,
+            GenericConstraints: genericConstraints);
+    }
+
+    private static (string? ReturnType, IReadOnlyList<Core.ParameterInfo> Parameters, IReadOnlyList<Core.GenericConstraint> GenericConstraints)
+        ExtractSignatureFields(ISymbol symbol)
+    {
+        switch (symbol)
+        {
+            case IMethodSymbol method:
+            {
+                string? returnType = null;
+                if (method.ReturnType.SpecialType != SpecialType.System_Void &&
+                    method.MethodKind != MethodKind.Constructor &&
+                    method.MethodKind != MethodKind.StaticConstructor)
+                {
+                    returnType = method.ReturnType.ToDisplayString();
+                }
+
+                var parameters = method.Parameters
+                    .Select(p => new Core.ParameterInfo(
+                        Name: p.Name,
+                        TypeName: p.Type.ToDisplayString(),
+                        DefaultValue: p.HasExplicitDefaultValue ? p.ExplicitDefaultValue?.ToString() : null,
+                        IsParams: p.IsParams,
+                        IsRef: p.RefKind == RefKind.Ref,
+                        IsOut: p.RefKind == RefKind.Out,
+                        IsIn: p.RefKind == RefKind.In))
+                    .ToList();
+
+                var genericConstraints = ExtractTypeParameterConstraints(method.TypeParameters);
+
+                return (returnType, parameters, genericConstraints);
+            }
+
+            case IPropertySymbol property:
+            {
+                var returnType = property.Type.ToDisplayString();
+                IReadOnlyList<Core.ParameterInfo> parameters = property.IsIndexer
+                    ? property.Parameters
+                        .Select(p => new Core.ParameterInfo(
+                            Name: p.Name,
+                            TypeName: p.Type.ToDisplayString(),
+                            DefaultValue: p.HasExplicitDefaultValue ? p.ExplicitDefaultValue?.ToString() : null,
+                            IsParams: p.IsParams,
+                            IsRef: p.RefKind == RefKind.Ref,
+                            IsOut: p.RefKind == RefKind.Out,
+                            IsIn: p.RefKind == RefKind.In))
+                        .ToList()
+                    : Array.Empty<Core.ParameterInfo>();
+                return (returnType, parameters, Array.Empty<Core.GenericConstraint>());
+            }
+
+            case IFieldSymbol field:
+                return (field.Type.ToDisplayString(), Array.Empty<Core.ParameterInfo>(), Array.Empty<Core.GenericConstraint>());
+
+            case INamedTypeSymbol namedType:
+            {
+                var genericConstraints = ExtractTypeParameterConstraints(namedType.TypeParameters);
+                return (null, Array.Empty<Core.ParameterInfo>(), genericConstraints);
+            }
+
+            default:
+                return (null, Array.Empty<Core.ParameterInfo>(), Array.Empty<Core.GenericConstraint>());
+        }
+    }
+
+    private static IReadOnlyList<Core.GenericConstraint> ExtractTypeParameterConstraints(
+        System.Collections.Immutable.ImmutableArray<ITypeParameterSymbol> typeParameters)
+    {
+        var result = new List<Core.GenericConstraint>();
+        foreach (var tp in typeParameters)
+        {
+            if (tp.ConstraintTypes.Length == 0 &&
+                !tp.HasConstructorConstraint &&
+                !tp.HasReferenceTypeConstraint &&
+                !tp.HasValueTypeConstraint &&
+                !tp.HasNotNullConstraint &&
+                !tp.HasUnmanagedTypeConstraint)
+                continue;
+
+            var constraints = new List<string>();
+            if (tp.HasReferenceTypeConstraint) constraints.Add("class");
+            if (tp.HasValueTypeConstraint) constraints.Add("struct");
+            if (tp.HasNotNullConstraint) constraints.Add("notnull");
+            if (tp.HasUnmanagedTypeConstraint) constraints.Add("unmanaged");
+            constraints.AddRange(tp.ConstraintTypes.Select(c => c.ToDisplayString()));
+            if (tp.HasConstructorConstraint) constraints.Add("new()");
+
+            result.Add(new Core.GenericConstraint(tp.Name, constraints));
+        }
+        return result;
     }
 
     // ── Documentation resolution ─────────────────────────────────────────────

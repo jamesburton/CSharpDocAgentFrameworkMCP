@@ -43,7 +43,10 @@ public class SnapshotSerializationTests
             PreviousIds: [new SymbolId("DocAgent.Core.OldSymbols")],
             Accessibility: Accessibility.Public,
             Docs: docComment,
-            Span: new SourceSpan("src/DocAgent.Core/Symbols.cs", 1, 0, 76, 0));
+            Span: new SourceSpan("src/DocAgent.Core/Symbols.cs", 1, 0, 76, 0),
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         var node2 = new SymbolNode(
             Id: new SymbolId("DocAgent.Core.SymbolNode"),
@@ -53,7 +56,10 @@ public class SnapshotSerializationTests
             PreviousIds: [],
             Accessibility: Accessibility.Internal,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         var edge = new SymbolEdge(
             From: new SymbolId("DocAgent.Core.Symbols"),
@@ -142,7 +148,10 @@ public class SnapshotSerializationTests
             PreviousIds: [],
             Accessibility: Accessibility.Private,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
         var snapshot2 = snapshot1 with
         {
             ProjectName = "DifferentProject",

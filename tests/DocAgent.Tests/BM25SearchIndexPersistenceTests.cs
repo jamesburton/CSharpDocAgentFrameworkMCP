@@ -27,7 +27,10 @@ public class BM25SearchIndexPersistenceTests
             PreviousIds:        [],
             Accessibility:      Accessibility.Public,
             Docs:               null,
-            Span:               null)).ToArray();
+            Span:               null,
+            ReturnType:         null,
+            Parameters:         Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>())).ToArray();
 
         return new SymbolGraphSnapshot(
             SchemaVersion:      "v1",

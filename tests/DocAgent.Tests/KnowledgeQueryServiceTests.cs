@@ -45,7 +45,10 @@ public class KnowledgeQueryServiceTests : IDisposable
                 Examples: [],
                 Exceptions: [],
                 SeeAlso: []),
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
     private static SymbolGraphSnapshot MakeSnapshot(
         SymbolNode[] nodes,
@@ -338,7 +341,10 @@ public class KnowledgeQueryServiceTests : IDisposable
             PreviousIds: [new SymbolId("M:Y")],
             Accessibility: Accessibility.Public,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         var (svc, savedA, savedB) = await CreateDiffServiceAsync([nodeY], [nodeZ]);
 

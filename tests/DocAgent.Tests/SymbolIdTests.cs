@@ -50,7 +50,10 @@ public class SymbolIdTests
             PreviousIds: [oldId],
             Accessibility: Accessibility.Public,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         return Verify(node);
     }
@@ -68,7 +71,10 @@ public class SymbolIdTests
             PreviousIds: [],
             Accessibility: Accessibility.Public,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         node.PreviousIds.Should().BeEmpty();
     }

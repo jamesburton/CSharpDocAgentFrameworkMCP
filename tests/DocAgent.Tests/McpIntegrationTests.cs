@@ -229,7 +229,10 @@ public sealed class McpIntegrationTests
                 Examples: [],
                 Exceptions: [],
                 SeeAlso: []),
-            Span: filePath is null ? null : new SourceSpan(filePath, 10, 0, 20, 1));
+            Span: filePath is null ? null : new SourceSpan(filePath, 10, 0, 20, 1),
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         return new SymbolDetail(node, ParentId: null, ChildIds: [], RelatedIds: []);
     }

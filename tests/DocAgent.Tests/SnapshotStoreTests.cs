@@ -45,7 +45,10 @@ public class SnapshotStoreTests : IDisposable
                 Examples: [],
                 Exceptions: [],
                 SeeAlso: []),
-            Span: new SourceSpan("src/MyClass.cs", 1, 0, 10, 0));
+            Span: new SourceSpan("src/MyClass.cs", 1, 0, 10, 0),
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         var node2 = new SymbolNode(
             Id: new SymbolId("TestProject.MyClass.Method"),
@@ -55,7 +58,10 @@ public class SnapshotStoreTests : IDisposable
             PreviousIds: [],
             Accessibility: Accessibility.Public,
             Docs: null,
-            Span: null);
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
 
         var edge = new SymbolEdge(
             From: new SymbolId("TestProject.MyClass"),

@@ -32,6 +32,21 @@ public readonly record struct SymbolId(string Value);
 
 public sealed record SourceSpan(string FilePath, int StartLine, int StartColumn, int EndLine, int EndColumn);
 
+/// <summary>Structured parameter information for methods, indexers, and delegates.</summary>
+public sealed record ParameterInfo(
+    string Name,
+    string TypeName,
+    string? DefaultValue,
+    bool IsParams,
+    bool IsRef,
+    bool IsOut,
+    bool IsIn);
+
+/// <summary>A generic type parameter constraint (e.g., "where T : class, IDisposable").</summary>
+public sealed record GenericConstraint(
+    string TypeParameterName,
+    IReadOnlyList<string> Constraints);
+
 public sealed record DocComment(
     string? Summary,
     string? Remarks,
@@ -50,7 +65,10 @@ public sealed record SymbolNode(
     IReadOnlyList<SymbolId> PreviousIds,
     Accessibility Accessibility,
     DocComment? Docs,
-    SourceSpan? Span);
+    SourceSpan? Span,
+    string? ReturnType,
+    IReadOnlyList<ParameterInfo> Parameters,
+    IReadOnlyList<GenericConstraint> GenericConstraints);
 
 public enum SymbolEdgeKind
 {

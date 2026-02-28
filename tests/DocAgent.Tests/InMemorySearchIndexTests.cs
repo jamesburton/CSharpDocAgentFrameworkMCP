@@ -16,7 +16,7 @@ public class InMemorySearchIndexTests
             SourceFingerprint: "fixture",
             ContentHash: null,
             CreatedAt: DateTimeOffset.UtcNow,
-            Nodes: new[] { new SymbolNode(new SymbolId("T:Foo"), SymbolKind.Type, "Foo", "Foo", [], Accessibility.Public, null, null) },
+            Nodes: new[] { new SymbolNode(new SymbolId("T:Foo"), SymbolKind.Type, "Foo", "Foo", [], Accessibility.Public, null, null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>()) },
             Edges: Array.Empty<SymbolEdge>());
 
         await idx.IndexAsync(snap, CancellationToken.None);

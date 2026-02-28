@@ -62,7 +62,10 @@ public sealed class IngestionServiceTests : IDisposable
                     PreviousIds: [],
                     Accessibility: Accessibility.Public,
                     Docs: null,
-                    Span: null))
+                    Span: null,
+                    ReturnType: null,
+                    Parameters: Array.Empty<ParameterInfo>(),
+                    GenericConstraints: Array.Empty<GenericConstraint>()))
                 .ToList(),
             Edges: []);
 
