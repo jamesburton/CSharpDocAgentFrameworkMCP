@@ -47,7 +47,8 @@ public sealed class IngestionService : IIngestionService
         string? excludeGlob,
         bool forceReindex,
         Func<int, int, string, Task>? reportProgress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceFullReingestion = false)
     {
         var normalizedPath = Path.GetFullPath(path);
         var semaphore = _locks.GetOrAdd(normalizedPath, _ => new SemaphoreSlim(1, 1));
@@ -81,6 +82,15 @@ public sealed class IngestionService : IIngestionService
             if (reportProgress is not null)
                 await reportProgress(2, 4, $"Parsing ({projectCount} projects)...").ConfigureAwait(false);
 
+            // Load previous snapshot for incremental merge (latest by manifest order)
+            SymbolGraphSnapshot? previousSnapshot = null;
+            var manifestEntries = await _store.ListAsync(ct).ConfigureAwait(false);
+            if (manifestEntries.Count > 0)
+            {
+                var latestEntry = manifestEntries[^1];
+                previousSnapshot = await _store.LoadAsync(latestEntry.ContentHash, ct).ConfigureAwait(false);
+            }
+
             SymbolGraphSnapshot snapshot;
             if (PipelineOverride is not null)
             {
@@ -92,9 +102,16 @@ public sealed class IngestionService : IIngestionService
                 var resolver = new InheritDocResolver();
                 var builder = new RoslynSymbolGraphBuilder(parser, resolver, logWarning: w => warnings.Add(w));
                 var docs = new DocInputSet(new Dictionary<string, string>());
+                var engine = new IncrementalIngestionEngine(
+                    builder,
+                    _store,
+                    _store.ArtifactsDir,
+                    logWarning: w => warnings.Add(w));
+
                 try
                 {
-                    snapshot = await builder.BuildAsync(inventory, docs, ct).ConfigureAwait(false);
+                    snapshot = await engine.IngestAsync(
+                        inventory, docs, previousSnapshot, forceFullReingestion, ct).ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

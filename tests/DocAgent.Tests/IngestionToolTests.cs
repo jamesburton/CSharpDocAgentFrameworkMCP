@@ -94,7 +94,8 @@ public sealed class IngestionToolTests
             string? excludeGlob,
             bool forceReindex,
             Func<int, int, string, Task>? reportProgress,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool forceFullReingestion = false)
         {
             LastPath = path;
             LastInclude = includeGlob;

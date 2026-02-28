@@ -11,6 +11,7 @@ public interface IIngestionService
     /// <param name="includeGlob">Optional glob pattern to include project files (e.g. <c>**/*.csproj</c>).</param>
     /// <param name="excludeGlob">Optional glob pattern to exclude project files (e.g. <c>**/Tests/**</c>).</param>
     /// <param name="forceReindex">When true, re-indexes even if snapshot is already current.</param>
+    /// <param name="forceFullReingestion">When true, re-parses all projects regardless of what has changed.</param>
     /// <param name="reportProgress">Optional async callback: (current, total, stageName). Only invoked when a progress token is present.</param>
     /// <param name="cancellationToken">Cancellation token (also used to enforce the configured timeout).</param>
     Task<IngestionResult> IngestAsync(
@@ -19,5 +20,6 @@ public interface IIngestionService
         string? excludeGlob,
         bool forceReindex,
         Func<int, int, string, Task>? reportProgress,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool forceFullReingestion = false);
 }
