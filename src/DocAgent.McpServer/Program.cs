@@ -77,7 +77,7 @@ app.MapHealthChecks("/health");
 
 // Startup: load existing index if snapshot exists on disk
 var store = app.Services.GetRequiredService<SnapshotStore>();
-var index = (BM25SearchIndex)app.Services.GetRequiredService<ISearchIndex>();
+var index = app.Services.GetRequiredService<ISearchIndex>();
 var snapshots = await store.ListAsync();
 if (snapshots.Count > 0)
 {
