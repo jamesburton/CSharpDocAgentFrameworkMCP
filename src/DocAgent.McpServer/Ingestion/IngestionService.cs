@@ -119,7 +119,7 @@ public sealed class IngestionService : IIngestionService
             string? indexError = null;
             try
             {
-                await _index.IndexAsync(saved, ct).ConfigureAwait(false);
+                await _index.IndexAsync(saved, ct, forceReindex).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

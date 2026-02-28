@@ -7,7 +7,7 @@ public sealed class InMemorySearchIndex : ISearchIndex
 {
     private readonly Dictionary<SymbolId, SymbolNode> _nodes = new();
 
-    public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct)
+    public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false)
     {
         _nodes.Clear();
         foreach (var n in snapshot.Nodes)

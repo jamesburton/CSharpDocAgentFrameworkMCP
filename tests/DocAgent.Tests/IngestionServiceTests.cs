@@ -294,12 +294,51 @@ public sealed class IngestionServiceTests : IDisposable
         progress.Select(p => p.current).Should().Equal(1, 2, 3, 4);
     }
 
+    [Fact]
+    public async Task IngestAsync_ForceReindexTrue_PassesTrueToIndex()
+    {
+        // forceReindex=true should be forwarded to ISearchIndex.IndexAsync.
+        var stub = new StubSearchIndex();
+        var svc = CreateService(index: stub);
+        svc.PipelineOverride = InstantPipeline(MakeSnapshot());
+
+        var csprojPath = Path.Combine(_tempDir, "Force.csproj");
+        await File.WriteAllTextAsync(csprojPath, "<Project />");
+
+        await svc.IngestAsync(csprojPath, null, null, forceReindex: true, null, CancellationToken.None);
+
+        stub.LastForceReindex.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IngestAsync_ForceReindexFalse_PassesFalseToIndex()
+    {
+        // forceReindex=false (default) should be forwarded as false to ISearchIndex.IndexAsync.
+        var stub = new StubSearchIndex();
+        var svc = CreateService(index: stub);
+        svc.PipelineOverride = InstantPipeline(MakeSnapshot());
+
+        var csprojPath = Path.Combine(_tempDir, "NoForce.csproj");
+        await File.WriteAllTextAsync(csprojPath, "<Project />");
+
+        await svc.IngestAsync(csprojPath, null, null, forceReindex: false, null, CancellationToken.None);
+
+        stub.LastForceReindex.Should().BeFalse();
+    }
+
     // ── Stub implementations ──────────────────────────────────────────────────
 
     private sealed class StubSearchIndex : ISearchIndex
     {
-        public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct) =>
-            Task.CompletedTask;
+        public int IndexCallCount { get; private set; }
+        public bool LastForceReindex { get; private set; }
+
+        public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false)
+        {
+            IndexCallCount++;
+            LastForceReindex = forceReindex;
+            return Task.CompletedTask;
+        }
 
         public async IAsyncEnumerable<SearchHit> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
@@ -312,7 +351,7 @@ public sealed class IngestionServiceTests : IDisposable
 
     private sealed class FailingSearchIndex : ISearchIndex
     {
-        public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct) =>
+        public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false) =>
             Task.FromException(new InvalidOperationException("Index write failed."));
 
         public async IAsyncEnumerable<SearchHit> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)

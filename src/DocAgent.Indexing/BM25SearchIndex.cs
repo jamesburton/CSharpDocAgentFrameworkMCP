@@ -49,7 +49,7 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
 
     // --- ISearchIndex ---------------------------------------------------------
 
-    public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct)
+    public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false)
     {
         if (_injectedDirectory is not null)
         {
@@ -65,8 +65,8 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
         System.IO.Directory.CreateDirectory(indexPath);
         var dir = FSDirectory.Open(new System.IO.DirectoryInfo(indexPath));
 
-        // Freshness check: skip rebuild if index already contains this hash.
-        if (IsIndexFresh(dir, snapshot.ContentHash!))
+        // Freshness check: skip rebuild if index already contains this hash (unless forced).
+        if (!forceReindex && IsIndexFresh(dir, snapshot.ContentHash!))
         {
             // Populate _nodes for GetAsync, reuse existing index directory.
             PopulateNodes(snapshot);
