@@ -24,7 +24,7 @@ Full details: milestones/v1.0-ROADMAP.md
 </details>
 
 - [x] **Phase 9: Semantic Diff Engine** - Core diff types and algorithm for comparing two SymbolGraphSnapshots — detect signature, nullability, constraint, accessibility, and dependency changes (completed 2026-02-28)
-- [ ] **Phase 10: Incremental Ingestion** - File change detection and partial re-ingestion — only re-process changed files with precise change tracking
+- [x] **Phase 10: Incremental Ingestion** - File change detection and partial re-ingestion — only re-process changed files with precise change tracking (completed 2026-02-28)
 - [ ] **Phase 11: Change Intelligence & Review** - MCP tools (review_changes, find_breaking_changes, explain_change) and unusual change review skill with worktree-based remediation proposals (depends on Phase 9)
 
 ## Progress
@@ -40,7 +40,7 @@ Full details: milestones/v1.0-ROADMAP.md
 | 6. Analysis + Hosting | v1.0 | 4/4 | Complete | 2026-02-28 |
 | 8. Ingestion Runtime Trigger | v1.0 | 2/2 | Complete | 2026-02-28 |
 | 9. Semantic Diff Engine | v1.1 | 3/3 | Complete | 2026-02-28 |
-| 10. Incremental Ingestion | 2/3 | In Progress|  | — |
+| 10. Incremental Ingestion | 3/3 | Complete   | 2026-02-28 | — |
 | 11. Change Intelligence & Review | v1.1 | 0/? | Pending | — |
 
 ## Phase Details
@@ -59,7 +59,7 @@ Full details: milestones/v1.0-ROADMAP.md
 **Goal**: File change detection and partial re-ingestion — only re-process changed files with precise change tracking
 **Depends on**: Nothing (builds on v1.0 Ingestion pipeline)
 **Requirements**: R-INCR-INGEST
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md — Core types (IngestionMetadata, FileHashManifest) and unit tests

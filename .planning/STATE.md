@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 10 of 11 — Incremental Ingestion (in progress)
-Plan: 2 of 3 plans executed (10-02 complete)
-Status: In progress — plan 02 executed
-Last activity: 2026-02-28 — Phase 10 plan 02 executed
+Phase: 10 of 11 — Incremental Ingestion (complete)
+Plan: 3 of 3 plans executed (10-03 complete)
+Status: Phase 10 complete — all 3 plans executed
+Last activity: 2026-02-28 — Phase 10 plan 03 executed
 
 ## Accumulated Context
 
@@ -45,8 +45,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 10-02-PLAN.md
-Resume file: .planning/phases/10-incremental-ingestion/10-03-PLAN.md
+Stopped at: Completed 10-03-PLAN.md
+Resume file: .planning/phases/11-mcp-tool-updates/11-01-PLAN.md
 
 ### Decisions (09-01)
 
@@ -78,3 +78,9 @@ Resume file: .planning/phases/10-incremental-ingestion/10-03-PLAN.md
 
 - DiffTestHelpers uses BuildSnapshot overloads with optional projectName for incompatible-snapshot tests
 - DiffDeterminismTests uses ContractlessStandardResolver matching existing SnapshotSerializationTests pattern
+
+### Decisions (10-03)
+
+- ContentHashedBuilder (BuildOverride fallback) used instead of real Roslyn — avoids MSBuild SDK resolution fragility per plan fallback guidance
+- Fresh artifacts directory per independent run prevents manifest cross-contamination between full and incremental paths in tests
+- Node ID encodes relPath + SHA-256 prefix — models real re-parse behavior (changed content yields different node IDs)
