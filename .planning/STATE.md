@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 10 of 11 — Incremental Ingestion (complete)
-Plan: 3 of 3 plans executed (10-03 complete)
-Status: Phase 10 complete — all 3 plans executed
-Last activity: 2026-02-28 — Phase 10 plan 03 executed
+Phase: 11 of 11 — Change Intelligence Review (in progress)
+Plan: 1 of 3 plans executed (11-01 complete)
+Status: Phase 11 in progress — plan 01 executed
+Last activity: 2026-02-28 — Phase 11 plan 01 executed
 
 ## Accumulated Context
 
@@ -45,8 +45,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 10-03-PLAN.md
-Resume file: .planning/phases/11-mcp-tool-updates/11-01-PLAN.md
+Stopped at: Completed 11-01-PLAN.md
+Resume file: .planning/phases/11-change-intelligence-review/11-02-PLAN.md
 
 ### Decisions (09-01)
 
@@ -84,3 +84,10 @@ Resume file: .planning/phases/11-mcp-tool-updates/11-01-PLAN.md
 - ContentHashedBuilder (BuildOverride fallback) used instead of real Roslyn — avoids MSBuild SDK resolution fragility per plan fallback guidance
 - Fresh artifacts directory per independent run prevents manifest cross-contamination between full and incremental paths in tests
 - Node ID encodes relPath + SHA-256 prefix — models real re-parse behavior (changed content yields different node IDs)
+
+### Decisions (11-01)
+
+- AccessibilityRank dictionary maps 6-value Accessibility enum (no File value); Private=0 through Public=5
+- Unusual symbol IDs tracked in HashSet for O(1) lookup during severity escalation
+- MassSignatureChange groups by ParentSymbolId.Value — only fires when ParentSymbolId is non-null
+- NullabilityRegression: checks OldAnnotation not ending with '?' and NewAnnotation does, using NullabilityChangeDetail fields
