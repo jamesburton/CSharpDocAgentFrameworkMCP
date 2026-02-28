@@ -25,6 +25,9 @@ public sealed class SnapshotStore
 
     private readonly string _artifactsDir;
 
+    /// <summary>The directory where snapshots and manifests are persisted.</summary>
+    public string ArtifactsDir => _artifactsDir;
+
     public SnapshotStore(string artifactsDir)
     {
         _artifactsDir = artifactsDir;
