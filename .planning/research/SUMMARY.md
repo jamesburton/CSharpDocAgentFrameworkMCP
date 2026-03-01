@@ -1,210 +1,215 @@
 # Project Research Summary
 
-**Project:** CSharpDocAgentFrameworkMCP
-**Domain:** .NET compiler-grade code documentation memory system with MCP server
-**Researched:** 2026-02-26
+**Project:** DocAgentFramework v1.2 — Multi-Project / Solution-Level Symbol Graphs
+**Domain:** .NET Roslyn-based code documentation ingestion with MCP server
+**Researched:** 2026-03-01 (v1.2 research synthesized over v1.0 baseline from 2026-02-26)
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This project builds an agent-native code documentation memory system for .NET/C# codebases, exposing compiler-accurate symbol intelligence through a Model Context Protocol (MCP) stdio server. The core thesis is that Roslyn's semantic model produces provably correct symbol information — types, nullability, generic constraints, member signatures — that no text parser or embedding heuristic can match. The recommended approach is a strict layered pipeline: ingest source via Roslyn workspace at build time, emit an immutable `SymbolGraphSnapshot` artifact, index it with BM25 for keyword search, and serve agent queries through a narrow MCP tool surface. The serving layer never holds a live Roslyn workspace — all queries are answered from the persisted snapshot.
+DocAgentFramework v1.2 extends an already-working single-project symbol graph pipeline to operate at the solution level. The project has a strong foundation: v1.1 ships `SymbolGraphSnapshot`, `RoslynSymbolGraphBuilder`, `BM25SearchIndex`, 8 MCP tools, incremental ingestion, and `PathAllowlist` security enforcement. The v1.2 milestone does not require architectural rethinking — it requires targeted, backward-compatible extensions to an established pipeline. The recommended approach is to treat the existing flat multi-node graph as the preserved contract, extend it with per-node attribution (`ProjectOrigin`, `IsStub`), add two new static pure-logic services (`SolutionDependencyResolver`, `SolutionGraphMerger`), and surface solution-level data through one new MCP tool (`explain_solution`) and one new trigger tool (`ingest_solution`). The single-snapshot model is preserved; per-project sub-snapshots are explicitly rejected as an anti-pattern.
 
-The key competitive gap this fills is the combination of compiler accuracy, offline/self-hosted operation, and versioned diffable memory. Sourcegraph provides broad search but its symbol memory is opaque and requires a hosted service. CodeQL is a query engine, not a memory substrate. Raw LSP is live-only with no persistence or historical diff. DocAgentFramework occupies the intersection: deterministic, versionable, diff-capable, air-gap-compatible code memory for .NET agents.
+The critical technical dependency is `Microsoft.Build.Locator` 1.11.2, which must be explicitly referenced in `DocAgent.McpServer` and `DocAgent.AppHost` and called as `MSBuildLocator.RegisterDefaults()` before any MSBuild type is loaded. The existing `LocalProjectSource` already calls `MSBuildWorkspace.OpenSolutionAsync` for `.sln` inputs, so the workspace integration is partially in place — what is missing is dependency ordering, per-node project attribution, stub node generation, and merged indexing. Three net-new NuGet packages cover all gaps: `Microsoft.Build.Locator` 1.11.2, `NuGet.Packaging` 6.12.0, and `NuGet.Configuration` 6.12.0.
 
-The highest-risk decisions are made earliest: the `SymbolId` stability spec and snapshot determinism must be locked before any downstream work begins, because every diff, cache, and index depends on them. The most dangerous operational pitfall is stdout contamination breaking the MCP stdio framing — this must be enforced at server scaffold time. The recommended stack is fully confirmed: .NET 10, Roslyn 5.0.0, ModelContextProtocol 1.0.0 (just reached stable), Lucene.Net 4.8.0-beta for BM25, Aspire 13.1 for hosting, and xunit.v3 for testing.
+The main risks are MSBuildWorkspace memory growth (every snapshot build loads full compilations into memory — these must be extracted to plain data and released immediately), STDIO contamination corrupting the MCP stream (all logging must go to stderr — established from v1.1 but worth re-verifying), and non-deterministic snapshot serialization (all collections must be sorted before serialization). All three are known patterns with clear mitigations. The implementation is a bottom-up, phase-by-phase build: Core model extensions first, then Ingestion layer, then Indexing, then MCP tools — each phase independently testable.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is high-confidence and well-grounded. .NET 10 (LTS) with C# 14 is the locked target. The most important upgrade is Roslyn from 4.12.0 to **5.0.0** — the current pin misses C# 14 semantic APIs. The MCP SDK just reached **1.0.0** (2026-02-25) and the preview wildcard in `Directory.Packages.props` must be pinned immediately. Lucene.Net 4.8.0-beta is the only mature self-contained BM25 implementation for .NET; its `ISearchIndex` abstraction allows swapping to a hand-rolled implementation if the beta status is unacceptable. All logging must route to stderr to protect the MCP stdio stream — this is non-negotiable.
+The v1.2 stack adds exactly three packages on top of the already-pinned v1.1 dependencies. `Microsoft.Build.Locator` 1.11.2 is the required companion to `MSBuildWorkspace` for standalone host processes — without it, workspace construction throws a MEF composition exception with no useful diagnostic. `NuGet.Packaging` 6.12.0 and `NuGet.Configuration` 6.12.0 enable reading package metadata from the local NuGet cache (no network calls) to create stub `SymbolNode`s for external package types. The 6.x line is the stable public Client SDK; 7.x is prerelease internal tooling. No other net-new dependencies are required.
 
-**Core technologies:**
-- `.NET 10 / C# 14`: Target framework — LTS, already locked in project constraints
-- `Microsoft.CodeAnalysis.CSharp 5.0.0`: Roslyn compiler API — upgrade from 4.12.0 required for C# 14 semantic models
-- `ModelContextProtocol 1.0.0`: MCP stdio server SDK — just reached stable; pin immediately, drop preview wildcard
-- `Lucene.Net 4.8.0-beta00017`: BM25 full-text search — only mature .NET BM25 option; `ISearchIndex` interface is the escape hatch
-- `Aspire 13.1.0`: App host + telemetry — optional for V1 but strongly recommended; routes OpenTelemetry without boilerplate
-- `xunit.v3 3.2.2 + FluentAssertions 8.8.0`: Testing — upgrade from v2/6.x; xunit.v3 required for proper async CancellationToken support
+**Core technologies (v1.2 additions only):**
+- `Microsoft.Build.Locator` 1.11.2: MSBuild assembly discovery at process startup — required for `MSBuildWorkspace` in standalone executables; must be called before any MSBuild type is loaded
+- `NuGet.Packaging` 6.12.0: Read `.nuspec` metadata from the local package cache for stub node construction — no network I/O
+- `NuGet.Configuration` 6.12.0: Resolve global NuGet packages folder path without hardcoded paths; must match `NuGet.Packaging` major.minor
+
+**Critical constraint:** `MSBuildLocator.RegisterDefaults()` must be the very first statement in `Program.cs`, before any `Microsoft.CodeAnalysis.MSBuild` or `Microsoft.Build.*` type is referenced. Failure mode is a silent MEF composition exception with no useful diagnostic. Do NOT add a direct `PackageReference` to `Microsoft.Build` — the locator manages those assemblies at runtime; referencing them directly causes binding failures.
+
+**Already pinned (do not change):** `Microsoft.CodeAnalysis.CSharp` 4.12.0, `Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.12.0, `MessagePack` 3.1.4, `Lucene.Net` 4.8.0-beta00017, `ModelContextProtocol` 1.0.0, `System.IO.Hashing` 9.0.0, `OpenTelemetry.*` 1.15.0, all test packages.
 
 ### Expected Features
 
-**Must have (table stakes — V1):**
-- Stable `SymbolId` spec — foundation for everything; wrong decisions here force a full rebuild
-- Roslyn symbol graph walker — namespaces, types, members, file spans; this is the compiler truth engine
-- XML doc parser with symbol binding — binds prose documentation to specific symbols via XML doc ID round-trip
-- Deterministic snapshot serialization — same input must produce identical bytes; required for diff and caching
-- BM25 search index — solves 80% of agent navigation cheaply and deterministically
-- MCP tools: `search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project` — the agent-facing surface
-- Path allowlist + audit logging — minimum security posture for CI use
-- Snapshot artifact storage — write versioned snapshots to `artifacts/snapshots/` for historical diff
+The v1.2 feature set is well-defined by the milestone scope. The dependency chain is clear: `.sln` ingestion and the `SolutionSnapshot` aggregate must land first because every other feature depends on them. Cross-project `SymbolEdge`s and unified BM25 search come next. The two highest-complexity features (NuGet stub nodes and per-project incremental re-ingestion) are P2 follow-ons.
 
-**Should have (competitive differentiators — V1.x / V2):**
-- Semantic diff engine with risk scoring — structured API surface change detection; no competitor exposes this as a composable MCP tool
-- Roslyn analyzers for doc parity enforcement — catch public API changes not reflected in docs at CI time
-- Doc coverage policy enforcement as a build gate — configurable threshold per project/namespace
-- PackageRefGraph — NuGet dependency graph reasoning; unavailable in LSP or Sourcegraph without custom indexing
-- `review_changes` MCP tool (Unusual Change Review skill) — synthesizes semantic diff + analyzer findings
+**Must have (table stakes — P1):**
+- `.sln` ingestion via `MSBuildWorkspace.OpenSolutionAsync` — skip non-C# projects gracefully with logged warning; `IngestionTools.ingest_project` already accepts `.sln` paths
+- `SolutionSnapshot` extensions — `SolutionName?`, `IReadOnlyList<ProjectEntry> Projects` added to `SymbolGraphSnapshot`; `ProjectEntry` is a new record with name, file path, project references, and test project flag
+- Cross-project `SymbolEdge`s — `Inherits`/`Implements`/`References` edges across project boundaries tagged with new `EdgeScope.CrossProject` enum value
+- Per-node project attribution — `ProjectOrigin?` and `IsStub` fields added to `SymbolNode`; null/false defaults ensure backward compatibility with v1.0/v1.1 snapshots via MessagePack `ContractlessStandardResolver`
+- Unified BM25 search index — `project` field added to each Lucene document; `search_symbols` gains optional `projectFilter` parameter
+- `get_references` gains optional `crossProjectOnly` parameter — filters by `EdgeScope.CrossProject`
+- `explain_solution` MCP tool — solution architecture overview: project list, dependency DAG, per-project node/edge counts, doc coverage, stub node count
+- `ingest_solution` MCP tool — explicit re-ingestion trigger for `.sln` files; PathAllowlist-enforced
 
-**Defer (V2+):**
-- `IVectorIndex` implementation — define interface in V1 only; implement when BM25 proves insufficient
-- HTTP/SSE MCP transport — adds auth complexity; defer until stdio is proven and auth model is designed
-- Embeddings / semantic search — adds non-determinism and provider coupling; BM25 covers 80% of navigation needs
-- Polyglot via Tree-sitter — locks to C#/Roslyn until generic `ISymbolGraphBuilder<TDoc>` contract is stable
-- Query DSL — premature without known query patterns from real agent usage
+**Should have (P2 follow-on within milestone):**
+- Stub/metadata nodes for NuGet packages — lightweight `IsStub = true` nodes from nuspec metadata; satisfies dangling edge targets without network I/O
+- Per-project incremental re-ingestion — re-ingest only changed projects; manifest-of-manifests keyed by project path; most complex feature in the milestone
+
+**Defer (v2+):**
+- Vector/semantic search — `IVectorIndex` interface already stubbed; embeddings provider not yet selected
+- HTTP/SSE MCP transport — auth model not yet designed
+- Polyglot support (F#, VB) — deferred; F# Roslyn support incomplete
+- Real-time file-watch re-ingestion — event storms and consistency complexity
+
+**Anti-features (explicitly rejected):**
+- Full NuGet package source ingestion — millions of symbols, gigabyte index bloat
+- One giant merged `SymbolGraphSnapshot` replacing all project snapshots — loses per-project identity, breaks the determinism contract
+- Per-project sub-snapshot storage — breaks the existing single-snapshot model that `KnowledgeQueryService`, `BM25SearchIndex`, and `SnapshotStore` all depend on
 
 ### Architecture Approach
 
-The architecture follows a strict compiler pipeline pattern: each phase produces an immutable artifact consumed by the next, and no downstream component can reach backward to an upstream one. The `SymbolGraphSnapshot` is the critical interchange artifact — versioned, deterministically serialized, and persisted to `artifacts/`. The MCP serving layer is deliberately thin: it validates input, delegates to `IKnowledgeQueryService`, formats output, and logs. All business logic lives in the facade and below. The Roslyn workspace is a build-time tool only; it is never held open in the serving path.
+The existing architecture already handles multi-project within one flat snapshot — `RoslynSymbolGraphBuilder` already loops over all projects in `ProjectInventory`. The v1.2 changes are additive: new fields on existing types (backward-compatible via MessagePack `ContractlessStandardResolver`), two new static pure-logic services, and one new MCP tool class. The `SchemaVersion` should be bumped from `"1.0"` to `"1.2"` in `RoslynSymbolGraphBuilder.BuildAsync` after all new fields are added; `KnowledgeQueryService` should tolerate both schema versions.
 
-**Major components:**
-1. `DocAgent.Core` — Pure domain: zero-dependency interfaces (`IProjectSource`, `IDocSource`, `ISymbolGraphBuilder`, etc.) and domain types (`SymbolNode`, `SymbolGraphSnapshot`, `SymbolId`, `GraphDiff`)
-2. `DocAgent.Ingestion` — All I/O-touching, source-format-specific code: `LocalProjectSource`, `LocalDocSource`, `XmlDocParser`, `RoslynSymbolGraphBuilder`
-3. `DocAgent.Indexing` — BM25 `ISearchIndex` + `SnapshotStore`; decoupled from ingestion, consumes only `SymbolGraphSnapshot` values
-4. `DocAgent.Analysis` — `SymbolDiffEngine` + Roslyn `DiagnosticAnalyzer` implementations; pure functions over snapshots
-5. `DocAgent.McpServer` — Thin MCP tool handlers, path allowlist, audit logger; security boundary lives here, not deeper
-6. `DocAgent.AppHost` — Aspire app host, DI wiring, OpenTelemetry configuration
+**New components:**
+1. `SolutionDependencyResolver` (Ingestion) — static pure-logic class; topological sort (Kahn's algorithm) of the project dependency graph; produces dependency-ordered project list and `ProjectEntry[]`; easily tested with in-memory fixtures, no DI required
+2. `SolutionGraphMerger` (Ingestion) — static pure-logic class; promotes stub nodes to real nodes when a real node with matching `SymbolId` appears from a later-processed project; tags `EdgeScope` on all edges; same pattern as `ChangeReviewer` and `SymbolGraphDiffer` from v1.1
+3. `SolutionTools` (McpServer/Tools) — new `[McpServerToolType]` class implementing `explain_solution`; follows exact `DocTools`/`ChangeTools` pattern with `PathAllowlist` enforcement on all operations
+
+**Modified components (key changes):**
+- `SymbolNode` (Core/Symbols.cs): add `ProjectOrigin?` and `IsStub` — null/false defaults are backward-compatible
+- `SymbolEdge` (Core/Symbols.cs): add `EdgeScope` enum with `IntraProject` default — backward-compatible
+- `SymbolGraphSnapshot` (Core/Symbols.cs): add `SolutionName?` and `IReadOnlyList<ProjectEntry> Projects` — empty list default is backward-compatible
+- `ProjectInventory` (Core/Abstractions.cs): add `ProjectDependencies` adjacency map
+- `IKnowledgeQueryService` (Core/Abstractions.cs): add optional `projectFilter` to `SearchAsync`
+- `LocalProjectSource` (Ingestion): populate `ProjectDependencies` adjacency map from Roslyn solution
+- `RoslynSymbolGraphBuilder` (Ingestion): tag each node with `ProjectOrigin`; emit lightweight stub nodes for dangling edge targets
+- `SnapshotManifestEntry` (Ingestion): add `SolutionName?` and `ProjectCount`
+- `BM25SearchIndex` (Indexing): add `project` field to Lucene document
+- `KnowledgeQueryService` (Indexing): thread `projectFilter` through `SearchAsync`
+- `DocTools` (McpServer/Tools): add `projectFilter` to `search_symbols`, `crossProjectOnly` to `get_references`
 
 ### Critical Pitfalls
 
-1. **Symbol identity instability** — Using `ISymbol.ToDisplayString()` or raw XML doc IDs as persisted `SymbolId` values breaks on rename; add `PreviousIds` rename tracking, write a golden-file rename test, and lock the `SymbolId` spec before any other work. Address: Phase 1 (Core Domain).
+1. **MSBuildLocator not called before first MSBuild type load** — Call `MSBuildLocator.RegisterDefaults()` as the absolute first statement in `Program.cs`. This is the single most common `MSBuildWorkspace` failure mode. The error is a MEF composition exception with no useful diagnostic — it appears as an infrastructure failure, not a missing-package error.
 
-2. **Stdout contamination breaking MCP protocol** — Any `Console.Write`, unhandled exception trace, or logger writing to stdout corrupts MCP JSON-RPC framing. Redirect all `ILogger` sinks to stderr from day one; add an integration test that captures raw stdout bytes and asserts valid JSON-RPC only. Address: Phase 5 (MCP Server scaffold).
+2. **MSBuildWorkspace memory growth in long-running processes** — After `RoslynSymbolGraphBuilder.BuildAsync`, extract all needed data into `SymbolNode`/`SymbolEdge` plain records immediately and release `Compilation` objects. Do not cache `Compilation` or `SemanticModel` in DI services. Add a memory regression test: build the same fixture project 10 times in a loop and assert no unbounded Gen2 GC growth.
 
-3. **MSBuildWorkspace memory leakage** — Roslyn `Compilation` objects cannot be GC'd without an `AssemblyLoadContext` boundary; repeated builds in a long-running process cause unbounded memory growth. Isolate each snapshot build in a collectible `AssemblyLoadContext` or run ingestion as a short-lived worker process. Address: Phase 2 (Ingestion pipeline).
+3. **MSBuildWorkspace silent failures on stale build artifacts** — `ProjectReference` resolution can produce semantically incomplete compilations if build artifacts are stale. Always check and log `workspace.Diagnostics` after `OpenSolutionAsync`. Treat any project with null or empty compilation as skipped.
 
-4. **Non-deterministic snapshot serialization** — `HashSet<T>`, `Dictionary<K,V>`, and unordered Roslyn symbol enumeration produce different orderings across runs. Sort all collections before serialization; write a byte-identical cross-run determinism test as the first snapshot test. Address: Phase 1 + Phase 2.
+4. **Non-deterministic snapshot serialization** — All collections in `SymbolGraphSnapshot` must be sorted before serialization (symbols by `SymbolId`, edges by `(From, To, Kind)`). The `SchemaVersion` bump to `"1.2"` must be accompanied by a byte-for-byte determinism test that runs the same fixture twice in the same process and asserts identical output.
 
-5. **XML doc binding failures on generics and partial types** — Backtick-encoded XML doc IDs (`M:Foo.Bar``1(System.String,``0)`) have known edge cases for generics, partial classes, overloads, and operators. Use `DocumentationCommentId.GetFirstSymbolForDeclarationId()` for round-trip lookup; track unbound doc entries as a pipeline metric. Address: Phase 2 (Ingestion pipeline).
+5. **Stub node proliferation from transitive NuGet references** — Cap stub node creation to direct assembly references only (assemblies explicitly listed in the project file's `PackageReference` items), not the transitive closure. At 100 projects with rich NuGet graphs, uncapped stub node generation can produce tens of thousands of nodes and materially increase indexing time.
 
-6. **Prompt injection via doc comments** — XML doc comment text read verbatim by agents is an injection vector (OWASP LLM01:2025). Implement output redaction hooks; return structured DTOs rather than raw strings; mark tool output as "data, not instructions." Address: Phase 5 (Security hardening).
+6. **STDIO contamination breaking MCP stream** — All `ILogger` sinks must write exclusively to `stderr` or a file sink. Any `Console.Write*` call in the server project, unhandled exception trace, or .NET startup banner written to stdout corrupts MCP JSON-RPC framing. This was established in v1.1 but must be verified in any new tool class or host modification.
+
+---
 
 ## Implications for Roadmap
 
-Based on research, the architecture's own build-order analysis maps directly to phases. Each phase is independently testable before the next phase begins.
+The bottom-up build order documented in ARCHITECTURE.md maps directly to implementation phases. Each phase is independently testable and delivers a verifiable increment. The recommended structure has 5 phases for the v1.2 milestone.
 
-### Phase 1: Core Domain Contracts
-**Rationale:** Everything else depends on `DocAgent.Core`. The `SymbolId` spec and snapshot schema must be locked first — wrong decisions here force a full rebuild of every downstream component. This is the highest-leverage, lowest-implementation-cost phase.
-**Delivers:** Locked `SymbolId` spec, `SymbolGraphSnapshot` schema with schema version + content hash, all interface contracts, domain records. Zero runtime dependencies.
-**Addresses:** Stable symbol identity (P1 feature), snapshot versioning and schema migration (P1 feature)
-**Avoids:** Symbol identity instability (Pitfall 1), non-deterministic serialization (Pitfall 4)
-**Research flag:** Standard patterns — no additional research needed; Roslyn XML doc ID format is well-documented.
+### Phase 1: Core Domain Model Extensions
 
-### Phase 2: Ingestion Pipeline
-**Rationale:** The index consumes snapshots; you need a real snapshot from a real codebase to validate the index. Ingestion must produce a correct, deterministic snapshot before indexing begins.
-**Delivers:** `LocalProjectSource`, `LocalDocSource`, `XmlDocParser` (with generic/partial/overload edge cases), `RoslynSymbolGraphBuilder` (Roslyn walk + doc merge), `SnapshotStore` (artifacts/ read/write), determinism test suite.
-**Uses:** `Microsoft.CodeAnalysis.CSharp 5.0.0`, `Microsoft.CodeAnalysis.CSharp.Workspaces 5.0.0`, `System.Xml.Linq` (inbox), `System.Text.Json` (inbox)
-**Avoids:** MSBuildWorkspace memory leak (Pitfall 3), XML doc binding failures (Pitfall 5), non-deterministic serialization (Pitfall 4)
-**Research flag:** May need deeper research on `MSBuildLocator` isolation strategies and `AssemblyLoadContext` boundary patterns for snapshot build lifecycle.
+**Rationale:** All v1.2 features depend on the extended domain types. These are the lowest-risk changes — adding nullable/default fields to existing records. Must land first because Ingestion, Indexing, and McpServer layers all reference these types. Zero behavior change in this phase; purely type contract updates.
 
-### Phase 3: BM25 Search Index
-**Rationale:** The query facade delegates to the index; the facade must be built on a real index, not the `InMemorySearchIndex` stub. BM25 replaces the stub with a correctness-validated implementation.
-**Delivers:** `Bm25SearchIndex` replacing `InMemorySearchIndex`, camelCase-aware tokenization, index persistence alongside snapshots, `IVectorIndex` interface (stub only).
-**Uses:** `Lucene.Net 4.8.0-beta00017`, `Lucene.Net.Analysis.Common`, `Lucene.Net.QueryParser`
-**Avoids:** BM25 index rebuilt from scratch on every search (performance trap), stub fallback silently used in production
-**Research flag:** Standard patterns — Lucene.Net BM25Similarity is well-documented; no additional research needed.
+**Delivers:** Updated `SymbolNode` (`ProjectOrigin?`, `IsStub`), updated `SymbolEdge` (`EdgeScope` with default), updated `SymbolGraphSnapshot` (`SolutionName?`, `Projects` list), new `ProjectEntry` record, new `EdgeScope` enum, updated `IKnowledgeQueryService.SearchAsync` signature, updated `ProjectInventory`
 
-### Phase 4: Query Facade
-**Rationale:** MCP tools must be thin wrappers around a tested facade. The facade isolates business logic (search ranking, diff, filtering) from the transport layer, enabling testing without a running MCP server.
-**Delivers:** `IKnowledgeQueryService` wired to `ISearchIndex` + `SnapshotStore`; `SearchAsync`, `GetSymbolAsync`, `DiffAsync` (basic structural diff).
-**Implements:** Query facade pattern (Architecture Pattern 3)
-**Avoids:** Thin core / fat tools anti-pattern (Architecture Anti-Pattern 3)
-**Research flag:** Standard patterns — facade pattern is well-established.
+**Addresses:** Foundation for all P1 table-stakes features
 
-### Phase 5: MCP Server + Security
-**Rationale:** The serving boundary is where security lives. Stdio contamination, path traversal, prompt injection, and scope creep must all be addressed at tool registration time before any tools ship.
-**Delivers:** `DocTools.cs` handlers for `search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`; `PathAllowlist`; `AuditLogger`; stderr-only logging configuration; integration test for raw stdout byte capture.
-**Uses:** `ModelContextProtocol 1.0.0` (stable — pin immediately), `Microsoft.Extensions.Hosting` (inbox)
-**Avoids:** Stdout contamination (Pitfall 2), MCP tool scope creep (Pitfall 6), prompt injection (Pitfall 7), path traversal (security mistake)
-**Research flag:** Needs research — MCP SDK 1.0.0 was released the day before this research. Verify exact `[McpServerTool]` attribute API, tool schema validation via `mcp inspect`, and stdio transport configuration. Also verify Aspire 13.1 + MCP integration patterns.
+**Avoids:** Backward-compatibility breaks — all new fields must have null/false/empty-list defaults; existing MessagePack artifacts from v1.0/v1.1 must deserialize without error
 
-### Phase 6: Analysis Layer
-**Rationale:** Diff and analyzer logic are additive features on top of a working pipeline. They depend on a stable snapshot format and validated ingestion pipeline, both completed in earlier phases.
-**Delivers:** `SymbolDiffEngine` (full semantic diff with risk scoring, nullability classification, compiler-synthesized member exclusion), Roslyn `DiagnosticAnalyzer` implementations for doc parity and suspicious edit detection, `review_changes` MCP tool.
-**Avoids:** Diff false positives from nullability and compiler-generated members (Pitfall 8)
-**Research flag:** Needs research — risk classification model for semantic diff findings (nullability changes as LOW risk, binary-incompatible changes as HIGH) benefits from review of APIDiff literature and Roslyn `ISymbol.IsImplicitlyDeclared` API.
+**Research flag:** Standard patterns — record type additions and MessagePack `ContractlessStandardResolver` backward-compat are well-understood. No additional research needed.
 
-### Phase 7: Host + Observability
-**Rationale:** Aspire wiring is straightforward once the components it orchestrates exist. Telemetry is the last thing to add because it depends on all layers being stable.
-**Delivers:** `DocAgent.AppHost`, DI extension methods (`AddDocAgentCore`, `AddDocAgentIngestion`, `AddDocAgentMcpServer`), OpenTelemetry wiring, Aspire dashboard for tool call observation.
-**Uses:** `Aspire.Hosting 13.1.0`, `OpenTelemetry 1.15.0`
-**Research flag:** Standard patterns — Aspire DI wiring and OpenTelemetry are well-documented.
+### Phase 2: Ingestion Layer — Solution-Aware Builder
 
-### Phase 8: V1.x Enhancements (Post-Validation)
-**Rationale:** These features add significant value but depend on the core pipeline being validated by real agent workloads first.
-**Delivers:** `PackageRefGraph` (NuGet dependency reasoning), semantic diff risk scoring calibration, Roslyn analyzer doc coverage policy gate (configurable threshold per namespace), snapshot catalog.
-**Research flag:** Standard patterns for PackageRefGraph (parses `.csproj`, `Directory.Packages.props`). Coverage policy gate needs threshold calibration research.
+**Rationale:** The core ingestion pipeline changes are the most complex and highest-risk in the milestone. Must come before indexing and tool layers. The two new static services (`SolutionDependencyResolver`, `SolutionGraphMerger`) are pure logic with no DI dependencies and are trivial to unit-test with in-memory fixtures before the full pipeline is wired.
+
+**Delivers:** `SolutionDependencyResolver` (topological sort, `ProjectEntry` builder), updated `LocalProjectSource` (populates `ProjectDependencies`), updated `RoslynSymbolGraphBuilder` (tags `ProjectOrigin` per node, emits stub nodes for dangling targets), `SolutionGraphMerger` (stub promotion, edge scope tagging), updated `SnapshotManifestEntry`
+
+**Uses:** `Microsoft.Build.Locator` 1.11.2 (startup call), `NuGet.Packaging` + `NuGet.Configuration` 6.12.0 (stub node metadata from local cache)
+
+**Avoids:** MSBuildWorkspace memory growth (release `Compilation` objects immediately after node extraction); MSBuildLocator startup ordering pitfall (first call in Program.cs); silent workspace failures (log all `workspace.Diagnostics`); stub node proliferation (cap to direct references)
+
+**Research flag:** May benefit from a spike test against the actual solution to characterize `workspace.Diagnostics` behavior and memory profile before committing to the stub node cap heuristic. Not blocking for planning, but recommended before implementation begins.
+
+### Phase 3: Indexing Layer — Project-Aware Search
+
+**Rationale:** Consumes the enriched `SymbolGraphSnapshot` from Phase 2. Short phase — adds a `project` field to the Lucene document schema and threads `projectFilter` through `KnowledgeQueryService`. No interface redesign; no new packages.
+
+**Delivers:** Updated `BM25SearchIndex` (adds stored `project` Lucene field; routes `projectFilter` as a term query), updated `KnowledgeQueryService` (threads `projectFilter` through `SearchAsync`)
+
+**Implements:** Unified BM25 search index spanning all projects (table-stakes P1 feature)
+
+**Research flag:** Standard patterns — Lucene.Net field addition and term query routing are well-documented. No additional research needed.
+
+### Phase 4: MCP Tool Surface — Solution-Aware Tools
+
+**Rationale:** Consumes Phase 2 and Phase 3 outputs. Adds `projectFilter` and `crossProjectOnly` parameters to existing tools (low risk — new optional parameters; no existing client breaks) and adds the new `SolutionTools` class for `explain_solution`.
+
+**Delivers:** Updated `DocTools` (`projectFilter` on `search_symbols`, `crossProjectOnly` on `get_references`), new `SolutionTools` class (`explain_solution` tool), `ingest_solution` tool registration (thin wrapper — `LocalProjectSource` already accepts `.sln` paths)
+
+**Avoids:** STDIO contamination (all new tool logging to `stderr`); MCP tool surface expansion beyond read-only scope (`PathAllowlist` on all new tools, including `.sln` path validation); prompt injection via symbol names (sanitize all symbol data in tool responses)
+
+**Research flag:** Standard patterns — follows established `DocTools`/`ChangeTools` pattern exactly. No additional research needed.
+
+### Phase 5: P2 Enhancements — Stub Nodes and Incremental Re-ingestion
+
+**Rationale:** These features have the most dependencies and the highest complexity. Stub node enrichment requires the full ingestion pipeline (Phase 2) to be stable and tested. Incremental per-project re-ingestion requires a manifest-of-manifests design on top of the existing `SnapshotStore` — a non-trivial design decision that benefits from observing real usage patterns in the stable core first.
+
+**Delivers:** NuGet stub node enrichment via `PackageArchiveReader`/`NuspecReader`; per-project incremental re-ingestion with manifest-of-manifests
+
+**Avoids:** Network I/O in tests (use `NuGet.Packaging` local cache reads only — never `NuGet.Protocol`); manifest-of-manifests breaking existing `SnapshotStore` content-hash scheme (design must be validated before implementation)
+
+**Research flag:** The manifest-of-manifests design for incremental re-ingestion has no prior art in this codebase. Explicit design review of the `SnapshotStore` extension strategy is recommended before Phase 5 implementation begins. This is the only phase where additional research-phase work is warranted.
 
 ### Phase Ordering Rationale
 
-- Core Domain must precede everything: the `SymbolId` spec is a dependency of every downstream artifact. Getting it wrong forces a full rebuild.
-- Ingestion precedes Indexing: the index consumes `SymbolGraphSnapshot` values; no real snapshot = no real index validation.
-- Indexing precedes Query Facade: the facade delegates to the index; stub tests are insufficient for integration confidence.
-- Query Facade precedes MCP Tools: business logic must be in the facade before tools are built to prevent the fat-tools anti-pattern.
-- Analysis after Serving: diff and analyzers are additive features; they must not block the working read-only pipeline.
-- Host last: wiring is trivial once the components it wires exist.
+- Core types must exist before Ingestion can use them; Ingestion must produce enriched snapshots before Indexing can store project-aware data; Indexing must support `projectFilter` before tools can expose it. This is a hard bottom-up dependency chain.
+- Static pure-logic services (`SolutionDependencyResolver`, `SolutionGraphMerger`) are implemented and unit-tested before DI-wired components depend on them — consistent with the v1.1 pattern established by `ChangeReviewer` and `SymbolGraphDiffer`.
+- P2 features are deferred to Phase 5 to avoid blocking the core milestone on the two highest-complexity features. The core solution graph must be validated by real ingestion runs before the incremental re-ingestion design is locked.
+- Each phase boundary is a natural integration test point: the `SymbolGraphSnapshot` contract, the `BM25SearchIndex` document schema, and the MCP tool parameter signatures are all independently verifiable at each boundary.
 
 ### Research Flags
 
-Phases needing deeper research during planning:
-- **Phase 2 (Ingestion):** `AssemblyLoadContext` isolation strategy for Roslyn workspace memory management; `MSBuildLocator.RegisterDefaults()` process isolation patterns.
-- **Phase 5 (MCP Server):** MCP SDK 1.0.0 is brand new (released 2026-02-25); verify exact attribute API (`[McpServerTool]`), tool schema validation, and Aspire 13.1 MCP integration patterns.
-- **Phase 6 (Analysis):** Semantic diff risk classification model; `ISymbol.IsImplicitlyDeclared` API for excluding compiler-synthesized members.
+Phases with standard patterns (research-phase not needed):
+- **Phase 1:** Record type additions and MessagePack backward-compat — well-established
+- **Phase 3:** Lucene field addition and term query routing — well-documented
+- **Phase 4:** Follows existing `DocTools`/`ChangeTools` pattern exactly
 
-Phases with standard, well-documented patterns (skip research-phase):
-- **Phase 1 (Core Domain):** Roslyn XML doc ID format is officially documented; domain record design is straightforward.
-- **Phase 3 (BM25 Index):** Lucene.Net BM25Similarity and StandardAnalyzer patterns are well-documented.
-- **Phase 4 (Query Facade):** Facade pattern over search index is well-established.
-- **Phase 7 (Host):** Aspire + OpenTelemetry wiring follows official docs directly.
+Phases that may benefit from targeted investigation before or during implementation:
+- **Phase 2:** A spike test characterizing MSBuildWorkspace memory profile and `workspace.Diagnostics` behavior on the actual solution is recommended before committing to the stub node cap heuristic. Not blocking for roadmap planning.
+- **Phase 5:** Manifest-of-manifests design for incremental re-ingestion needs explicit design validation before implementation. This is the only phase that genuinely warrants a research-phase stop.
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Core packages verified via NuGet. ModelContextProtocol 1.0.0 stable release confirmed 2026-02-25. Roslyn 5.0.0 confirmed stable with .NET 10. Lucene.Net perpetual-beta status is the only uncertainty. |
-| Features | HIGH (P1) / MEDIUM (P2+) | V1 table stakes derived from existing project plans and validated against competitor analysis. Differentiator features (semantic diff, review_changes) based on project plans; competitive analysis via WebSearch is MEDIUM confidence. |
-| Architecture | HIGH | Grounded in existing `DocAgent.Core` contracts, Roslyn SDK official docs, and LSIF specification. Build order and anti-patterns verified against Roslyn GitHub issues. |
-| Pitfalls | HIGH (Roslyn) / MEDIUM (MCP) | Roslyn symbol stability, memory, and XML doc binding pitfalls verified against GitHub issues and official API docs. MCP pitfalls verified via Microsoft DevBlog and Nearform guide. Prompt injection risk class-1 on OWASP LLM Top 10 2025. |
+| Stack | HIGH | All three new packages verified on NuGet Gallery; `MSBuildLocator` usage verified via official Roslyn team gist (Dustin Campbell); `NuGet.Packaging` 6.x confirmed as stable public SDK line per Microsoft Learn |
+| Features | HIGH | Feature set derived directly from codebase inspection + PROJECT.md milestone definition; dependency chain verified through source code; no assumptions required |
+| Architecture | HIGH | Based on direct inspection of all 6 project layers and all relevant source files; change surface identified at file and member level; anti-patterns derived from Roslyn GitHub issues |
+| Pitfalls | HIGH (Roslyn/MSBuild) / MEDIUM (NuGet stub) | MSBuildWorkspace memory, locator startup, and workspace diagnostics pitfalls verified via GitHub issues and official Roslyn docs; NuGet stub node proliferation heuristic is an inference from documented ecosystem behavior |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Lucene.Net beta status:** The 4.8.0-beta series is mature in practice but carries formal prerelease designation. If this becomes a concern during planning, evaluate the hand-rolled BM25 alternative (the `ISearchIndex` interface makes swapping trivial). Resolve at Phase 3 kickoff.
-- **MCP SDK 1.0.0 API surface:** The SDK was released the day before this research. The `[McpServerTool]` attribute registration pattern is confirmed, but edge cases in schema validation and error handling should be verified via `mcp inspect` tooling at Phase 5 start.
-- **FluentAssertions license change:** v7+ has a licensing change from Apache 2.0. Verify license acceptability for this project before Phase 1 testing begins. If unacceptable, Shouldly or raw xunit assertions are viable alternatives.
-- **Aspire 13.1 MCP integration details:** InfoQ reference is a secondary source. Verify the exact `AddProject` + MCP wiring API before Phase 7 implementation.
-- **`inheritdoc` expansion:** XML doc `<inheritdoc/>` tags are not expanded by the compiler XML output. The ingestion pipeline must expand these during `XmlDocParser` processing using the symbol hierarchy. This is a non-trivial edge case not fully addressed in Phase 2 scope above; it should be explicitly included as a tracked task.
+- **MSBuildWorkspace at scale:** Memory profile and `workspace.Diagnostics` behavior with 50+ project solutions is not well-documented. Recommend a one-day spike against the actual solution before finalizing the stub node cap heuristic in Phase 2. This is an implementation-time gap, not a planning blocker.
+- **Manifest-of-manifests design for incremental re-ingestion:** No prior art in this codebase. The existing `SnapshotStore` uses a single `manifest.json` keyed by `ContentHash`. A multi-project manifest design needs explicit design review before Phase 5 implementation begins to avoid breaking the content-hash scheme.
+- **`SchemaVersion` migration policy:** The research recommends bumping `SchemaVersion` to `"1.2"` and tolerating both `"1.0"` and `"1.2"` artifacts in `KnowledgeQueryService`. The exact behavior for v1.0 artifacts — re-ingest required, auto-upgrade on read, or serve as-is with missing fields — must be decided before Phase 2 ships. Current recommendation: serve v1.0 artifacts as-is with `ProjectOrigin = null` on all nodes (the null default is safe); require explicit `ingest_solution` call to get v1.2 enriched data.
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [NuGet: ModelContextProtocol 1.0.0](https://www.nuget.org/packages/ModelContextProtocol/) — stable release date, API surface
-- [Context7: modelcontextprotocol/csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk) — `AddMcpServer().WithStdioServerTransport().WithToolsFromAssembly()` pattern
-- [NuGet: Microsoft.CodeAnalysis.CSharp 5.0.0](https://www.nuget.org/packages/microsoft.codeanalysis.csharp/) — version compatibility with .NET 10
-- [.NET Compiler Platform SDK concepts — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/compiler-api-model) — Roslyn architecture
-- [LSIF Specification 0.4.0 — Microsoft](https://microsoft.github.io/language-server-protocol/specifications/lsif/0.4.0/specification/) — immutable snapshot pattern
-- [ISymbol Interface — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.isymbol) — symbol equality and stability
-- [xUnit.net Core Framework v3 3.2.2](https://xunit.net/releases/v3/3.2.2) — testing framework
-- [NuGet: FluentAssertions 8.8.0](https://www.nuget.org/packages/fluentassertions/) — xunit.v3 compatibility
-- [NuGet: OpenTelemetry 1.15.0](https://www.nuget.org/packages/OpenTelemetry) — stable signals
-- [Build an MCP server in C# — .NET Blog](https://devblogs.microsoft.com/dotnet/build-a-model-context-protocol-mcp-server-in-csharp/) — C# SDK guidance
-- [LLM01:2025 Prompt Injection — OWASP](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — security threat classification
-- Project source contracts: `src/DocAgent.Core/Abstractions.cs`, `src/DocAgent.Core/Symbols.cs`, `docs/Plan.md`, `EXTENDED_PLANS/`
+- [NuGet Gallery: Microsoft.Build.Locator 1.11.2](https://www.nuget.org/packages/Microsoft.Build.Locator/) — version confirmed, latest stable Nov 2025
+- [NuGet Gallery: NuGet.Packaging 6.12.0](https://www.nuget.org/packages/NuGet.Packaging/6.12.0) — stable client SDK line confirmed
+- [Using MSBuildWorkspace — Dustin Campbell (Roslyn team)](https://gist.github.com/DustinCampbell/32cd69d04ea1c08a16ae5c4cd21dd3a3) — authoritative usage guide; MEF pitfall; `ExcludeAssets=runtime` pattern
+- Direct codebase inspection: `DocAgent.Core/Symbols.cs`, `DocAgent.Core/Abstractions.cs`, `DocAgent.Ingestion/RoslynSymbolGraphBuilder.cs`, `LocalProjectSource.cs`, `SnapshotStore.cs`, `DocAgent.Indexing/KnowledgeQueryService.cs`, `BM25SearchIndex.cs`, `DocAgent.McpServer/Tools/DocTools.cs`, `IngestionTools.cs`, `ChangeTools.cs`, `IngestionService.cs`
 
 ### Secondary (MEDIUM confidence)
-- [Lucene.NET BM25Similarity API docs](https://lucenenet.apache.org/docs/4.8.0-beta00009/api/core/Lucene.Net.Search.Similarities.BM25Similarity.html) — BM25 support
-- [Aspire 13.1 MCP integration — InfoQ](https://www.infoq.com/news/2026/01/dotnet-aspire-13-1-release/) — Aspire + MCP integration
-- [Implementing MCP: Tips, Tricks and Pitfalls — Nearform](https://nearform.com/digital-community/implementing-model-context-protocol-mcp-tips-tricks-and-pitfalls/) — stdio contamination, tool design
-- [New Prompt Injection Attack Vectors Through MCP — Palo Alto Unit 42](https://unit42.paloaltonetworks.com/model-context-protocol-attack-vectors/) — MCP-specific injection threat model
-- [Evaluating the impact of LSP-based code intelligence on coding agents](https://www.nuanced.dev/blog/evaluating-lsp) — LSP vs text-search latency data
-- [Memory leak on Microsoft.CodeAnalysis.Scripting — dotnet/roslyn #41348](https://github.com/dotnet/roslyn/issues/41348) — compilation memory retention
-- [APIDiff: Detecting API breaking changes — Semantic Scholar](https://www.semanticscholar.org/paper/APIDiff:-Detecting-API-breaking-changes-Brito-Xavier/a02f93289afe58989589abafc6ae098ef8e544a8) — semantic diff false positive research
-
-### Tertiary (LOW confidence)
-- [CodeQL LSP MCP Server](https://lobehub.com/mcp/neuralprogram-codeql-lsp-mcp) — competitor feature analysis; third-party listing
-- [Sourcegraph Amp Agent](https://www.amplifilabs.com/post/sourcegraph-amp-agent-accelerating-code-intelligence-for-ai-driven-development) — competitive landscape; Sourcegraph's internal index schema is not public
+- [NuGet Client SDK — Microsoft Learn](https://learn.microsoft.com/en-us/nuget/reference/nuget-client-sdk) — `NuGet.Packaging` + `NuGet.Configuration` API documentation
+- [MSBuildWorkspace cross-project reference issue #36072](https://github.com/dotnet/roslyn/issues/36072) — `ProjectReference` loading behavior
+- [dotnet/roslyn #25921](https://github.com/dotnet/roslyn/issues/25921) — workspace diagnostic behavior
+- [Steve Gordon — Using Roslyn APIs to Analyse a .NET Solution](https://www.stevejgordon.co.uk/using-the-roslyn-apis-to-analyse-a-dotnet-solution) — solution analysis patterns
+- [NuGet Gallery: Microsoft.CodeAnalysis.Workspaces.MSBuild 4.12.0](https://www.nuget.org/packages/Microsoft.CodeAnalysis.Workspaces.MSBuild/) — confirmed already in CPM
 
 ---
-*Research completed: 2026-02-26*
+
+*Research completed: 2026-03-01*
 *Ready for roadmap: yes*

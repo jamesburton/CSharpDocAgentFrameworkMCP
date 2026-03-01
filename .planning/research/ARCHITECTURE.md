@@ -1,372 +1,506 @@
 # Architecture Research
 
-**Domain:** .NET code documentation intelligence system with MCP server
-**Researched:** 2026-02-26
-**Confidence:** HIGH (Roslyn SDK — official docs; LSIF pipeline — official spec; system structure — grounded in existing codebase contracts)
+**Domain:** Multi-project symbol graph integration for DocAgentFramework v1.2
+**Researched:** 2026-03-01
+**Confidence:** HIGH — based on direct inspection of all existing source files
 
-## Standard Architecture
+---
+
+## Existing Architecture (Baseline)
 
 ### System Overview
 
-Code intelligence systems of this type follow a well-established layered pipeline. The Roslyn compiler platform and LSIF both use the same fundamental structure: source material flows through parse/ingest stages into a normalized graph, which is indexed for query, then served via a narrow API surface. This project's existing abstractions map cleanly onto this canonical pattern.
-
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                         INGESTION LAYER                          │
-│                                                                  │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐ │
-│  │ IProjectSource│   │  IDocSource  │   │    IXmlDocParser     │ │
-│  │ (discovery)  │   │  (loading)   │   │    (parse + bind)    │ │
-│  └──────┬───────┘   └──────┬───────┘   └──────────┬───────────┘ │
-│         │                  │                       │             │
-│         ▼                  ▼                       ▼             │
-│  ProjectInventory      DocInputSet          parsed + bound       │
-│         │                  │               DocInputSet           │
-│         └──────────────────┴───────────────────────┐            │
-│                                                     ▼            │
-│                                          ISymbolGraphBuilder     │
-│                                          (Roslyn walk + merge)   │
-├─────────────────────────────────────────────────────────────────┤
-│                          CORE DOMAIN                            │
-│                                                                  │
-│         SymbolGraphSnapshot (versioned, deterministic)           │
-│         SymbolNode / SymbolEdge / SymbolId / DocComment          │
-│         SourceSpan / SnapshotRef / GraphDiff                     │
-├─────────────────────────────────────────────────────────────────┤
-│                         INDEXING LAYER                           │
-│                                                                  │
-│  ┌──────────────────────┐   ┌──────────────────────────────┐    │
-│  │   ISearchIndex       │   │     IVectorIndex             │    │
-│  │   (BM25 / keyword)   │   │   (embeddings, deferred V2)  │    │
-│  └──────────┬───────────┘   └──────────────────────────────┘    │
-│             │                                                    │
-│             ▼                                                    │
-│      artifacts/ snapshots + index files                          │
-├─────────────────────────────────────────────────────────────────┤
-│                          QUERY FACADE                            │
-│                                                                  │
-│              IKnowledgeQueryService                              │
-│              (Search / GetSymbol / Diff)                         │
-├─────────────────────────────────────────────────────────────────┤
-│                         SERVING LAYER                            │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │               MCP Server (stdio transport)               │   │
-│  │   search_symbols / get_symbol / get_references /         │   │
-│  │   diff_snapshots / explain_project / review_changes      │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                  path allowlists / audit log / input validation  │
-├─────────────────────────────────────────────────────────────────┤
-│                       HOST / WIRING LAYER                        │
-│                                                                  │
-│   Aspire app host · DI registration · config · OpenTelemetry    │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          MCP Client (Agent)                          │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ stdio
+┌──────────────────────────────▼──────────────────────────────────────┐
+│                         DocAgent.McpServer                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────────┐  │
+│  │  DocTools    │  │ChangeTools   │  │    IngestionTools          │  │
+│  │(search,get,  │  │(review,diff, │  │  (ingest_project)          │  │
+│  │ refs, diff,  │  │ explain)     │  │                            │  │
+│  │ explain)     │  │              │  │                            │  │
+│  └──────┬───────┘  └──────┬───────┘  └──────────┬────────────────┘  │
+│         │                 │                      │                   │
+│         ▼                 ▼                      ▼                   │
+│  IKnowledgeQueryService  ChangeReviewer    IIngestionService         │
+│  PathAllowlist (all tools)                                           │
+└──────────┬───────────────────────────────────────┬──────────────────┘
+           │                                       │
+┌──────────▼───────────┐              ┌────────────▼──────────────────┐
+│   DocAgent.Indexing  │              │      DocAgent.Ingestion        │
+│  ┌─────────────────┐ │              │  ┌────────────────────────┐    │
+│  │ BM25SearchIndex │ │              │  │   LocalProjectSource   │    │
+│  │ (Lucene.Net)    │ │              │  │   (MSBuildWorkspace)   │    │
+│  └─────────────────┘ │              │  ├────────────────────────┤    │
+│  ┌─────────────────┐ │              │  │ RoslynSymbolGraphBuilder│   │
+│  │KnowledgeQuery   │ │              │  │  (per-project loop)    │    │
+│  │Service          │ │              │  ├────────────────────────┤    │
+│  └─────────────────┘ │              │  │IncrementalIngestion    │    │
+│  ┌─────────────────┐ │              │  │Engine (SHA-256 delta)  │    │
+│  │  SnapshotStore  │◄├──────────────┤  ├────────────────────────┤    │
+│  │  (MessagePack)  │ │              │  │    SnapshotStore        │    │
+│  └─────────────────┘ │              │  └────────────────────────┘    │
+└──────────────────────┘              └───────────────────────────────┘
+           │
+┌──────────▼───────────┐
+│    DocAgent.Core     │
+│  SymbolGraphSnapshot │
+│  SymbolNode          │
+│  SymbolEdge          │
+│  IProjectSource      │
+│  ISymbolGraphBuilder │
+│  IKnowledgeQuerySvc  │
+└──────────────────────┘
+           │
+┌──────────▼───────────┐
+│  artifacts/ (disk)   │
+│  {hash}.msgpack      │
+│  manifest.json       │
+│  lucene-index/       │
+└──────────────────────┘
 ```
 
-### Component Responsibilities
+### Key Structural Facts from Code Inspection
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| `IProjectSource` | Discover solution/project/XML doc files from a locator (path or URL) | Filesystem walker; future: git remote cache |
-| `IDocSource` | Load raw XML documentation content given a `ProjectInventory` | Read `.xml` files output by `GenerateDocumentationFile` |
-| `IXmlDocParser` | Parse XML doc content and bind entries to stable `SymbolId` values | `System.Xml` parse + `/// <member name="...">` ID string resolution |
-| `ISymbolGraphBuilder` | Walk Roslyn symbols (`INamespaceSymbol`, `ITypeSymbol`, `IMethodSymbol`, etc.) and merge with parsed doc comments to produce a `SymbolGraphSnapshot` | `Microsoft.CodeAnalysis.CSharp` workspace + symbol visitor |
-| `SymbolGraphSnapshot` | Immutable, versioned, deterministically-serializable graph of all symbols and their edges | Record type; written to `artifacts/` as JSON |
-| `ISearchIndex` | Index a snapshot for keyword retrieval; answer `SearchAsync` + `GetAsync` queries | BM25 inverted index over `DisplayName` + `DocComment.Summary` fields |
-| `IVectorIndex` | Upsert and retrieve by embedding similarity (deferred, interface only in V1) | Placeholder for future semantic search |
-| `IKnowledgeQueryService` | Unified query facade: search, point-get by `SymbolId`, and diff two `SnapshotRef` values | Delegates to `ISearchIndex`; diff engine compares snapshots |
-| MCP Tools | Narrow toolset mapping agent requests to `IKnowledgeQueryService` methods | `[McpTool]` handlers with path-allowlisted security wrapper |
-| Roslyn Analyzers | Detect API changes not reflected in docs; detect suspicious edits | `DiagnosticAnalyzer` implementations registered to the build |
-| Aspire Host | Wire DI, config, storage paths, telemetry | `IHostApplicationBuilder` + `AddDocAgentCore/Ingestion/McpServer` extensions |
+**`SymbolGraphSnapshot`** (Core/Symbols.cs):
+- Has a single `ProjectName: string` field — currently names the snapshot after one project or the solution file stem.
+- `Nodes` and `Edges` are flat lists with no project-origin metadata on each node.
+- `SourceFingerprint` is computed from project file paths only; `ContentHash` is the XxHash128 of the serialized bytes.
 
-## Recommended Project Structure
+**`RoslynSymbolGraphBuilder`** (Ingestion):
+- Already iterates multiple projects (`foreach (var projectFile in inv.ProjectFiles)`), accumulating all nodes/edges into single flat lists.
+- Each project is loaded with its own `MSBuildWorkspace`, disposed after processing.
+- Cross-project edges (Inherits, Implements, References) are emitted naturally because Roslyn resolves referenced symbols from metadata — but those referenced symbols are not added as `SymbolNode`s if they belong to another project or NuGet package.
+- `SymbolId` is the Roslyn documentation comment ID (e.g. `T:Namespace.Type`). This is globally unique per symbol, which is the key fact enabling cross-project edge tracing.
 
-```
-src/
-├── DocAgent.Core/            # Pure domain — no IO, no framework deps
-│   ├── Abstractions.cs       # All interfaces (IProjectSource, IDocSource, etc.)
-│   └── Symbols.cs            # All domain types (SymbolNode, SymbolGraphSnapshot, etc.)
-├── DocAgent.Ingestion/       # Ingestion pipeline implementation
-│   ├── LocalProjectSource.cs # Filesystem project/solution discovery
-│   ├── LocalDocSource.cs     # XML doc file loading
-│   ├── XmlDocParser.cs       # Parse + bind doc comments to SymbolId
-│   └── RoslynSymbolGraphBuilder.cs  # Roslyn walk + doc merge → SymbolGraphSnapshot
-├── DocAgent.Indexing/        # Search index implementations
-│   ├── InMemorySearchIndex.cs       # Stub; replace with BM25
-│   ├── Bm25SearchIndex.cs           # BM25 inverted index (V1 target)
-│   └── SnapshotStore.cs             # Read/write snapshots to artifacts/
-├── DocAgent.Analysis/        # Diff engine + Roslyn analyzers
-│   ├── SymbolDiffEngine.cs          # SnapshotRef → GraphDiff
-│   └── Analyzers/                   # DiagnosticAnalyzer implementations
-│       ├── ApiChangeWithoutDocAnalyzer.cs
-│       └── SuspiciousEditAnalyzer.cs
-├── DocAgent.McpServer/       # MCP server host
-│   ├── Program.cs
-│   ├── Tools/
-│   │   └── DocTools.cs       # MCP tool handlers (search, get, diff, explain, review)
-│   └── Security/
-│       ├── PathAllowlist.cs
-│       └── AuditLogger.cs
-└── DocAgent.AppHost/         # Aspire app host + DI wiring
-    └── Program.cs
-```
+**`LocalProjectSource`** (Ingestion):
+- Already handles `.sln`, `.slnx`, `.csproj`, or directory inputs.
+- For `.sln`, it uses `MSBuildWorkspace.OpenSolutionAsync` and returns all project files.
+- `ProjectInventory` returns flat `ProjectFiles: IReadOnlyList<string>` — no project graph or dependency order.
 
-### Structure Rationale
+**`SnapshotStore`** (Ingestion):
+- Single global `manifest.json` keyed by `ContentHash`. Only stores one snapshot at a time in practice (manifest is append-only but `KnowledgeQueryService` resolves to the latest).
+- No concept of per-project sub-snapshots.
 
-- **DocAgent.Core/:** Zero-dependency domain contracts. Everything else depends on this; it depends on nothing. This is the seam that enables testability and future polyglot extension.
-- **DocAgent.Ingestion/:** All I/O-touching, source-format-specific code lives here. Isolating ingestion means the graph builder can be tested with injected data, and new source types (git remotes, NuGet) slot in without touching Core.
-- **DocAgent.Indexing/:** Decoupled from ingestion — indexes consume `SymbolGraphSnapshot` values, not raw source material. This is the boundary that lets you swap BM25 for a vector index without touching the ingestion pipeline.
-- **DocAgent.Analysis/:** Diff and analyzer logic separate from the serving layer. The diff engine operates on snapshots (pure data), making it testable in isolation.
-- **DocAgent.McpServer/:** The serving boundary. Security enforcement lives here, not deeper. This layer should be thin: validate input, delegate to `IKnowledgeQueryService`, format output, log.
+**`KnowledgeQueryService`** (Indexing):
+- Always resolves to latest snapshot by `IngestedAt`.
+- All queries (`SearchAsync`, `GetSymbolAsync`, `GetReferencesAsync`) operate on a single flat `SymbolGraphSnapshot`.
 
-## Architectural Patterns
+**`BM25SearchIndex`** (Indexing):
+- Indexes all nodes from a snapshot into one Lucene FSDirectory index. No project field currently stored in the Lucene document.
 
-### Pattern 1: Compiler Pipeline Phases → Layered Components
+---
 
-**What:** Roslyn's own architecture exposes this: parse → declare → bind → emit. The equivalent here is discover → load → parse-and-bind → graph-build → index → serve. Each phase produces an immutable artifact consumed by the next.
+## What v1.2 Needs to Change
 
-**When to use:** Always — this is the foundational structure. Deviating from it (e.g., mixing parse and index logic) breaks testability and makes future polyglot extension impossible.
+### The Core Problem
 
-**Trade-offs:** Slightly more indirection than a monolithic pipeline, but each phase is independently testable with deterministic fixtures. The existing test stub follows this correctly.
+The existing model merges all project nodes into a single flat graph. This already works for multi-project solutions — `RoslynSymbolGraphBuilder` already loops over all projects in `ProjectInventory`. The missing capabilities are:
 
-**Example:**
+1. **No per-node project attribution** — cannot answer "which project owns this symbol?"
+2. **No cross-project dependency edges** — when `ProjectA.Foo` calls `ProjectB.Bar`, an edge exists, but `ProjectB.Bar` has no `SymbolNode` unless `ProjectB` was also ingested.
+3. **No stub/metadata nodes for NuGet types** — references to NuGet types produce dangling `References` edges.
+4. **No solution-level metadata** — no concept of `ProjectReference` graph, dependency order, or which projects are test vs. production.
+5. **`explain_solution` tool does not exist** — current `explain_project` describes a single project.
+6. **`search_symbols` / `get_references` cannot filter by project** — no project scope parameter.
+
+---
+
+## Integration Points and New Components
+
+### What to MODIFY (existing components)
+
+#### 1. `SymbolNode` — add `ProjectOrigin` property (Core/Symbols.cs)
+
 ```csharp
-// Each stage is independently replaceable
-var inventory = await projectSource.DiscoverAsync(locator, ct);
-var docInputSet = await docSource.LoadAsync(inventory, ct);
-var parsedDocs = xmlDocParser.Parse(docInputSet.XmlDocsByAssemblyName
-    .Select(kv => (kv.Key, kv.Value)));
-var snapshot = await graphBuilder.BuildAsync(inventory, parsedDocs, ct);
-await searchIndex.IndexAsync(snapshot, ct);
+// BEFORE
+public sealed record SymbolNode(
+    SymbolId Id,
+    SymbolKind Kind,
+    // ...
+);
+
+// AFTER
+public sealed record SymbolNode(
+    SymbolId Id,
+    SymbolKind Kind,
+    string? ProjectOrigin,   // NEW: assembly name or project name that owns this node
+    bool IsStub,             // NEW: true for NuGet/metadata-only nodes
+    // ... existing fields unchanged
+);
 ```
 
-### Pattern 2: Immutable Snapshot as the Interchange Format
+This is the minimal, non-breaking addition. `ProjectOrigin = null` on existing snapshots means "unknown" — backward compatible with deserialized v1.0/v1.1 snapshots via MessagePack ContractlessStandardResolver (missing fields default to null/false).
 
-**What:** The `SymbolGraphSnapshot` is the stable artifact between the ingestion/indexing boundary. It is versioned, deterministic (same input → same output), and serializable. This is the same principle LSIF uses: emit an immutable graph dump that can be indexed by any consumer without running the language server again.
+#### 2. `SymbolGraphSnapshot` — add `SolutionName` and `Projects` list (Core/Symbols.cs)
 
-**When to use:** Always for the V1 pipeline. The snapshot is written to `artifacts/` and reloaded on startup or on explicit refresh — the server does not hold a live Roslyn workspace in memory at query time.
-
-**Trade-offs:** Snapshot must be re-built when source changes. Acceptable for V1 (build-time trigger). Live workspace queries are a V2+ concern.
-
-**Example:**
 ```csharp
+// AFTER
 public sealed record SymbolGraphSnapshot(
-    string SchemaVersion,        // bump on breaking schema changes
-    string SourceFingerprint,    // hash of inputs — enables cache invalidation
+    string SchemaVersion,
+    string ProjectName,          // Keep for backward compat; set to solution name for solution snapshots
+    string? SolutionName,        // NEW: null if single-project snapshot
+    IReadOnlyList<ProjectEntry> Projects,  // NEW: per-project metadata list
+    string SourceFingerprint,
+    string? ContentHash,
     DateTimeOffset CreatedAt,
     IReadOnlyList<SymbolNode> Nodes,
-    IReadOnlyList<SymbolEdge> Edges);
+    IReadOnlyList<SymbolEdge> Edges,
+    IngestionMetadata? IngestionMetadata = null);
+
+// NEW type in Core/Symbols.cs
+public sealed record ProjectEntry(
+    string Name,           // assembly name / project name stem
+    string ProjectFilePath,
+    IReadOnlyList<string> ProjectReferences,  // names of projects this one depends on
+    bool IsTestProject);
 ```
 
-### Pattern 3: Narrow Tool Surface Over a Facade
+`Projects` defaults to empty list on MessagePack deserialization — backward compatible.
 
-**What:** MCP tools do not call Roslyn or the index directly. They call `IKnowledgeQueryService`, which is the single query facade. This is how LSP architectures work: the protocol handler is thin; the language server backend is the intelligence.
+#### 3. `SymbolEdge` — add `EdgeScope` (Core/Symbols.cs)
 
-**When to use:** Always for the serving layer. Adding a new tool means adding a method to the facade and wiring a thin handler, not touching ingestion or indexing.
+```csharp
+public enum EdgeScope { IntraProject, CrossProject, CrossPackage }
 
-**Trade-offs:** One extra interface hop. Worth it — it allows the MCP server to be tested with a mock `IKnowledgeQueryService` without any Roslyn or filesystem dependency.
-
-### Pattern 4: Interface-Scoped Capability Flags (Polyglot Extension)
-
-**What:** Per `POLYGLOT_STRATEGY.md`, future language adapters declare capability flags (`HasSemanticTypes`, `HasCallGraph`, etc.) rather than implementing a fixed contract. The `Extensions` bag on `SymbolNode` holds language-specific fields. The core schema stays stable.
-
-**When to use:** When adding Tier A (Tree-sitter) or Tier B (TS compiler, gopls) adapters in future milestones. Not needed in V1 — the current `ISymbolGraphBuilder` is non-generic; make it generic (`ISymbolGraphBuilder<TDoc>`) when the first polyglot adapter is added.
-
-**Trade-offs:** Adds generics complexity. Deferred correctly to after V1 validation.
-
-## Data Flow
-
-### Ingestion Flow (Build-Time / On-Demand Refresh)
-
-```
-ProjectLocator (path or URL)
-    │
-    ▼
-IProjectSource.DiscoverAsync()
-    │
-    ▼
-ProjectInventory (solution files, project files, XML doc paths)
-    │
-    ├──────────────────────────────────────┐
-    ▼                                      ▼
-IDocSource.LoadAsync()           ISymbolGraphBuilder.BuildAsync()
-    │                                      ▲
-    ▼                                      │
-DocInputSet (raw XML by assembly)          │
-    │                                      │
-    ▼                                      │
-IXmlDocParser.Parse()                      │
-    │                                      │
-    ▼                                      │
-DocInputSet (parsed + SymbolId-bound) ─────┘
-                                           │
-                                           ▼
-                              SymbolGraphSnapshot
-                              (versioned, fingerprinted)
-                                           │
-                              ┌────────────┴────────────┐
-                              ▼                         ▼
-                    ISearchIndex.IndexAsync()    artifacts/ (persist)
-                              │
-                              ▼
-                      Index ready for queries
+public sealed record SymbolEdge(
+    SymbolId From,
+    SymbolId To,
+    SymbolEdgeKind Kind,
+    EdgeScope Scope = EdgeScope.IntraProject);   // NEW, default value = backward compatible
 ```
 
-### Query Flow (Agent → MCP Tool → Facade → Index)
+#### 4. `RoslynSymbolGraphBuilder` — tag nodes with `ProjectOrigin`, emit stub nodes (Ingestion)
 
-```
-Agent sends MCP request
-    │
-    ▼
-MCP Tool Handler
-    │  (validate input, enforce path allowlist)
-    ▼
-IKnowledgeQueryService
-    │
-    ├── SearchAsync(query) ──────► ISearchIndex.SearchAsync()
-    │                                    │
-    │                                    ▼
-    │                             BM25 hits → SearchHit[]
-    │
-    ├── GetSymbolAsync(id) ───────► ISearchIndex.GetAsync(id)
-    │                                    │
-    │                                    ▼
-    │                             SymbolNode (with DocComment)
-    │
-    └── DiffAsync(a, b) ──────────► SymbolDiffEngine
-                                         │
-                                         ▼
-                                    GraphDiff (structured findings)
-    │
-    ▼
-MCP Tool formats response
-    │  (serialize, audit log)
-    ▼
-Agent receives structured result
+The existing per-project loop already processes each project. Changes required:
+- Pass `projectName` into `WalkNamespace` and `WalkType` so nodes created from that project get `ProjectOrigin` set.
+- After walking a project, collect outbound `References`/`Inherits`/`Implements` edges whose `To` IDs are not in `allNodes`. For those dangling targets, emit stub `SymbolNode` entries with `IsStub = true` and `ProjectOrigin` set to the assembly name resolved from the compilation's referenced assemblies.
+- Tag edges as `CrossProject` when `From.ProjectOrigin != To.ProjectOrigin`.
+
+This is the most significant code change but is self-contained within `RoslynSymbolGraphBuilder`.
+
+#### 5. `BM25SearchIndex` — add `project` field to Lucene document (Indexing)
+
+Currently no project field exists in the Lucene document schema. Add a stored `project` field from `node.ProjectOrigin`. This enables `search_symbols` to accept an optional `projectFilter` parameter routed as a Lucene term query.
+
+The `IndexAsync` method already receives the full `SymbolGraphSnapshot`. No interface change needed — just add the field to the document build in `BM25SearchIndex`.
+
+#### 6. `IKnowledgeQueryService` + `KnowledgeQueryService` — add project filter (Indexing)
+
+```csharp
+// Add optional projectFilter to SearchAsync
+Task<QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>> SearchAsync(
+    string query,
+    SymbolKind? kindFilter = null,
+    string? projectFilter = null,   // NEW
+    int offset = 0,
+    int limit = 20,
+    string? snapshotVersion = null,
+    CancellationToken ct = default);
 ```
 
-### Key Data Flows
+`GetReferencesAsync` already returns all edges involving a symbol. Cross-project filtering can be done client-side via `EdgeScope`, or a `crossProjectOnly` parameter added.
 
-1. **Snapshot invalidation:** `SourceFingerprint` (hash of input file mtimes or content hashes) determines whether a cached snapshot is still valid. On mismatch, ingestion re-runs and the index is rebuilt.
-2. **Diff flow:** `DiffAsync(SnapshotRef a, SnapshotRef b)` loads both snapshots from the artifact store and compares `SymbolNode` sets by `SymbolId`. Signature, nullability, accessibility, and constraint changes are reported as structured `GraphDiff.Findings`.
-3. **Doc binding:** `XmlDocParser` maps `/// <member name="M:Namespace.Type.Method(...)">` ID strings to `SymbolId` values that match what the Roslyn symbol walker emits. This is the critical join: without correct binding, doc comments detach from symbol nodes.
+#### 7. `DocTools` — add `projectFilter` param to `search_symbols`, add `crossProjectOnly` to `get_references` (McpServer)
+
+- `search_symbols`: add optional `projectFilter` string parameter, pass to `IKnowledgeQueryService`.
+- `get_references`: add optional `crossProjectOnly` bool parameter.
+
+#### 8. `SnapshotManifestEntry` — add `SolutionName` and `ProjectCount` (Ingestion)
+
+Currently has `ProjectName` (single string). Extend with:
+```csharp
+public sealed record SnapshotManifestEntry(
+    string ContentHash,
+    string ProjectName,
+    string? SolutionName,   // NEW
+    int ProjectCount,       // NEW
+    // ... existing fields
+);
+```
+
+---
+
+### What to ADD (new components)
+
+#### NEW: `SolutionDependencyResolver` (DocAgent.Ingestion)
+
+**Responsibility:** Given a list of project metadata from `MSBuildWorkspace.OpenSolutionAsync`, compute the `ProjectReference` dependency graph and topological order.
+
+**Why needed:** `RoslynSymbolGraphBuilder` currently processes projects in the order returned by `LocalProjectSource`. For correct stub node promotion (a stub created for `ProjectA.Bar` when processing `ProjectC.Foo` should be replaced by the real node when `ProjectA` is later processed), projects must be processed in dependency order — leaf projects first, consumers last.
+
+```csharp
+// DocAgent.Ingestion/SolutionDependencyResolver.cs
+public static class SolutionDependencyResolver
+{
+    // Returns project file paths in dependency order (leaves first).
+    public static IReadOnlyList<string> TopologicalSort(
+        IReadOnlyList<(string FilePath, IReadOnlyList<string> ReferencedProjectPaths)> projects);
+
+    // Builds ProjectEntry list for snapshot metadata.
+    public static IReadOnlyList<ProjectEntry> BuildProjectEntries(
+        IReadOnlyList<(string FilePath, IReadOnlyList<string> ReferencedProjectPaths)> projects,
+        Func<string, bool> isTestProject);
+}
+```
+
+This is a static pure-logic service (same pattern as `ChangeReviewer`, `SymbolGraphDiffer`).
+
+#### NEW: `SolutionGraphMerger` (DocAgent.Ingestion)
+
+**Responsibility:** After `RoslynSymbolGraphBuilder` builds a graph with stub nodes, the merger promotes stub nodes that were resolved by later-processed projects. It deduplicates nodes (same `SymbolId` appearing as both real and stub) and marks remaining stubs.
+
+```csharp
+// DocAgent.Ingestion/SolutionGraphMerger.cs
+public static class SolutionGraphMerger
+{
+    // Replaces stub nodes with real nodes where a real node with matching SymbolId exists.
+    // Updates edge Scope flags for cross-project edges.
+    // Returns merged node + edge lists.
+    public static (IReadOnlyList<SymbolNode> Nodes, IReadOnlyList<SymbolEdge> Edges)
+        Merge(IReadOnlyList<SymbolNode> nodes, IReadOnlyList<SymbolEdge> edges);
+}
+```
+
+Also a static pure-logic service, easily tested with fixtures.
+
+#### NEW: `SolutionTools` (DocAgent.McpServer/Tools)
+
+**Responsibility:** Implement `explain_solution` MCP tool.
+
+```
+explain_solution: Returns solution-level architecture overview including:
+- List of projects with node/edge counts per project
+- ProjectReference dependency graph as adjacency list
+- Top cross-project dependency pairs (most referenced project pairs)
+- NuGet stub node count
+- Snapshot freshness indicator
+```
+
+This is a new `[McpServerToolType]` class following the exact same pattern as `DocTools` and `ChangeTools`. It depends on `IKnowledgeQueryService` (reads the snapshot's `Projects` list and does cross-project edge analysis) and `PathAllowlist`.
+
+---
+
+## Data Flow Changes
+
+### Solution Ingestion Flow (v1.2)
+
+```
+ingest_project (path = solution.sln)
+    |
+    v
+LocalProjectSource.DiscoverAsync
+    ├── MSBuildWorkspace.OpenSolutionAsync
+    ├── Extract project files + ProjectReference graph   [MODIFIED]
+    └── Returns ProjectInventory
+         + new: ProjectDependencies adjacency map        [NEW field]
+    |
+    v
+SolutionDependencyResolver.TopologicalSort              [NEW]
+    └── Reorders ProjectInventory.ProjectFiles by dependency
+    |
+    v
+RoslynSymbolGraphBuilder.BuildAsync                     [MODIFIED]
+    ├── Per-project loop (already exists)
+    ├── Tag each node with ProjectOrigin                 [NEW]
+    ├── After each project: emit stub nodes for          [NEW]
+    |   dangling edge targets from other assemblies
+    └── Accumulate all nodes + edges (as before)
+    |
+    v
+SolutionGraphMerger.Merge                               [NEW]
+    ├── Promote stubs to real nodes where resolved
+    ├── Mark remaining stubs (IsStub = true)
+    └── Tag cross-project edges (EdgeScope)
+    |
+    v
+SymbolGraphSnapshot with:
+    ├── SolutionName set                                 [NEW field]
+    ├── Projects list with ProjectEntry records          [NEW field]
+    ├── Nodes with ProjectOrigin + IsStub                [NEW fields]
+    └── Edges with EdgeScope                             [NEW field]
+    |
+    v
+SnapshotStore.SaveAsync (unchanged)
+    |
+    v
+BM25SearchIndex.IndexAsync                              [MODIFIED]
+    └── Adds "project" field to Lucene document
+```
+
+### Cross-Project Reference Query Flow (v1.2)
+
+```
+get_references(symbolId, crossProjectOnly = true)
+    |
+    v
+IKnowledgeQueryService.GetReferencesAsync              [MODIFIED]
+    └── Filters edges where EdgeScope == CrossProject
+    |
+    v
+Returns cross-project SymbolEdge list
+    (From.ProjectOrigin and To.ProjectOrigin differ)
+```
+
+---
+
+## Component Boundaries: New vs. Modified
+
+| Component | File | Status | Change Summary |
+|-----------|------|--------|----------------|
+| `SymbolNode` | Core/Symbols.cs | MODIFY | Add `ProjectOrigin?`, `IsStub` |
+| `SymbolEdge` | Core/Symbols.cs | MODIFY | Add `EdgeScope` with default |
+| `SymbolGraphSnapshot` | Core/Symbols.cs | MODIFY | Add `SolutionName?`, `Projects` list |
+| `ProjectEntry` | Core/Symbols.cs | ADD | New record for project metadata |
+| `EdgeScope` | Core/Symbols.cs | ADD | New enum |
+| `IKnowledgeQueryService` | Core/Abstractions.cs | MODIFY | Add `projectFilter` to `SearchAsync` |
+| `ProjectInventory` | Core/Abstractions.cs | MODIFY | Add `ProjectDependencies` adjacency |
+| `LocalProjectSource` | Ingestion | MODIFY | Populate `ProjectDependencies` from Roslyn solution |
+| `RoslynSymbolGraphBuilder` | Ingestion | MODIFY | Tag nodes, emit stubs, tag edge scopes |
+| `SolutionDependencyResolver` | Ingestion | ADD | Topological sort, ProjectEntry builder |
+| `SolutionGraphMerger` | Ingestion | ADD | Stub promotion, cross-project edge tagging |
+| `SnapshotManifestEntry` | Ingestion/SnapshotStore.cs | MODIFY | Add `SolutionName`, `ProjectCount` |
+| `BM25SearchIndex` | Indexing | MODIFY | Add `project` Lucene field |
+| `KnowledgeQueryService` | Indexing | MODIFY | Thread `projectFilter` through `SearchAsync` |
+| `DocTools` | McpServer/Tools | MODIFY | Add `projectFilter` to `search_symbols`, `crossProjectOnly` to `get_references` |
+| `SolutionTools` | McpServer/Tools | ADD | `explain_solution` tool |
+| `IngestionTools` | McpServer/Tools | NO CHANGE | `ingest_project` already accepts `.sln` path |
+
+---
+
+## Architectural Patterns to Follow
+
+### Pattern 1: Static Pure-Logic Service (established in v1.1)
+
+`ChangeReviewer` and `SymbolGraphDiffer` are static classes with no DI dependencies. Apply the same pattern to `SolutionDependencyResolver` and `SolutionGraphMerger`. This makes them trivial to unit-test with in-memory fixtures, no mock setup required.
+
+### Pattern 2: Backward-Compatible Domain Model Extension
+
+`DiffTypes.cs` in v1.1 used nullable optional detail fields on `DiffEntry` to avoid polymorphic MessagePack serialization. For v1.2, the same principle applies: new fields on `SymbolNode`, `SymbolEdge`, and `SymbolGraphSnapshot` should have null/default values so existing MessagePack artifacts deserialize without error via `ContractlessStandardResolver`.
+
+Verify: `SchemaVersion` is currently `"1.0"` for all snapshots. After v1.2 changes, bump to `"1.2"` in `RoslynSymbolGraphBuilder.BuildAsync`. `SnapshotStore` and `KnowledgeQueryService` should tolerate both versions.
+
+### Pattern 3: Opaque Denial in Security Gate
+
+`PathAllowlist` enforcement is already applied uniformly across all tool classes. `SolutionTools` must follow the same pattern — check `PathAllowlist` before any graph access. For `explain_solution`, the "path" being checked is the snapshot's root path, which is stored in `IngestionMetadata`.
+
+### Pattern 4: Per-Path Semaphore in `IngestionService`
+
+The existing per-path semaphore in `IngestionService` already prevents concurrent ingestion of the same solution. No change needed here for v1.2. The semaphore key is `Path.GetFullPath(path)`, which works equally well for `.sln` paths.
+
+---
+
+## Build Order for Implementation
+
+Dependencies flow upward — implement bottom-up:
+
+```
+Phase 1: Core model extensions
+    ├── SymbolNode.ProjectOrigin, SymbolNode.IsStub
+    ├── SymbolEdge.EdgeScope enum + field
+    ├── SymbolGraphSnapshot.SolutionName, .Projects
+    ├── ProjectEntry record
+    ├── IKnowledgeQueryService.SearchAsync projectFilter param
+    └── ProjectInventory.ProjectDependencies
+
+Phase 2: Ingestion layer
+    ├── SolutionDependencyResolver (NEW, pure static)
+    ├── LocalProjectSource — populate ProjectDependencies
+    ├── RoslynSymbolGraphBuilder — tag ProjectOrigin, emit stubs
+    └── SolutionGraphMerger (NEW, pure static)
+
+Phase 3: SnapshotStore + manifest
+    └── SnapshotManifestEntry — add SolutionName, ProjectCount
+
+Phase 4: Indexing layer
+    ├── BM25SearchIndex — add project Lucene field
+    └── KnowledgeQueryService — thread projectFilter
+
+Phase 5: MCP tool layer
+    ├── DocTools — add projectFilter, crossProjectOnly params
+    └── SolutionTools (NEW) — explain_solution tool
+```
+
+Each phase is independently testable. Phases 2 and 4 are the longest; phases 1 and 3 are the safest starting points since they only add fields.
+
+---
 
 ## Scaling Considerations
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| Single repo, small solution | In-memory BM25 index, flat `artifacts/` directory — no external storage needed |
-| Large solution (100k+ symbols) | Persist BM25 index to disk between runs; add SQLite for snapshot catalog and metadata queries |
-| Multiple repos / enterprise | Content-addressed snapshot store (V2+); snapshot sharing across projects; optional vector index for semantic search |
+| Concern | At 10 projects | At 100 projects | Notes |
+|---------|---------------|-----------------|-------|
+| Memory during ingestion | Fine | May spike during build | Existing MSBuildWorkspace-per-project + dispose pattern handles this |
+| Stub node count | Low (hundreds) | Can grow to tens of thousands for NuGet types | Cap stub nodes to direct assembly references only, not transitive |
+| Lucene index size | Increases proportionally | Linear growth | Acceptable; no architectural change needed |
+| Topological sort | Trivial | Trivial (Kahn's algorithm, O(V+E)) | `SolutionDependencyResolver` is never a bottleneck |
+| `explain_solution` response size | Small | Medium (100+ projects) | Paginate project list if needed; out of scope for v1.2 |
 
-### Scaling Priorities
+---
 
-1. **First bottleneck:** Roslyn workspace load time. A full solution with many projects takes seconds to load. Mitigation: cache the `SymbolGraphSnapshot` to `artifacts/` and only re-ingest when `SourceFingerprint` changes. This is the V1 design.
-2. **Second bottleneck:** BM25 index size in memory for very large codebases. Mitigation: spill to disk (LuceneNet or a simple persistent inverted index). Deferred to V2.
+## Anti-Patterns to Avoid
 
-## Anti-Patterns
+### Anti-Pattern 1: Per-Project Snapshots
 
-### Anti-Pattern 1: Live Roslyn Workspace in the Query Path
+**What people do:** Store one `SymbolGraphSnapshot` per project, then merge at query time.
 
-**What people do:** Keep a `Compilation` or `Workspace` object alive in the MCP server and answer queries by calling Roslyn APIs at request time.
+**Why it's wrong:** Breaks the existing single-snapshot model that `KnowledgeQueryService`, `BM25SearchIndex`, and `SnapshotStore` all depend on. Requires a query-time merge layer, complicates the diff model, and invalidates the content-hash scheme. The existing architecture already handles multi-project within one snapshot — `RoslynSymbolGraphBuilder` already loops over all projects.
 
-**Why it's wrong:** Roslyn workspace loading is slow (seconds for a real solution) and memory-intensive. It introduces non-determinism (source changes mid-session), makes the server harder to secure (it holds live filesystem handles), and makes testing expensive.
+**Do this instead:** Extend the single snapshot model with `ProjectOrigin` on nodes and a `Projects` list on the snapshot. Keep one active snapshot per solution.
 
-**Do this instead:** Build the `SymbolGraphSnapshot` at ingestion time and serve queries entirely from the in-memory index. The snapshot is the durable artifact — the Roslyn workspace is a build-time tool only.
+### Anti-Pattern 2: Blocking on Roslyn MetadataReference for NuGet Stubs
 
-### Anti-Pattern 2: Binding Doc Comments by Name String Matching
+**What people do:** For every dangling `References` edge, open the referenced NuGet DLL via Roslyn to extract symbol information.
 
-**What people do:** Match XML doc `<member name="...">` strings to symbol display names by substring or fuzzy match rather than by precise ID string parsing.
+**Why it's wrong:** NuGet DLLs are not on the PathAllowlist, may not be present on all machines, dramatically increases ingestion time, and was explicitly deferred to V1.5.
 
-**Why it's wrong:** C# XML doc ID strings follow a precise format (`T:` for types, `M:` for methods with full parameter type encoding). Fuzzy matching produces silent mismatches — doc comments bind to the wrong symbol or get dropped. The resulting graph has corrupt edges.
+**Do this instead:** Emit lightweight stub nodes with `IsStub = true`, `ProjectOrigin` set to the assembly name, and minimal fields (just `Id`, `DisplayName`, `Kind = Type`). Stubs satisfy edge validity without full symbol data.
 
-**Do this instead:** Parse XML doc ID strings using the documented format (see `System.Xml.XPath` + the [XML documentation comments spec](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/xmldoc/)). Roslyn itself provides `DocumentationCommentId.GetFirstSymbolForDeclarationId()` for the reverse lookup.
+### Anti-Pattern 3: Changing `SymbolId` Format for Cross-Project Disambiguation
 
-### Anti-Pattern 3: Thin Core, Fat Tools
+**What people do:** Prefix symbol IDs with project name (e.g. `ProjectA::T:Foo.Bar`) to make cross-project IDs unique.
 
-**What people do:** Put business logic (search ranking, diff logic, filtering) directly inside MCP tool handlers to ship faster.
+**Why it's wrong:** Roslyn documentation comment IDs (the existing `SymbolId` basis) are already globally unique across a solution — the fully-qualified type name is unambiguous. Changing the ID format breaks all existing snapshots, tests, and client tooling.
 
-**Why it's wrong:** Tool handlers are the security boundary and the protocol adapter. Logic in tool handlers cannot be tested without a running MCP server. It also couples business rules to the transport layer, making it impossible to call the same logic from a CLI, test harness, or alternative transport.
+**Do this instead:** Keep `SymbolId` format unchanged. Use `ProjectOrigin` as an attribute on the node, not part of the identifier.
 
-**Do this instead:** All logic lives in `IKnowledgeQueryService` and below. Tools are dumb: validate → call facade → format → return.
+### Anti-Pattern 4: Solution-Level IngestionService Redesign
 
-### Anti-Pattern 4: Mutable SymbolGraphSnapshot
+**What people do:** Create a separate `SolutionIngestionService` to handle multi-project as a distinct code path.
 
-**What people do:** Update the in-memory graph incrementally as files change, mutating nodes in place.
+**Why it's wrong:** `IngestionService` already routes `.sln` paths through `LocalProjectSource.DiscoverFromSolutionAsync`, producing a `ProjectInventory` with all project files. The pipeline difference for v1.2 is inside `RoslynSymbolGraphBuilder` and the new `SolutionGraphMerger` — not in `IngestionService`.
 
-**Why it's wrong:** Mutable shared state in the serving path introduces race conditions, makes diffs unreliable (you can't compare a snapshot to itself after it changed), and destroys determinism. The snapshot fingerprint becomes meaningless.
+**Do this instead:** Add `SolutionDependencyResolver` and `SolutionGraphMerger` calls within the existing `IngestionService.IngestAsync` pipeline, between discovery and building.
 
-**Do this instead:** Treat every snapshot as an immutable artifact. Incremental updates produce a new snapshot version. Old snapshots are retained for diff operations. This is exactly how LSIF is designed.
+---
 
-## Integration Points
+## Integration Points Summary
 
-### External Services
+| Boundary | Communication | Change Required |
+|----------|---------------|-----------------|
+| Core to Ingestion | `ProjectInventory`, `SymbolGraphSnapshot` records | Add fields to both |
+| Core to Indexing | `IKnowledgeQueryService` interface | Add `projectFilter` param |
+| Core to McpServer | `IKnowledgeQueryService`, `SymbolGraphSnapshot` | Add `projectFilter` param, read new snapshot fields |
+| Ingestion internal | `LocalProjectSource` to `RoslynSymbolGraphBuilder` | `LocalProjectSource` populates dep graph; builder uses it |
+| Ingestion to Indexing | `SymbolGraphSnapshot` passed to `BM25SearchIndex.IndexAsync` | Index reads new `ProjectOrigin` field from nodes |
+| McpServer to Ingestion | `IngestionService.IngestAsync` | Insert `SolutionDependencyResolver` + `SolutionGraphMerger` calls |
+| McpServer tool surface | New `explain_solution` tool | New `SolutionTools` class |
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Roslyn (`Microsoft.CodeAnalysis.CSharp`) | Build-time only — create `AdhocWorkspace` or use `MSBuildWorkspace`, walk symbols, then discard | Never hold workspace open at query time |
-| MCP SDK (`ModelContextProtocol`) | stdio transport, `[McpTool]` attribute-driven registration | Preview SDK; expect API churn; wrap in thin adapter layer |
-| Aspire (`Microsoft.Extensions.Hosting`) | `IHostApplicationBuilder` extensions; config via `appsettings.json` | Standard .NET hosting; no Aspire-specific lock-in |
-| OpenTelemetry | Structured logs via `Microsoft.Extensions.Logging`; trace tool calls with duration + status | Log every MCP tool invocation with requester identity |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| Core ↔ Ingestion | `IProjectSource`, `IDocSource`, `ISymbolGraphBuilder` interfaces | Ingestion depends on Core; Core has no knowledge of Ingestion |
-| Ingestion ↔ Indexing | `SymbolGraphSnapshot` value (passed directly or via artifact store) | No interface needed — snapshot is the contract |
-| Indexing ↔ Serving | `ISearchIndex`, `IKnowledgeQueryService` interfaces | Serving depends on Core interfaces only, not Indexing impl |
-| Serving ↔ Host | DI registrations (`AddDocAgentCore()`, `AddDocAgentIngestion()`, `AddDocAgentMcpServer()`) | Host wires implementations to interfaces; serving layer is unaware of concrete types |
-| Core ↔ Analysis | `SymbolGraphSnapshot`, `GraphDiff` — pure value types | Diff engine is a pure function over snapshots; no side effects |
-
-## Suggested Build Order
-
-The dependency graph dictates this order. Each phase is independently testable before the next phase is started.
-
-```
-Phase 1: Core Domain
-    ↓ (all other components depend on this)
-Phase 2: Ingestion
-    2a. IProjectSource (LocalProjectSource) + IDocSource (LocalDocSource)
-    2b. IXmlDocParser (proper XML parse + SymbolId binding)
-    2c. ISymbolGraphBuilder (RoslynSymbolGraphBuilder — Roslyn walk + doc merge)
-    ↓
-Phase 3: Indexing
-    3a. BM25 ISearchIndex (replace InMemorySearchIndex stub)
-    3b. SnapshotStore (artifacts/ read/write)
-    ↓
-Phase 4: Query Facade
-    IKnowledgeQueryService wired to ISearchIndex + SnapshotStore
-    ↓
-Phase 5: Serving (MCP Tools)
-    5a. DocTools wired to IKnowledgeQueryService
-    5b. Security layer (path allowlists, audit logging, input validation)
-    ↓
-Phase 6: Analysis
-    6a. SymbolDiffEngine (diff_snapshots, review_changes)
-    6b. Roslyn Analyzers (API change detection, suspicious edit detection)
-    ↓
-Phase 7: Host + Observability
-    Aspire app host, DI wiring, telemetry
-```
-
-**Rationale:**
-- Core must ship first — it is the dependency of everything else. It is already partially implemented.
-- Ingestion before Indexing — the index consumes snapshots; you need a real snapshot to validate the index.
-- Indexing before Query Facade — the facade delegates to the index; stub tests are insufficient for integration validation.
-- Query Facade before MCP Tools — tools must be thin wrappers; business logic must be in the facade before tools are built.
-- Analysis after Serving — diff and analyzers are additive features on top of a working pipeline, not prerequisites.
-- Host last — wiring is straightforward once the components it wires exist.
+---
 
 ## Sources
 
-- [.NET Compiler Platform SDK concepts and object model (official Microsoft docs)](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/compiler-api-model) — HIGH confidence
-- [LSIF Specification 0.4.0 — Language Server Index Format (Microsoft)](https://microsoft.github.io/language-server-protocol/specifications/lsif/0.4.0/specification/) — HIGH confidence
-- [Language Server Protocol official site](https://microsoft.github.io/language-server-protocol/) — HIGH confidence
-- [Roslyn GitHub — architecture overview](https://github.com/dotnet/roslyn/blob/main/docs/wiki/Roslyn-Overview.md) — HIGH confidence
-- [Sourcegraph: code intelligence and LSP](https://sourcegraph.com/blog/sourcegraph-code-intelligence-and-the-language-server-protocol) — MEDIUM confidence
-- Existing project contracts in `src/DocAgent.Core/Abstractions.cs` and `src/DocAgent.Core/Symbols.cs` — grounding source
+- Direct inspection: `DocAgent.Core/Symbols.cs`, `DocAgent.Core/Abstractions.cs`
+- Direct inspection: `DocAgent.Ingestion/RoslynSymbolGraphBuilder.cs`, `LocalProjectSource.cs`, `SnapshotStore.cs`
+- Direct inspection: `DocAgent.Indexing/KnowledgeQueryService.cs`, `BM25SearchIndex.cs`
+- Direct inspection: `DocAgent.McpServer/Tools/DocTools.cs`, `IngestionTools.cs`, `ChangeTools.cs`
+- Direct inspection: `DocAgent.McpServer/Ingestion/IngestionService.cs`
+- Project context: `.planning/PROJECT.md`
+- Roslyn `Project.ProjectReferences` and `Solution.Projects` APIs for dependency graph extraction
 
 ---
-*Architecture research for: .NET code documentation intelligence system with MCP server*
-*Researched: 2026-02-26*
+
+*Architecture research for: DocAgentFramework v1.2 Multi-Project Symbol Graphs*
+*Researched: 2026-03-01*

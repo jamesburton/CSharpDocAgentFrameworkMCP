@@ -1,150 +1,77 @@
 # Stack Research
 
-**Domain:** .NET semantic diff engine, incremental Roslyn ingestion, change review MCP tooling (v1.1 additions)
-**Researched:** 2026-02-28
-**Confidence:** HIGH (core additions verified via NuGet and official docs; no new external dependencies required)
+**Domain:** .NET solution-level symbol graph ingestion (v1.2 additions only)
+**Researched:** 2026-03-01
+**Confidence:** HIGH
 
 ---
 
 ## Context: What Already Exists (Do Not Re-Research)
 
-The v1.0 stack is fully validated and operational:
+The following are **already pinned** in `Directory.Packages.props` and must NOT be re-added or changed:
 
-| Package | Version Pinned | Status |
-|---------|---------------|--------|
-| `Microsoft.CodeAnalysis.CSharp` | 4.12.0 | In use — upgrade candidate below |
-| `Microsoft.CodeAnalysis.CSharp.Workspaces` | 4.12.0 | In use |
-| `ModelContextProtocol` | 1.0.0 | Stable |
-| `Lucene.Net` + `Lucene.Net.Analysis.Common` | 4.8.0-beta00017 | In use |
-| `MessagePack` | 3.1.4 | In use |
-| `System.IO.Hashing` | 9.0.0 | In use |
-| `OpenTelemetry.*` | 1.15.0 | In use |
-| `xunit` | 2.9.3 | In use |
-| `FluentAssertions` | 6.12.1 | In use |
-| `Verify.Xunit` | 31.12.5 | In use |
+| Package | Pinned Version | Role |
+|---------|---------------|------|
+| `Microsoft.CodeAnalysis.CSharp` | 4.12.0 | Roslyn compiler APIs |
+| `Microsoft.CodeAnalysis.CSharp.Workspaces` | 4.12.0 | Roslyn workspace model |
+| `Microsoft.CodeAnalysis.Workspaces.MSBuild` | 4.12.0 | MSBuildWorkspace — already present, already versioned |
+| `MessagePack` | 3.1.4 | Snapshot serialization |
+| `Lucene.Net` + `Lucene.Net.Analysis.Common` | 4.8.0-beta00017 | BM25 search index |
+| `ModelContextProtocol` | 1.0.0 | MCP server SDK |
+| `System.IO.Hashing` | 9.0.0 | SHA-256 file hashing |
+| `OpenTelemetry.*` | 1.15.0 | Telemetry |
+| `xunit`, `FluentAssertions`, `Verify.Xunit` | 2.9.3 / 6.12.1 / 31.12.5 | Testing |
 
-**This file covers only what v1.1 adds or changes.**
-
----
-
-## Recommended Stack Additions for v1.1
-
-### Semantic Diff Engine
-
-**Verdict: No new packages. Implement entirely using Roslyn APIs already present.**
-
-The existing `Microsoft.CodeAnalysis.CSharp` 4.12.0 (or upgraded to 5.0.0 — see below) provides all primitives needed to build a symbol-level semantic diff:
-
-| Roslyn API | What It Enables |
-|------------|----------------|
-| `ISymbol.ToDisplayString(SymbolDisplayFormat)` | Canonical string representation of signatures for equality comparison |
-| `IMethodSymbol.Parameters`, `.TypeParameters`, `.ReturnType` | Parameter list, constraints, return type diffing |
-| `INamedTypeSymbol.Interfaces`, `.BaseType` | Inheritance and interface implementation changes |
-| `ISymbol.DeclaredAccessibility` | Accessibility (public → internal) change detection |
-| `ISymbol.IsAbstract`, `.IsSealed`, `.IsOverride`, `.IsVirtual` | Modifier change detection |
-| `NullableAnnotation` on `IParameterSymbol`, `IPropertySymbol`, `IFieldSymbol` | Nullability annotation change detection |
-| `IMethodSymbol.IsGenericMethod`, `.TypeParameters[i].ConstraintTypes` | Generic constraint change detection |
-| `ISymbol.GetDocumentationCommentId()` | Stable cross-snapshot symbol identity key |
-
-**Pattern:** Diff two `SymbolGraphSnapshot`s by keying nodes on `DocumentationCommentId`, comparing `ISymbol`-derived fields. No graph diffing library needed — the `SymbolNode` model already carries all comparable fields. Implement as a pure in-memory comparator in `DocAgent.Core` or `DocAgent.Ingestion`.
-
-**Confidence: HIGH** — This is the standard approach used by tooling such as `git-semantic-diff` (which explicitly uses Roslyn APIs for semantic analysis) and `ApiCompat`.
+**This file covers only what v1.2 adds.**
 
 ---
 
-### Incremental Ingestion (File-Change Detection + Partial Re-Walk)
+## New Additions for v1.2
 
-**Verdict: No new packages. Use `System.IO.Hashing` (already present) + `System.IO.FileSystemWatcher` (inbox BCL).**
+### Core — Solution Loading
 
-| Mechanism | Package | Approach |
-|-----------|---------|---------|
-| Content-hash change detection | `System.IO.Hashing` 9.0.0 (already pinned) | `XxHash64.HashToUInt64(fileBytes)` per `.cs` file; store hash in a `FileHashManifest` alongside the snapshot. On next ingest, compare hashes to identify changed/added/removed files only. |
-| File-system event watching (optional) | `System.IO.FileSystemWatcher` (BCL inbox) | Wire `Changed`/`Created`/`Deleted` events to trigger incremental re-ingest of affected files. Debounce with `System.Threading.Channels.Channel<T>` (inbox) to coalesce rapid edits. |
-| Partial Roslyn re-walk | `Microsoft.CodeAnalysis.CSharp` (already pinned) | Replace only the changed `SyntaxTree`s in the existing `CSharpCompilation` via `compilation.ReplaceSyntaxTree(oldTree, newTree)`. This preserves the existing semantic model for unchanged files — Roslyn internally caches unchanged trees. |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `Microsoft.Build.Locator` | 1.11.2 | Locate and register MSBuild assemblies at runtime before `MSBuildWorkspace.Create()` | Required companion to `MSBuildWorkspace`. Without it, workspace construction throws a MEF composition error because the process cannot find `Microsoft.Build.*` assemblies. `MSBuildLocator.RegisterDefaults()` must be called before any MSBuild/Roslyn workspace type is loaded. Latest stable as of Nov 2025. |
 
-**Key pattern for incremental Roslyn re-walk:**
-```csharp
-// Fast path: only parse changed files
-var updatedCompilation = existingCompilation;
-foreach (var changedFile in changedFilePaths)
-{
-    var newSource = await File.ReadAllTextAsync(changedFile);
-    var newTree = CSharpSyntaxTree.ParseText(newSource, path: changedFile);
-    var oldTree = existingCompilation.SyntaxTrees
-        .FirstOrDefault(t => t.FilePath == changedFile);
-    updatedCompilation = oldTree is null
-        ? updatedCompilation.AddSyntaxTrees(newTree)
-        : updatedCompilation.ReplaceSyntaxTree(oldTree, newTree);
-}
-// Re-walk only changed symbols
-```
+**Why `MSBuildWorkspace` for solution loading:** `MSBuildWorkspace.OpenSolutionAsync()` is the only Roslyn-sanctioned API that turns a `.sln` file into a typed multi-project `Solution` object with compiler-grade `Compilation` chains and fully resolved `ProjectReference` cross-project edges. Alternatives produce inferior results — they give file lists but not semantic models. Since `Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.12.0 is already in CPM, `Microsoft.Build.Locator` is the **only net-new dependency** for solution loading.
 
-`CSharpCompilation.ReplaceSyntaxTree()` is documented Roslyn API — it preserves all unchanged semantic models. This is the same mechanism used by Roslyn's incremental source generators internally.
+**Important: the v1.1 STACK.md said `Microsoft.Build.Locator` was already transitively available and not needed as an explicit reference. That was incorrect for server/host processes.** In `DocAgent.McpServer` and `DocAgent.AppHost`, which are standalone executables, the locator must be explicitly referenced to guarantee it is present at startup before the registration call. Add it explicitly.
 
-**Confidence: HIGH** — `ReplaceSyntaxTree` is a stable, documented public API. The hash-based manifest pattern is standard for incremental build systems (used by MSBuild's input/output tracking).
+### Supporting — NuGet Stub Nodes
+
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `NuGet.Packaging` | 6.12.0 | Read `.nuspec` metadata (package ID, version, exported type surface) from packages in the global NuGet cache | Building stub `SymbolNode`s for NuGet package types. Provides `PackageArchiveReader` and `NuspecReader` to extract package identity from local `.nupkg` files without any network calls. |
+| `NuGet.Configuration` | 6.12.0 | Resolve the global NuGet packages folder path via `SettingsUtility.GetGlobalPackagesFolder()` | Locating the package cache without hardcoding paths. Reads `NuGet.Config` from standard locations. Must match `NuGet.Packaging` major.minor. |
+
+**Why 6.12.0 not 7.x:** NuGet.Packaging 7.x is prerelease targeting internal NuGet tooling. The 6.x stable line is the public Client SDK per the official Microsoft Learn NuGet Client SDK documentation. The latest stable is 6.12.0 (confirmed on NuGet Gallery).
+
+**Why not `NuGet.Protocol`:** `NuGet.Protocol` is for querying a NuGet feed over the network. v1.2 requires stub nodes from the local package cache only — no network calls in tests. `NuGet.Packaging` reads already-restored `.nupkg` files on disk, satisfying the no-network-in-tests constraint.
 
 ---
 
-### Change Review Skill (`review_changes` MCP Tool + `find_breaking_changes` / `explain_change`)
+## Installation (CPM Additions to Directory.Packages.props)
 
-**Verdict: No new packages. New MCP tools are pure logic built on the diff engine output.**
-
-| Component | Implementation |
-|-----------|---------------|
-| `review_changes` tool | Calls diff engine on two named snapshots; serializes `SymbolDiffResult[]` to MCP response using existing `System.Text.Json` (inbox) |
-| `find_breaking_changes` tool | Filters diff results by `DiffClassification.Breaking` enum; a breaking change is any signature removal, accessibility narrowing, parameter type change, non-nullable→nullable annotation change, or constraint loosening |
-| `explain_change` tool | Given a `DocumentationCommentId`, returns the before/after `SymbolNode` diff with human-readable field labels — formatted as structured text, no LLM call needed |
-| Snapshot selection | Load two snapshots by version label from existing `SnapshotStore` (artifacts directory + manifest.json — already implemented) |
-
-No new MCP SDK features are required. Tool registration follows the existing `[McpServerTool]` attribute pattern. `ModelContextProtocol` 1.0.0 is already stable and sufficient.
-
----
-
-### Optional Upgrade: Roslyn 5.0.0
-
-**Recommendation: Upgrade `Microsoft.CodeAnalysis.CSharp` and `Microsoft.CodeAnalysis.CSharp.Workspaces` from 4.12.0 to 5.0.0.**
-
-| Reason | Detail |
-|--------|--------|
-| C# 14 language feature APIs | 5.0.0 ships with VS 2026 / .NET 10 final. The project targets `LangVersion=preview` — Roslyn must be >= the language version to parse C# 14 constructs in analyzed projects without degraded semantic models. |
-| `NullableAnnotation` API improvements | 5.0.0 adds more complete nullability flow in `ITypeSymbol.NullableAnnotation` — directly relevant to the nullability diffing requirement. |
-| No breaking changes in public API | Roslyn maintains strict API compatibility across minor versions. Upgrading 4.12.0 → 5.0.0 requires no application code changes. |
-
-**Version on NuGet as of 2026-02-28:** `Microsoft.CodeAnalysis.CSharp` **5.0.0** (stable, not preview).
-
-**Confidence: MEDIUM** — Version confirmed on NuGet. No specific C# 14 nullability API changes verified against changelog; assertion is based on Roslyn's track record of backward compatibility.
-
----
-
-### No New Testing Packages Needed
-
-The existing `Verify.Xunit` 31.12.5 (already pinned) is the right tool for golden-file testing of diff engine output — snapshot the `SymbolDiffResult[]` JSON and verify determinism across runs. No new test library is required.
-
-If the team upgrades to `xunit.v3` (3.2.2) and `FluentAssertions` 8.8.0 (recommended in the v1.0 STACK.md but deferred), v1.1 is a natural time to do it — the test count is about to grow significantly and the v3 parallelism model helps.
-
----
-
-## Installation (v1.1 Changes Only)
-
-```bash
-# In src/Directory.Packages.props — update these two version pins:
-# Microsoft.CodeAnalysis.CSharp: 4.12.0 → 5.0.0
-# Microsoft.CodeAnalysis.CSharp.Workspaces: 4.12.0 → 5.0.0
-
-# No new NuGet packages required for v1.1 core features.
-
-# If doing the xunit v3 + FA upgrade at the same time:
-# xunit: 2.9.3 → xunit.v3 3.2.2
-# FluentAssertions: 6.12.1 → 8.8.0
-```
-
-Update in `Directory.Packages.props`:
 ```xml
-<PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-<PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
+<!-- Solution loading — required companion to MSBuildWorkspace for standalone host processes -->
+<PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
+
+<!-- NuGet package metadata for stub nodes (local cache reads, no network) -->
+<PackageVersion Include="NuGet.Packaging" Version="6.12.0" />
+<PackageVersion Include="NuGet.Configuration" Version="6.12.0" />
 ```
 
-No other package changes are needed for the v1.1 feature set.
+Reference in project files:
+
+```xml
+<!-- DocAgent.McpServer and DocAgent.AppHost — both need the locator for startup registration -->
+<PackageReference Include="Microsoft.Build.Locator" />
+
+<!-- DocAgent.Ingestion — the layer that does discovery and NuGet stub node construction -->
+<PackageReference Include="NuGet.Packaging" />
+<PackageReference Include="NuGet.Configuration" />
+```
 
 ---
 
@@ -152,11 +79,11 @@ No other package changes are needed for the v1.1 feature set.
 
 | Recommended | Alternative | Why Not |
 |-------------|-------------|---------|
-| Custom diff engine on `ISymbol` APIs | `Microsoft.DotNet.ApiCompat` CLI tool | ApiCompat is an MSBuild task / CLI tool, not a library — cannot be embedded in a running MCP server or called programmatically in-process. It compares compiled assemblies (not source), which means it operates post-build, not on the live Roslyn symbol graph. Use ApiCompat in CI for safety, but it cannot power the `review_changes` MCP tool. |
-| Custom diff engine on `ISymbol` APIs | `DotNetAnalyzers.PublicApiAnalyzer` | A Roslyn analyzer that enforces API surface declaration in text files — useful for CI enforcement but not for runtime diff queries. Not embeddable as a library for on-demand diffing. |
-| `System.IO.Hashing` (already present) for file hashing | `MD5` / `SHA256` from `System.Security.Cryptography` | `XxHash64` is 3-5x faster than SHA256 for non-cryptographic content hashing of source files. Already a dependency. Collision probability for file change detection is negligible. |
-| `CSharpCompilation.ReplaceSyntaxTree()` for partial re-walk | Full re-parse of all files | Full re-parse is O(n) in file count; `ReplaceSyntaxTree` is O(changed files). For large projects with hundreds of files, partial re-walk is the only practical path. |
-| `System.Threading.Channels` (BCL) for debounce | `System.Reactive` (Rx.NET) | Rx adds a significant dependency for a pattern (`Channel<T>` + `Task.Delay` debounce) that is 20 LOC without it. Do not add Rx. |
+| `MSBuildWorkspace.OpenSolutionAsync()` | Parse `.sln` text manually (regex the `Project(...)` blocks) | Produces a file-path list only. Cannot resolve `ProjectReference` edges between projects or produce `Compilation` objects with inter-project type resolution. Breaks on SDK-style projects that expand globs. |
+| `MSBuildWorkspace.OpenSolutionAsync()` | `MSBuildProjectGraph` (Microsoft.Build package directly) | Gives build-ordering topology but not a Roslyn `Solution` or `Compilation`. No access to the Roslyn semantic model, symbol tables, or cross-project type resolution needed to build `SymbolNode` / `SymbolEdge` graphs. |
+| `NuGet.Packaging` (local cache reads) | `NuGet.Protocol` (feed queries) | Requires HTTP network access; violates the no-network-in-tests constraint. All restored packages already exist in the local cache; no feed query is needed for stub node metadata. |
+| `NuGet.Packaging` 6.12.0 | `NuGet.Packaging` 7.x | 7.x is prerelease/internal. 6.x is the stable public Client SDK line per Microsoft Learn documentation. |
+| `NuGet.Packaging` for stub type metadata | `MetadataReference.CreateFromFile()` on assembly DLLs in the package cache | Loading full assembly metadata via Roslyn is the right approach for resolving cross-project types semantically, but for stub nodes (which intentionally have no source span and minimal data), reading the nuspec for package identity is sufficient and much cheaper. Full metadata loading is the correct approach IF deep type resolution for NuGet packages is added in a later milestone. |
 
 ---
 
@@ -164,61 +91,86 @@ No other package changes are needed for the v1.1 feature set.
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Any third-party "semantic diff" NuGet package | No maintained, embeddable .NET library exists for C# symbol-level semantic diff. The two candidates (`semdiff`, `git-semantic-diff`) are CLI tools or abandoned. Roslyn already provides all the primitives; a custom comparator is ~300 LOC. | Custom `ISymbolDiffEngine` built on Roslyn `ISymbol` APIs |
-| `Microsoft.DotNet.ApiCompat` as a library | Not designed for embedding. Assembly-based (not source-based). Cannot operate on an in-memory `SymbolGraphSnapshot`. | Custom diff engine |
-| `System.Reactive` (Rx.NET) | Heavyweight dependency for a simple debounce pattern. Introduces `IObservable<T>` abstractions that conflict with the project's `IAsyncEnumerable<T>` + `Channel<T>` conventions. | `System.Threading.Channels.Channel<T>` (BCL inbox) |
-| `Microsoft.Build.Locator` (new reference) | Already implicitly used by `MSBuildWorkspace`. Do not add as an explicit dependency — it is transitively available via `Microsoft.CodeAnalysis.Workspaces.MSBuild`. | Existing transitive reference |
-| Embedding provider / vector index | Explicitly deferred to v2+. The diff engine results are structured data, not semantic embeddings. | Implement `IVectorIndex` in v2+ |
+| `Microsoft.Build` (direct reference) | Creates assembly version conflicts with the copy loaded by `MSBuildLocator` at runtime. The locator's purpose is to load the correct `Microsoft.Build.*` from the SDK install. Referencing it directly as a `PackageReference` causes binding failures. If it appears as a transitive dependency, set `ExcludeAssets=runtime`. | `Microsoft.Build.Locator` only |
+| `NuGet.Protocol` | Network I/O; violates no-network-in-tests constraint; overkill for reading already-restored packages from local cache | `NuGet.Packaging` for local `.nupkg` file reads |
+| `Buildalyzer` | Third-party wrapper around MSBuildWorkspace; adds abstraction without benefit since the project already has direct Roslyn workspace packages. Buildalyzer was useful before MSBuildLocator existed; it is no longer necessary. | `MSBuildWorkspace` directly |
+| Any new serialization library | MessagePack 3.1.4 already handles snapshot serialization. Stub node types must use the same contractless resolver pattern. | Extend existing MessagePack contracts |
+| `Microsoft.Build.Framework` / `Microsoft.Build.Tasks.Core` | These are internal MSBuild implementation packages. Referencing them alongside MSBuildLocator causes binding redirect conflicts. | MSBuildLocator manages these at runtime |
 
 ---
 
-## Stack Patterns for v1.1
+## Integration Notes
 
-**Building the semantic diff engine:**
-- Implement `ISymbolDiffEngine` in `DocAgent.Core` (no IO dependencies — pure symbol comparison)
-- Implement `SymbolDiffEngine : ISymbolDiffEngine` in `DocAgent.Ingestion` (has access to Roslyn APIs and snapshot loading)
-- Key `SymbolNode` records by `DocumentationCommentId` across two snapshots
-- Classify changes: `Added`, `Removed`, `SignatureChanged`, `NullabilityChanged`, `AccessibilityChanged`, `ConstraintChanged`, `DocChanged`
-- Breaking = `Removed` | `AccessibilityNarrowed` | `SignatureChanged` | `NullabilityChanged` (non-nullable added to param)
+### MSBuildLocator Call Site
 
-**Building incremental ingestion:**
-- Add `FileHashManifest` record alongside `SymbolGraphSnapshot` in the artifact store
-- Hash each `.cs` file with `XxHash64` before and after; compute added/changed/removed sets
-- Use `CSharpCompilation.ReplaceSyntaxTree()` for the changed files only
-- Re-walk only the `ISymbol`s declared in changed files; merge into the existing snapshot
-- Store new snapshot with incremented version label; keep previous version for diff
+`MSBuildLocator.RegisterDefaults()` must be called **once, at process startup**, before any `Microsoft.CodeAnalysis.MSBuild` or `Microsoft.Build.*` type is referenced — including before `MSBuildWorkspace.Create()` is called.
 
-**Building `review_changes` MCP tool:**
-- Accept two snapshot version labels (or "latest" + "previous") as parameters
-- Load both snapshots from `SnapshotStore`
-- Run `ISymbolDiffEngine.Diff(snapshotA, snapshotB)`
-- Return `SymbolDiffResult[]` as structured MCP response (serialize with `System.Text.Json`)
-- Annotate each result with `IsBreaking`, `ChangeType`, `Before`, `After` fields
+In `DocAgent.McpServer` or `DocAgent.AppHost` Program.cs:
+
+```csharp
+using Microsoft.Build.Locator;
+
+// Must be first — before any type from Microsoft.CodeAnalysis.MSBuild is loaded
+MSBuildLocator.RegisterDefaults();
+
+// Then proceed with host builder, DI, etc.
+var builder = Host.CreateApplicationBuilder(args);
+// ...
+```
+
+Failure to call this before any MSBuild type is loaded results in a MEF composition exception with no useful diagnostic message. This is the single most common failure mode when adopting `MSBuildWorkspace`.
+
+### Cross-Project Edge Representation
+
+`MSBuildWorkspace.OpenSolutionAsync()` produces a Roslyn `Solution` where each `Project` has a typed `ProjectReferences` collection (edges to other `Project`s in the solution). These map directly to new `SymbolEdge` entries with kind `ProjectReference` in `SymbolGraphSnapshot`. No additional library is needed — the `ProjectReference` API is part of the already-pinned `Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.12.0.
+
+### NuGet Stub Node Strategy
+
+For each `PackageReference` in a project that is NOT a `ProjectReference` (i.e., resolves to a NuGet package, not a local project):
+
+1. Resolve global NuGet cache path: `NuGet.Configuration.SettingsUtility.GetGlobalPackagesFolder(settings)`
+2. Locate the `.nupkg` file for the package ID + version
+3. Open with `NuGet.Packaging.PackageArchiveReader`
+4. Read package identity and description via `NuspecReader.GetIdentity()`, `GetDescription()`
+5. Create a lightweight `SymbolNode` with `IsStub = true`, no `SourceSpan`, doc from nuspec description
+6. Add `SymbolEdge` from the referencing project root node to the stub node with kind `NuGetReference`
+
+This stays entirely on the local filesystem — no network calls, no test isolation problems.
+
+### ExcludeAssets Pattern for Microsoft.Build
+
+If `Microsoft.Build` or `Microsoft.Build.Framework` appear as transitive dependencies (from NuGet packages), suppress their runtime assets to avoid conflict with the MSBuildLocator-managed copy:
+
+```xml
+<PackageReference Include="Microsoft.Build" ExcludeAssets="runtime" />
+```
+
+This is the documented pattern from the MSBuildWorkspace guidance by the Roslyn team.
 
 ---
 
 ## Version Compatibility
 
 | Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `Microsoft.CodeAnalysis.CSharp` 5.0.0 | `Microsoft.CodeAnalysis.CSharp.Workspaces` 5.0.0 | Must be the same version — always upgrade both together. |
-| `Microsoft.CodeAnalysis.CSharp` 5.0.0 | `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit` 1.1.2 | Testing package targets `netstandard2.0`; does not require a version bump when upgrading Roslyn core. |
-| `System.IO.Hashing` 9.0.0 | .NET 10 | Already pinned. `XxHash64` is the right algorithm — non-cryptographic, fast, stable API. |
-| `Verify.Xunit` 31.12.5 | `xunit` 2.9.3 and `xunit.v3` 3.x | Works with both. No version change needed if the xunit upgrade is deferred. |
+|---------|----------------|-------|
+| `Microsoft.Build.Locator` 1.11.2 | `Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.12.0 | Locator version is independent of Roslyn version; 1.11.2 supports .NET 10 SDK discovery |
+| `NuGet.Packaging` 6.12.0 | `NuGet.Configuration` 6.12.0 | Must match major.minor; version mismatches cause `NuGet.Frameworks` assembly binding failures |
+| `NuGet.Packaging` 6.12.0 | .NET 10 (`net10.0`) | Targets `netstandard2.0`; fully compatible with `net10.0` TFM |
+| `Microsoft.Build.Locator` 1.11.2 | .NET 10 | Confirmed: targets `net472` + `netstandard2.0`; loads .NET SDK MSBuild from `dotnet` install |
 
 ---
 
 ## Sources
 
-- [NuGet: Microsoft.CodeAnalysis.CSharp 5.0.0](https://www.nuget.org/packages/microsoft.codeanalysis.csharp/) — confirmed latest stable, HIGH confidence
-- [Roslyn GitHub: CSharpCompilation.ReplaceSyntaxTree](https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Compilation/CSharpCompilation.cs) — documented public API, HIGH confidence
-- [Microsoft Learn: Microsoft.DotNet.ApiCompat.Tool](https://learn.microsoft.com/en-us/dotnet/fundamentals/apicompat/global-tool) — CLI/MSBuild only, not embeddable library, HIGH confidence
-- [NuGet: DotNetAnalyzers.PublicApiAnalyzer](https://www.nuget.org/packages/DotNetAnalyzers.PublicApiAnalyzer) — analyzer-only, not runtime diff library, HIGH confidence
-- [GitHub: git-semantic-diff](https://github.com/gboya/git-semantic-diff) — uses Roslyn APIs for semantic analysis; confirms Roslyn is sufficient primitive, MEDIUM confidence
-- [Microsoft Learn: FileSystemWatcher](https://learn.microsoft.com/en-us/dotnet/fundamentals/runtime-libraries/system-io-filesystemwatcher) — BCL inbox, no package needed, HIGH confidence
-- [Roslyn incremental generators docs](https://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.md) — confirms ReplaceSyntaxTree caching model, HIGH confidence
+- [NuGet Gallery: Microsoft.Build.Locator 1.11.2](https://www.nuget.org/packages/Microsoft.Build.Locator/) — version confirmed, latest stable Nov 2025, HIGH confidence
+- [NuGet Gallery: Microsoft.CodeAnalysis.Workspaces.MSBuild](https://www.nuget.org/packages/Microsoft.CodeAnalysis.Workspaces.MSBuild/) — confirmed 4.12.0 already in CPM, HIGH confidence
+- [NuGet Gallery: NuGet.Packaging 6.12.0](https://www.nuget.org/packages/NuGet.Packaging/6.12.0) — stable client SDK line, HIGH confidence
+- [NuGet Client SDK — Microsoft Learn](https://learn.microsoft.com/en-us/nuget/reference/nuget-client-sdk) — official API documentation for `NuGet.Packaging` + `NuGet.Configuration`, MEDIUM confidence
+- [Using MSBuildWorkspace — Dustin Campbell (Roslyn team)](https://gist.github.com/DustinCampbell/32cd69d04ea1c08a16ae5c4cd21dd3a3) — authoritative usage guide including `ExcludeAssets=runtime` pattern and MEF composition pitfall, HIGH confidence
+- [MSBuildWorkspace cross-project reference issue #36072](https://github.com/dotnet/roslyn/issues/36072) — confirmed ProjectReference loading behavior, MEDIUM confidence
+- WebSearch: MSBuildWorkspace + MSBuildLocator + solution loading patterns — verified against official Roslyn gist and NuGet Gallery, HIGH confidence overall
 
 ---
 
-*Stack research for: v1.1 semantic diff engine, incremental ingestion, change review tooling*
-*Researched: 2026-02-28*
+*Stack research for: DocAgentFramework v1.2 multi-project/solution-level additions*
+*Researched: 2026-03-01*
