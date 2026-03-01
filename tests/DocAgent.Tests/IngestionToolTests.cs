@@ -69,6 +69,7 @@ public sealed class IngestionToolTests
 
         return new IngestionTools(
             svc ?? new StubIngestionService(DefaultResult),
+            new StubSolutionIngestionService(),
             allowlist,
             NullLogger<IngestionTools>.Instance);
     }
@@ -103,6 +104,16 @@ public sealed class IngestionToolTests
             LastForceReindex = forceReindex;
             return Task.FromResult(_result);
         }
+    }
+
+    private sealed class StubSolutionIngestionService : ISolutionIngestionService
+    {
+        public Task<SolutionIngestionResult> IngestAsync(
+            string slnPath,
+            Func<int, int, string, Task>? reportProgress,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new SolutionIngestionResult(
+                "stub", "stub", 0, 0, 0, 0, TimeSpan.Zero, [], []));
     }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
