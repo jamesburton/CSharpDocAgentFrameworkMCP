@@ -26,7 +26,7 @@ Full details: milestones/v1.0-ROADMAP.md
 - [x] **Phase 9: Semantic Diff Engine** - Core diff types and algorithm for comparing two SymbolGraphSnapshots — detect signature, nullability, constraint, accessibility, and dependency changes (completed 2026-02-28)
 - [x] **Phase 10: Incremental Ingestion** - File change detection and partial re-ingestion — only re-process changed files with precise change tracking (completed 2026-02-28)
 - [x] **Phase 11: Change Intelligence & Review** - MCP tools (review_changes, find_breaking_changes, explain_change) and unusual change review skill with worktree-based remediation proposals (depends on Phase 9) (completed 2026-02-28)
-- [ ] **Phase 12: ChangeTools Security Gate** - Add PathAllowlist enforcement to all ChangeTools MCP methods, closing audit gap (gap closure)
+- [x] **Phase 12: ChangeTools Security Gate** - Add PathAllowlist enforcement to all ChangeTools MCP methods, closing audit gap (gap closure) (completed 2026-03-01)
 
 ## Progress
 
@@ -43,7 +43,7 @@ Full details: milestones/v1.0-ROADMAP.md
 | 9. Semantic Diff Engine | v1.1 | 3/3 | Complete | 2026-02-28 |
 | 10. Incremental Ingestion | 3/3 | Complete    | 2026-02-28 | — |
 | 11. Change Intelligence & Review | 1/2 | Complete    | 2026-02-28 | — |
-| 12. ChangeTools Security Gate | v1.1 | 0/1 | Pending | — |
+| 12. ChangeTools Security Gate | 1/1 | Complete   | 2026-03-01 | — |
 
 ## Phase Details
 

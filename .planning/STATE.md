@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 11 of 11 — Change Intelligence Review (in progress)
-Plan: 2 of 3 plans executed (11-02 complete)
-Status: Phase 11 in progress — plan 02 executed
-Last activity: 2026-02-28 — Phase 11 plan 02 executed
+Phase: 12 of 12 — ChangeTools Security Gate (in progress)
+Plan: 1 of 1 plans executed (12-01 complete)
+Status: Phase 12 complete — plan 01 executed
+Last activity: 2026-03-01 — Phase 12 plan 01 executed
 
 ## Accumulated Context
 
@@ -44,9 +44,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 11-02-PLAN.md
-Resume file: .planning/phases/11-change-intelligence-review/11-03-PLAN.md
+Last session: 2026-03-01
+Stopped at: Completed 12-01-PLAN.md
+Resume file: none (phase 12 complete)
 
 ### Decisions (09-01)
 
@@ -97,3 +97,9 @@ Resume file: .planning/phases/11-change-intelligence-review/11-03-PLAN.md
 - Unusual symbol IDs tracked in HashSet for O(1) lookup during severity escalation
 - MassSignatureChange groups by ParentSymbolId.Value — only fires when ParentSymbolId is non-null
 - NullabilityRegression: checks OldAnnotation not ending with '?' and NewAnnotation does, using NullabilityChangeDetail fields
+
+### Decisions (12-01)
+
+- PathAllowlist guard checks _snapshotStore.ArtifactsDir once per method, not once per LoadAsync call
+- Uses QueryErrorKind.NotFound for opaque denial matching DocTools pattern (not_found error code)
+- ExplainChange test uses SaveBreakingPairAsync — guard fires before load so symbol existence is irrelevant
