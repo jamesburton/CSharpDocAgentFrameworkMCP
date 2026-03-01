@@ -262,4 +262,325 @@ public sealed class SolutionIngestionServiceTests : IDisposable
 
         await act.Should().NotThrowAsync();
     }
+
+    // ── SolutionSnapshot enrichment tests ─────────────────────────────────────
+
+    private static SolutionIngestionResult MakeResultWithSnapshot(
+        string solutionName,
+        IReadOnlyList<ProjectIngestionStatus> projects,
+        SolutionSnapshot? snapshot,
+        IReadOnlyList<string>? warnings = null,
+        string snapshotId = "test-snap-id") =>
+        new(
+            SnapshotId: snapshotId,
+            SolutionName: solutionName,
+            TotalProjectCount: projects.Count,
+            IngestedProjectCount: projects.Count(p => p.Status == "ok"),
+            TotalNodeCount: projects.Where(p => p.Status == "ok").Sum(p => p.NodeCount ?? 0),
+            TotalEdgeCount: 0,
+            Duration: TimeSpan.FromMilliseconds(50),
+            Projects: projects,
+            Warnings: warnings ?? Array.Empty<string>(),
+            Snapshot: snapshot);
+
+    private static SymbolNode MakeStubNode(string id, string assemblyName) =>
+        new(
+            Id: new SymbolId(id),
+            Kind: SymbolKind.Type,
+            DisplayName: id,
+            FullyQualifiedName: id,
+            PreviousIds: [],
+            Accessibility: Accessibility.Public,
+            Docs: null,
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>(),
+            ProjectOrigin: assemblyName,
+            NodeKind: NodeKind.Stub);
+
+    [Fact]
+    public async Task IngestAsync_PopulatesSolutionSnapshot_WithProjectEntries()
+    {
+        // Arrange
+        var svc = CreateService();
+        var proj1Entry = new ProjectEntry("Proj1", "/src/Proj1/Proj1.csproj", Array.Empty<string>());
+        var proj2Entry = new ProjectEntry("Proj2", "/src/Proj2/Proj2.csproj", new[] { "Proj1" });
+
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "MySolution",
+            Projects: new[] { proj1Entry, proj2Entry },
+            ProjectDependencies: new[] { new ProjectEdge("Proj2", "Proj1") },
+            ProjectSnapshots: Array.Empty<SymbolGraphSnapshot>(),
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var result = MakeResultWithSnapshot(
+            "MySolution",
+            projects: [OkStatus("Proj1", 2), OkStatus("Proj2", 1)],
+            snapshot: snapshot);
+
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/MySolution.sln", null, CancellationToken.None);
+
+        // Assert
+        actual.Snapshot.Should().NotBeNull();
+        actual.Snapshot!.SolutionName.Should().Be("MySolution");
+        actual.Snapshot.Projects.Should().HaveCount(2);
+        actual.Snapshot.Projects.Should().Contain(p => p.Name == "Proj1" && p.Path == "/src/Proj1/Proj1.csproj");
+        actual.Snapshot.Projects.Should().Contain(p => p.Name == "Proj2" && p.DependsOn.Contains("Proj1"));
+    }
+
+    [Fact]
+    public async Task IngestAsync_PopulatesProjectDependencyDAG()
+    {
+        // Arrange
+        var svc = CreateService();
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "MySolution",
+            Projects: new[]
+            {
+                new ProjectEntry("Proj1", "/src/Proj1/Proj1.csproj", Array.Empty<string>()),
+                new ProjectEntry("Proj2", "/src/Proj2/Proj2.csproj", new[] { "Proj1" }),
+            },
+            ProjectDependencies: new[] { new ProjectEdge("Proj2", "Proj1") },
+            ProjectSnapshots: Array.Empty<SymbolGraphSnapshot>(),
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var result = MakeResultWithSnapshot(
+            "MySolution",
+            projects: [OkStatus("Proj1", 1), OkStatus("Proj2", 1)],
+            snapshot: snapshot);
+
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/MySolution.sln", null, CancellationToken.None);
+
+        // Assert
+        actual.Snapshot.Should().NotBeNull();
+        actual.Snapshot!.ProjectDependencies.Should().HaveCount(1);
+        actual.Snapshot.ProjectDependencies.Should().Contain(e => e.From == "Proj2" && e.To == "Proj1");
+    }
+
+    [Fact]
+    public async Task IngestAsync_ClassifiesCrossProjectEdges()
+    {
+        // Arrange — verify that an edge between nodes from different ProjectOrigins
+        // carries EdgeScope.CrossProject when propagated through the result contract.
+        var svc = CreateService();
+
+        // Simulate: Proj2 node has an Inherits edge to a Proj1 type (cross-project)
+        var crossProjectEdge = new SymbolEdge(
+            new SymbolId("T:Proj2.DerivedClass"),
+            new SymbolId("T:Proj1.BaseClass"),
+            SymbolEdgeKind.Inherits,
+            EdgeScope.CrossProject);
+
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "MySolution",
+            Projects: new[]
+            {
+                new ProjectEntry("Proj1", "/src/Proj1/Proj1.csproj", Array.Empty<string>()),
+                new ProjectEntry("Proj2", "/src/Proj2/Proj2.csproj", new[] { "Proj1" }),
+            },
+            ProjectDependencies: new[] { new ProjectEdge("Proj2", "Proj1") },
+            ProjectSnapshots: new[]
+            {
+                new SymbolGraphSnapshot(
+                    SchemaVersion: "1.2",
+                    ProjectName: "Proj2",
+                    SourceFingerprint: "fp2",
+                    ContentHash: null,
+                    CreatedAt: DateTimeOffset.UtcNow,
+                    Nodes: new[] { MakeNode("T:Proj2.DerivedClass", "Proj2") },
+                    Edges: new[] { crossProjectEdge },
+                    IngestionMetadata: null,
+                    SolutionName: "MySolution"),
+            },
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var result = MakeResultWithSnapshot("MySolution", [OkStatus("Proj1", 1), OkStatus("Proj2", 1)], snapshot);
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/MySolution.sln", null, CancellationToken.None);
+
+        // Assert
+        actual.Snapshot.Should().NotBeNull();
+        var proj2Snapshot = actual.Snapshot!.ProjectSnapshots.Single(s => s.ProjectName == "Proj2");
+        var inheritEdge = proj2Snapshot.Edges.Single(e => e.Kind == SymbolEdgeKind.Inherits);
+        inheritEdge.Scope.Should().Be(EdgeScope.CrossProject);
+    }
+
+    [Fact]
+    public async Task IngestAsync_ClassifiesIntraProjectEdges()
+    {
+        // Arrange — verify that edges between nodes in the same project carry IntraProject scope.
+        var svc = CreateService();
+
+        var intraEdge = new SymbolEdge(
+            new SymbolId("T:Proj1.Derived"),
+            new SymbolId("T:Proj1.Base"),
+            SymbolEdgeKind.Inherits,
+            EdgeScope.IntraProject);
+
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "MySolution",
+            Projects: new[] { new ProjectEntry("Proj1", "/src/Proj1/Proj1.csproj", Array.Empty<string>()) },
+            ProjectDependencies: Array.Empty<ProjectEdge>(),
+            ProjectSnapshots: new[]
+            {
+                new SymbolGraphSnapshot(
+                    SchemaVersion: "1.2",
+                    ProjectName: "Proj1",
+                    SourceFingerprint: "fp1",
+                    ContentHash: null,
+                    CreatedAt: DateTimeOffset.UtcNow,
+                    Nodes: new[] { MakeNode("T:Proj1.Base", "Proj1"), MakeNode("T:Proj1.Derived", "Proj1") },
+                    Edges: new[] { intraEdge },
+                    IngestionMetadata: null,
+                    SolutionName: "MySolution"),
+            },
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var result = MakeResultWithSnapshot("MySolution", [OkStatus("Proj1", 2)], snapshot);
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/MySolution.sln", null, CancellationToken.None);
+
+        // Assert
+        actual.Snapshot.Should().NotBeNull();
+        var proj1Snapshot = actual.Snapshot!.ProjectSnapshots.Single(s => s.ProjectName == "Proj1");
+        var edge = proj1Snapshot.Edges.Single(e => e.Kind == SymbolEdgeKind.Inherits);
+        edge.Scope.Should().Be(EdgeScope.IntraProject);
+    }
+
+    [Fact]
+    public async Task IngestAsync_CreatesStubNodesForExternalTypes()
+    {
+        // Arrange — simulate a snapshot that contains a stub node for an external type.
+        var svc = CreateService();
+
+        var stubNode = MakeStubNode("T:ExternalLib.SomeInterface", "ExternalLib");
+
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "MySolution",
+            Projects: new[] { new ProjectEntry("Proj1", "/src/Proj1/Proj1.csproj", Array.Empty<string>()) },
+            ProjectDependencies: Array.Empty<ProjectEdge>(),
+            ProjectSnapshots: new[]
+            {
+                new SymbolGraphSnapshot(
+                    SchemaVersion: "1.2",
+                    ProjectName: "Proj1",
+                    SourceFingerprint: "fp1",
+                    ContentHash: null,
+                    CreatedAt: DateTimeOffset.UtcNow,
+                    Nodes: new[] { MakeNode("T:Proj1.MyClass", "Proj1"), stubNode },
+                    Edges: Array.Empty<SymbolEdge>(),
+                    IngestionMetadata: null,
+                    SolutionName: "MySolution"),
+            },
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var result = MakeResultWithSnapshot("MySolution", [OkStatus("Proj1", 1)], snapshot);
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/MySolution.sln", null, CancellationToken.None);
+
+        // Assert
+        actual.Snapshot.Should().NotBeNull();
+        var proj1Snapshot = actual.Snapshot!.ProjectSnapshots.Single();
+        var stub = proj1Snapshot.Nodes.FirstOrDefault(n => n.NodeKind == NodeKind.Stub);
+        stub.Should().NotBeNull();
+        stub!.Id.Value.Should().Be("T:ExternalLib.SomeInterface");
+        stub.ProjectOrigin.Should().Be("ExternalLib");
+    }
+
+    [Fact]
+    public async Task IngestAsync_FiltersCommonPrimitivesFromStubs()
+    {
+        // Arrange — simulate a snapshot where no stub nodes exist for System.String, System.Int32, etc.
+        var svc = CreateService();
+
+        // Only real nodes — no stubs for primitives
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "MySolution",
+            Projects: new[] { new ProjectEntry("Proj1", "/src/Proj1/Proj1.csproj", Array.Empty<string>()) },
+            ProjectDependencies: Array.Empty<ProjectEdge>(),
+            ProjectSnapshots: new[]
+            {
+                new SymbolGraphSnapshot(
+                    SchemaVersion: "1.2",
+                    ProjectName: "Proj1",
+                    SourceFingerprint: "fp1",
+                    ContentHash: null,
+                    CreatedAt: DateTimeOffset.UtcNow,
+                    Nodes: new[] { MakeNode("T:Proj1.MyClass", "Proj1") },
+                    Edges: Array.Empty<SymbolEdge>(),
+                    IngestionMetadata: null,
+                    SolutionName: "MySolution"),
+            },
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var result = MakeResultWithSnapshot("MySolution", [OkStatus("Proj1", 1)], snapshot);
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/MySolution.sln", null, CancellationToken.None);
+
+        // Assert — no stub nodes for primitive types
+        actual.Snapshot.Should().NotBeNull();
+        var allNodes = actual.Snapshot!.ProjectSnapshots.SelectMany(s => s.Nodes).ToList();
+        allNodes.Should().NotContain(n => n.NodeKind == NodeKind.Stub && (
+            n.FullyQualifiedName == "System.String" ||
+            n.FullyQualifiedName == "System.Int32" ||
+            n.FullyQualifiedName == "System.Object" ||
+            n.FullyQualifiedName == "System.Boolean"));
+    }
+
+    [Fact]
+    public async Task IngestAsync_DetectsCircularProjectReferences()
+    {
+        // Arrange — simulate circular A → B → A project references.
+        var svc = CreateService();
+
+        // Both edges present despite the cycle (not removed)
+        var projectEdges = new[] { new ProjectEdge("A", "B"), new ProjectEdge("B", "A") };
+
+        var snapshot = new SolutionSnapshot(
+            SolutionName: "CircularSln",
+            Projects: new[]
+            {
+                new ProjectEntry("A", "/src/A/A.csproj", new[] { "B" }),
+                new ProjectEntry("B", "/src/B/B.csproj", new[] { "A" }),
+            },
+            ProjectDependencies: projectEdges,
+            ProjectSnapshots: Array.Empty<SymbolGraphSnapshot>(),
+            CreatedAt: DateTimeOffset.UtcNow);
+
+        var circularWarnings = new[] { "Circular project reference detected: A -> B -> A" };
+        var result = MakeResultWithSnapshot(
+            "CircularSln",
+            projects: [OkStatus("A", 1), OkStatus("B", 1)],
+            snapshot: snapshot,
+            warnings: circularWarnings);
+
+        svc.PipelineOverride = (_, _, _) => Task.FromResult(result);
+
+        // Act
+        var actual = await svc.IngestAsync("/some/path/CircularSln.sln", null, CancellationToken.None);
+
+        // Assert — both edges are present despite circular reference
+        actual.Snapshot.Should().NotBeNull();
+        actual.Snapshot!.ProjectDependencies.Should().HaveCount(2);
+        actual.Snapshot.ProjectDependencies.Should().Contain(e => e.From == "A" && e.To == "B");
+        actual.Snapshot.ProjectDependencies.Should().Contain(e => e.From == "B" && e.To == "A");
+
+        // Assert — circular reference warning was captured
+        actual.Warnings.Should().Contain(w => w.Contains("Circular") && w.Contains("A") && w.Contains("B"));
+    }
 }
