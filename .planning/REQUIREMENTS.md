@@ -68,30 +68,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INGEST-01 | — | Pending |
-| INGEST-02 | — | Pending |
-| INGEST-03 | — | Pending |
-| INGEST-04 | — | Pending |
-| INGEST-05 | — | Pending |
-| INGEST-06 | — | Pending |
-| GRAPH-01 | — | Pending |
-| GRAPH-02 | — | Pending |
-| GRAPH-03 | — | Pending |
-| GRAPH-04 | — | Pending |
-| GRAPH-05 | — | Pending |
-| GRAPH-06 | — | Pending |
-| TOOLS-01 | — | Pending |
-| TOOLS-02 | — | Pending |
-| TOOLS-03 | — | Pending |
-| TOOLS-04 | — | Pending |
-| TOOLS-05 | — | Pending |
-| TOOLS-06 | — | Pending |
+| INGEST-01 | Phase 14 | Pending |
+| INGEST-02 | Phase 14 | Pending |
+| INGEST-03 | Phase 14 | Pending |
+| INGEST-04 | Phase 14 | Pending |
+| INGEST-05 | Phase 17 | Pending |
+| INGEST-06 | Phase 14 | Pending |
+| GRAPH-01 | Phase 13 | Pending |
+| GRAPH-02 | Phase 13 | Pending |
+| GRAPH-03 | Phase 13 | Pending |
+| GRAPH-04 | Phase 13 | Pending |
+| GRAPH-05 | Phase 13 | Pending |
+| GRAPH-06 | Phase 13 | Pending |
+| TOOLS-01 | Phase 15 | Pending |
+| TOOLS-02 | Phase 15 | Pending |
+| TOOLS-03 | Phase 15 | Pending |
+| TOOLS-04 | Phase 16 | Pending |
+| TOOLS-05 | Phase 16 | Pending |
+| TOOLS-06 | Phase 15 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-01 after initial definition*
+*Last updated: 2026-03-01 after roadmap creation (phases 13-17 assigned)*

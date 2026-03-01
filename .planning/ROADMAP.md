@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-8 (shipped 2026-02-28)
 - ✅ **v1.1 Semantic Diff & Change Intelligence** — Phases 9-12 (shipped 2026-03-01)
+- 🚧 **v1.2 Multi-Project & Solution-Level Graphs** — Phases 13-17 (in progress)
 
 ## Phases
 
@@ -35,6 +36,73 @@ Full details: milestones/v1.1-ROADMAP.md
 
 </details>
 
+### 🚧 v1.2 Multi-Project & Solution-Level Graphs (In Progress)
+
+**Milestone Goal:** Agents can query a unified symbol graph spanning an entire .NET solution, with cross-project dependency tracing and solution-aware MCP tools.
+
+- [ ] **Phase 13: Core Domain Extensions** — Extend domain types to carry solution-level identity and cross-project metadata
+- [ ] **Phase 14: Solution Ingestion Pipeline** — Ingest full .sln files; resolve dependencies; populate enriched snapshots
+- [ ] **Phase 15: Project-Aware Indexing & Query** — Thread project attribution through BM25 index and query service
+- [ ] **Phase 16: Solution MCP Tools** — Expose solution-level tools and update existing tools with solution awareness
+- [ ] **Phase 17: Incremental Solution Re-ingestion** — Re-ingest only changed projects within a solution
+
+## Phase Details
+
+### Phase 13: Core Domain Extensions
+**Goal**: Domain types carry solution-level identity, cross-project edge scopes, and stub-node flags — giving every downstream layer a backward-compatible foundation to build on
+**Depends on**: Nothing (builds on shipped v1.1 types)
+**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06
+**Success Criteria** (what must be TRUE):
+  1. `SymbolNode` has nullable `ProjectOrigin` and `IsStub` bool; existing v1.0/v1.1 MessagePack artifacts deserialize without error (null/false defaults)
+  2. `SymbolEdge` carries an `EdgeScope` enum with `IntraProject` as the default; existing edges round-trip cleanly
+  3. `SymbolGraphSnapshot` has nullable `SolutionName` and an empty-by-default `Projects` list holding `ProjectEntry` records with project name, path, and dependency references
+  4. `IKnowledgeQueryService.SearchAsync` accepts an optional `projectFilter` parameter without breaking existing callers
+  5. All 220+ existing tests pass without modification after the type changes land
+**Plans**: TBD
+
+### Phase 14: Solution Ingestion Pipeline
+**Goal**: An agent can ingest an entire .sln in one call; non-C# projects are skipped gracefully; MSBuild failures are detected and reported; the resulting snapshot carries per-node project attribution and is PathAllowlist-secured
+**Depends on**: Phase 13
+**Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-06
+**Success Criteria** (what must be TRUE):
+  1. Calling `ingest_solution` with a valid `.sln` path produces a `SymbolGraphSnapshot` where every node has a non-null `ProjectOrigin` matching its source project
+  2. Non-C# projects (e.g., F#, VB) in the solution are skipped and a warning is logged; the snapshot still contains all C# symbols
+  3. Multi-targeting projects (e.g., `net10.0;net48`) produce exactly one set of nodes, not duplicates
+  4. `workspace.Diagnostics` failures are logged and projects with null compilations are skipped, with the tool returning a partial-success response describing skipped projects
+  5. Calling `ingest_solution` with a path outside the configured PathAllowlist returns the same opaque not-found denial as all other secured tools
+**Plans**: TBD
+
+### Phase 15: Project-Aware Indexing & Query
+**Goal**: BM25 search results carry project attribution; agents can filter results to a single project or cross-project references without changing existing query contracts
+**Depends on**: Phase 14
+**Requirements**: TOOLS-01, TOOLS-02, TOOLS-03, TOOLS-06
+**Success Criteria** (what must be TRUE):
+  1. `search_symbols` called against a solution snapshot returns results from all projects in a single ranked list
+  2. `search_symbols` called with an optional `project` filter returns only symbols from that project
+  3. `get_symbol` resolves a fully qualified name that exists in any project in the solution, not just the first project processed
+  4. `get_references` with optional `crossProjectOnly` filter returns only edges whose `EdgeScope` is `CrossProject`, enabling "who across project boundaries calls this?" queries
+**Plans**: TBD
+
+### Phase 16: Solution MCP Tools
+**Goal**: Agents have a solution-level architecture overview tool and can diff solution snapshots; existing tools become solution-aware without breaking current MCP clients
+**Depends on**: Phase 15
+**Requirements**: TOOLS-04, TOOLS-05
+**Success Criteria** (what must be TRUE):
+  1. `explain_solution` returns a structured overview: project list with node/edge counts, the project dependency DAG, per-project doc coverage percentages, and total stub node count
+  2. `diff_snapshots` called with two `SolutionSnapshot`s produces a diff that spans all projects, including cross-project edge additions and removals
+  3. `SolutionTools` enforces PathAllowlist on all operations with opaque not-found denial, matching the pattern of `DocTools` and `ChangeTools`
+**Plans**: TBD
+
+### Phase 17: Incremental Solution Re-ingestion
+**Goal**: Agents can trigger re-ingestion of only the projects that changed within a solution, preserving previously-ingested data for unchanged projects
+**Depends on**: Phase 14
+**Requirements**: INGEST-05
+**Success Criteria** (what must be TRUE):
+  1. Changing a single file in one project and calling `ingest_solution` re-parses only that project; unchanged projects retain their previous snapshot data byte-for-byte
+  2. The re-ingested solution snapshot is identical to a full re-ingestion of the same solution state
+  3. The manifest-of-manifests store does not corrupt or overwrite the existing `SnapshotStore` content-hash scheme
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -51,3 +119,8 @@ Full details: milestones/v1.1-ROADMAP.md
 | 10. Incremental Ingestion | v1.1 | 3/3 | Complete | 2026-02-28 |
 | 11. Change Intelligence & Review | v1.1 | 2/2 | Complete | 2026-02-28 |
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
+| 13. Core Domain Extensions | v1.2 | 0/? | Not started | - |
+| 14. Solution Ingestion Pipeline | v1.2 | 0/? | Not started | - |
+| 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
+| 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
+| 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
