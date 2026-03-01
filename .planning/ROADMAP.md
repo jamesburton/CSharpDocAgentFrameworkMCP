@@ -90,7 +90,10 @@ Plans:
   3. Type references to external/NuGet types create `SymbolNode`s with `NodeKind = NodeKind.Stub` and `IsExternal = true`
   4. All existing 266+ tests continue to pass after enrichment changes
   5. New tests verify SolutionSnapshot population, cross-project edge classification, and stub node creation
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 14.1-01-PLAN.md — Enrich SolutionIngestionService with SolutionSnapshot builder, edge classification, stub synthesis + tests
+- [ ] 14.1-02-PLAN.md — Stub node filtering in BM25SearchIndex and InMemorySearchIndex + dedicated tests
 
 ### Phase 15: Project-Aware Indexing & Query
 **Goal**: BM25 search results carry project attribution; agents can filter results to a single project or cross-project references without changing existing query contracts
