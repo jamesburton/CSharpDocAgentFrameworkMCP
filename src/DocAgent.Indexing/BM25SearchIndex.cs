@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Runtime.CompilerServices;
 using DocAgent.Core;
 using Lucene.Net.Analysis;
@@ -232,7 +233,7 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
 
     private static void WriteDocuments(IndexWriter writer, SymbolGraphSnapshot snapshot)
     {
-        foreach (var node in snapshot.Nodes)
+        foreach (var node in snapshot.Nodes.Where(n => n.NodeKind == NodeKind.Real))
         {
             var doc = new Document
             {
@@ -248,7 +249,7 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
     private void PopulateNodes(SymbolGraphSnapshot snapshot)
     {
         _nodes.Clear();
-        foreach (var node in snapshot.Nodes)
+        foreach (var node in snapshot.Nodes.Where(n => n.NodeKind == NodeKind.Real))
             _nodes[node.Id] = node;
     }
 

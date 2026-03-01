@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using DocAgent.Core;
+using System.Linq;
 
 namespace DocAgent.Indexing;
 
@@ -10,7 +11,7 @@ public sealed class InMemorySearchIndex : ISearchIndex
     public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false)
     {
         _nodes.Clear();
-        foreach (var n in snapshot.Nodes)
+        foreach (var n in snapshot.Nodes.Where(n => n.NodeKind == NodeKind.Real))
             _nodes[n.Id] = n;
         return Task.CompletedTask;
     }
