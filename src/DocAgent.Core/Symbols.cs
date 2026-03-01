@@ -57,6 +57,26 @@ public sealed record DocComment(
     IReadOnlyList<(string Type, string Description)> Exceptions,
     IReadOnlyList<string> SeeAlso);
 
+/// <summary>Classifies whether a symbol node was discovered in source or synthesized as a stub for an external reference.</summary>
+public enum NodeKind
+{
+    /// <summary>A real symbol discovered from project source. Default value for backward compatibility.</summary>
+    Real = 0,
+    /// <summary>A stub node synthesized from a NuGet package or external assembly reference.</summary>
+    Stub = 1
+}
+
+/// <summary>Classifies the scope of a symbol edge with respect to project boundaries.</summary>
+public enum EdgeScope
+{
+    /// <summary>Both endpoints belong to the same project. Default value for backward compatibility.</summary>
+    IntraProject = 0,
+    /// <summary>Endpoints span two different projects within the same solution.</summary>
+    CrossProject = 1,
+    /// <summary>One endpoint is a stub node from an external assembly.</summary>
+    External = 2
+}
+
 public sealed record SymbolNode(
     SymbolId Id,
     SymbolKind Kind,
@@ -68,7 +88,9 @@ public sealed record SymbolNode(
     SourceSpan? Span,
     string? ReturnType,
     IReadOnlyList<ParameterInfo> Parameters,
-    IReadOnlyList<GenericConstraint> GenericConstraints);
+    IReadOnlyList<GenericConstraint> GenericConstraints,
+    string? ProjectOrigin = null,
+    NodeKind NodeKind = NodeKind.Real);
 
 public enum SymbolEdgeKind
 {
@@ -81,7 +103,7 @@ public enum SymbolEdgeKind
     Returns
 }
 
-public sealed record SymbolEdge(SymbolId From, SymbolId To, SymbolEdgeKind Kind);
+public sealed record SymbolEdge(SymbolId From, SymbolId To, SymbolEdgeKind Kind, EdgeScope Scope = EdgeScope.IntraProject);
 
 public sealed record SymbolGraphSnapshot(
     string SchemaVersion,
@@ -91,7 +113,8 @@ public sealed record SymbolGraphSnapshot(
     DateTimeOffset CreatedAt,
     IReadOnlyList<SymbolNode> Nodes,
     IReadOnlyList<SymbolEdge> Edges,
-    IngestionMetadata? IngestionMetadata = null);
+    IngestionMetadata? IngestionMetadata = null,
+    string? SolutionName = null);
 
 public enum SerializationFormat
 {
