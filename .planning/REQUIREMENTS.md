@@ -19,11 +19,11 @@ Requirements for multi-project / solution-level graph support. Each maps to road
 ### Solution Graph Model
 
 - [x] **GRAPH-01**: `SolutionSnapshot` aggregate type holds per-project `SymbolGraphSnapshot`s with solution-level metadata
-- [ ] **GRAPH-02**: Cross-project `SymbolEdge`s link symbols across project boundaries (inherits, implements, calls, references)
+- [x] **GRAPH-02**: Cross-project `SymbolEdge`s link symbols across project boundaries (inherits, implements, calls, references)
 - [x] **GRAPH-03**: Project dependency DAG is first-class data in `SolutionSnapshot` (ProjectEdge collection)
-- [ ] **GRAPH-04**: Stub/metadata nodes for NuGet package types (type name, namespace, member signatures; flagged `IsExternal`)
-- [ ] **GRAPH-05**: Stub nodes are filtered at index time to prevent BM25 search pollution (NodeKind discriminator)
-- [ ] **GRAPH-06**: New fields on existing types use nullable/default values for backward compatibility with v1.0/v1.1 snapshots
+- [x] **GRAPH-04**: Stub/metadata nodes for NuGet package types (type name, namespace, member signatures; flagged `IsExternal`)
+- [x] **GRAPH-05**: Stub nodes are filtered at index time to prevent BM25 search pollution (NodeKind discriminator)
+- [x] **GRAPH-06**: New fields on existing types use nullable/default values for backward compatibility with v1.0/v1.1 snapshots
 
 ### Solution-Aware Tools
 
@@ -75,11 +75,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INGEST-05 | Phase 17 | Pending |
 | INGEST-06 | Phase 14 | Pending |
 | GRAPH-01 | Phase 13 | Complete |
-| GRAPH-02 | Phase 13 | Pending |
+| GRAPH-02 | Phase 13 | Complete |
 | GRAPH-03 | Phase 13 | Complete |
-| GRAPH-04 | Phase 13 | Pending |
-| GRAPH-05 | Phase 13 | Pending |
-| GRAPH-06 | Phase 13 | Pending |
+| GRAPH-04 | Phase 13 | Complete |
+| GRAPH-05 | Phase 13 | Complete |
+| GRAPH-06 | Phase 13 | Complete |
 | TOOLS-01 | Phase 15 | Pending |
 | TOOLS-02 | Phase 15 | Pending |
 | TOOLS-03 | Phase 15 | Pending |

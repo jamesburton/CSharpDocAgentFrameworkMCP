@@ -40,7 +40,7 @@ Full details: milestones/v1.1-ROADMAP.md
 
 **Milestone Goal:** Agents can query a unified symbol graph spanning an entire .NET solution, with cross-project dependency tracing and solution-aware MCP tools.
 
-- [ ] **Phase 13: Core Domain Extensions** — Extend domain types to carry solution-level identity and cross-project metadata
+- [x] **Phase 13: Core Domain Extensions** — Extend domain types to carry solution-level identity and cross-project metadata (completed 2026-03-01)
 - [ ] **Phase 14: Solution Ingestion Pipeline** — Ingest full .sln files; resolve dependencies; populate enriched snapshots
 - [ ] **Phase 15: Project-Aware Indexing & Query** — Thread project attribution through BM25 index and query service
 - [ ] **Phase 16: Solution MCP Tools** — Expose solution-level tools and update existing tools with solution awareness
@@ -58,7 +58,7 @@ Full details: milestones/v1.1-ROADMAP.md
   3. `SymbolGraphSnapshot` has nullable `SolutionName` and an empty-by-default `Projects` list holding `ProjectEntry` records with project name, path, and dependency references
   4. `IKnowledgeQueryService.SearchAsync` accepts an optional `projectFilter` parameter without breaking existing callers
   5. All 220+ existing tests pass without modification after the type changes land
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 13-01-PLAN.md — Extend existing types (SymbolNode, SymbolEdge, SymbolGraphSnapshot) with enums + optional fields; update IKnowledgeQueryService; backward-compat tests
 - [ ] 13-02-PLAN.md — New solution aggregate types (SolutionSnapshot, ProjectEntry, ProjectEdge) with MessagePack roundtrip tests
@@ -122,7 +122,7 @@ Plans:
 | 10. Incremental Ingestion | v1.1 | 3/3 | Complete | 2026-02-28 |
 | 11. Change Intelligence & Review | v1.1 | 2/2 | Complete | 2026-02-28 |
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
-| 13. Core Domain Extensions | 1/2 | In Progress|  | - |
+| 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
 | 14. Solution Ingestion Pipeline | v1.2 | 0/? | Not started | - |
 | 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |

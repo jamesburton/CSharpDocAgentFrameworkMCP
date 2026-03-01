@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 13 of 17 (Core Domain Extensions)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-01 — v1.2 roadmap created; 5 phases defined (13-17), 18 requirements mapped
+Plan: 1 of 2 completed in current phase
+Status: In progress
+Last activity: 2026-03-01 — Plan 01 complete: NodeKind/EdgeScope enums, extended domain records, projectFilter on IKnowledgeQueryService
 
 Progress: [████████░░░░░░░░░░░░] ~41% (12/17 phases complete across all milestones)
 
@@ -41,6 +41,8 @@ Recent decisions affecting v1.2:
 - MSBuildLocator.RegisterDefaults() must be first statement in Program.cs before any MSBuild type load
 - Serve v1.0/v1.1 artifacts as-is with ProjectOrigin = null; require explicit ingest_solution call for v1.2 enrichment
 - Stub nodes capped to direct PackageReference assemblies only (not transitive closure) to prevent index bloat
+- NodeKind.Real=0 and EdgeScope.IntraProject=0 chosen as enum defaults for MessagePack backward compat with old artifacts
+- projectFilter on IKnowledgeQueryService.SearchAsync accepted but not applied until Phase 15
 - [Phase 13-core-domain-extensions]: SolutionSnapshot holds per-project SymbolGraphSnapshots as-is (not merged) to preserve project boundaries
 
 ### Pending Todos
@@ -55,5 +57,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Roadmap created for v1.2 (phases 13-17). Ready to plan Phase 13.
+Stopped at: Completed 13-01-PLAN.md — domain type extensions complete.
 Resume file: None
