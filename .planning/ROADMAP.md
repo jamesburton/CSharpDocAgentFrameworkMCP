@@ -90,7 +90,7 @@ Plans:
   3. Type references to external/NuGet types create `SymbolNode`s with `NodeKind = NodeKind.Stub` and `IsExternal = true`
   4. All existing 266+ tests continue to pass after enrichment changes
   5. New tests verify SolutionSnapshot population, cross-project edge classification, and stub node creation
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 14.1-01-PLAN.md — Enrich SolutionIngestionService with SolutionSnapshot builder, edge classification, stub synthesis + tests
 - [ ] 14.1-02-PLAN.md — Stub node filtering in BM25SearchIndex and InMemorySearchIndex + dedicated tests
@@ -144,7 +144,7 @@ Plans:
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
 | 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
 | 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
-| 14.1 Solution Graph Enrichment | v1.2 | 0/? | Not started | - |
+| 14.1 Solution Graph Enrichment | 1/2 | In Progress|  | - |
 | 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |

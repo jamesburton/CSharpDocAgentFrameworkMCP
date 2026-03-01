@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 
 ## Current Position
 
-Phase: 14 of 17 (Solution Ingestion Pipeline) — IN PROGRESS
-Current Plan: 14-02 COMPLETE (ingest_solution MCP tool wiring)
-Next Plan: 14-03 (next plan in phase 14, if exists)
-Last activity: 2026-03-01 — Phase 14 Plan 02 complete: ingest_solution MCP tool wired with PathAllowlist security + 5 tool-level tests
+Phase: 14.1 of 17 (Solution Graph Enrichment) — IN PROGRESS
+Current Plan: 14.1-01 COMPLETE (SolutionSnapshot enrichment — project DAG, edge classification, stub nodes)
+Next Plan: 14.1-02 (if exists, else phase complete)
+Last activity: 2026-03-01 — Phase 14.1 Plan 01 complete: SolutionIngestionService populates SolutionSnapshot with ProjectEntry DAG, EdgeScope classification, NodeKind.Stub synthesis, circular reference detection; 7 new tests; 273 total passing
 
 Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
 
@@ -48,6 +48,10 @@ Recent decisions affecting v1.2:
 - [Phase 14-01]: Inline WalkNamespaceInline in SolutionIngestionService (not delegating to RoslynSymbolGraphBuilder) to avoid second per-project MSBuildWorkspace inside open solution
 - [Phase 14-01]: PipelineOverride seam takes (slnPath, warnings, ct) → SolutionIngestionResult for full MSBuild bypass in unit tests
 - [Phase 14-solution-ingestion-pipeline]: IngestSolution mirrors IngestProject security pattern exactly: same allowlist message, progress token extraction, error handling
+- [Phase 14.1-01]: EdgeScope classified at WalkTypeInline call site (construction time), not via post-classification pass — locked design constraint met
+- [Phase 14.1-01]: ProjectWalkContext readonly record struct with shared seenStubIds HashSet across all projects deduplicates external type stub nodes
+- [Phase 14.1-01]: Primitive filter with 30 common framework types (System.String, Task, IEnumerable<T>, etc.) prevents stub bloat
+- [Phase 14.1-01]: SolutionIngestionResult.Snapshot defaults to null — fully backward-compatible with existing positional record callers
 
 ### Pending Todos
 
@@ -61,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 14 Plan 02 complete (ingest_solution MCP tool + DI wiring + 5 tool-level tests + SUMMARY.md).
+Stopped at: Phase 14.1 Plan 01 complete (SolutionSnapshot enrichment: project DAG, EdgeScope classification, stub nodes, circular detection + 7 tests + SUMMARY.md).
 Resume file: None
