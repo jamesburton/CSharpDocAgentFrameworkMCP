@@ -104,7 +104,10 @@ Plans:
   2. `search_symbols` called with an optional `project` filter returns only symbols from that project
   3. `get_symbol` resolves a fully qualified name that exists in any project in the solution, not just the first project processed
   4. `get_references` with optional `crossProjectOnly` filter returns only edges whose `EdgeScope` is `CrossProject`, enabling "who across project boundaries calls this?" queries
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Core types, service layer (SearchResultItem.ProjectName, projectFilter, crossProjectOnly, BM25 projectName field) + tests
+- [ ] 15-02-PLAN.md — MCP tool layer (project param on search_symbols, crossProjectOnly on get_references, enriched JSON output)
 
 ### Phase 16: Solution MCP Tools
 **Goal**: Agents have a solution-level architecture overview tool and can diff solution snapshots; existing tools become solution-aware without breaking current MCP clients
@@ -114,7 +117,10 @@ Plans:
   1. `explain_solution` returns a structured overview: project list with node/edge counts, the project dependency DAG, per-project doc coverage percentages, and total stub node count
   2. `diff_snapshots` called with two `SolutionSnapshot`s produces a diff that spans all projects, including cross-project edge additions and removals
   3. `SolutionTools` enforces PathAllowlist on all operations with opaque not-found denial, matching the pattern of `DocTools` and `ChangeTools`
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Core types, service layer (SearchResultItem.ProjectName, projectFilter, crossProjectOnly, BM25 projectName field) + tests
+- [ ] 15-02-PLAN.md — MCP tool layer (project param on search_symbols, crossProjectOnly on get_references, enriched JSON output)
 
 ### Phase 17: Incremental Solution Re-ingestion
 **Goal**: Agents can trigger re-ingestion of only the projects that changed within a solution, preserving previously-ingested data for unchanged projects
@@ -124,7 +130,10 @@ Plans:
   1. Changing a single file in one project and calling `ingest_solution` re-parses only that project; unchanged projects retain their previous snapshot data byte-for-byte
   2. The re-ingested solution snapshot is identical to a full re-ingestion of the same solution state
   3. The manifest-of-manifests store does not corrupt or overwrite the existing `SnapshotStore` content-hash scheme
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 15-01-PLAN.md — Core types, service layer (SearchResultItem.ProjectName, projectFilter, crossProjectOnly, BM25 projectName field) + tests
+- [ ] 15-02-PLAN.md — MCP tool layer (project param on search_symbols, crossProjectOnly on get_references, enriched JSON output)
 
 ## Progress
 
@@ -145,6 +154,6 @@ Plans:
 | 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
 | 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
 | 14.1 Solution Graph Enrichment | 2/2 | Complete    | 2026-03-01 | - |
-| 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
+| 15. Project-Aware Indexing & Query | v1.2 | 0/2 | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
