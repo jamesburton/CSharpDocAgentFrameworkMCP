@@ -240,7 +240,7 @@ public sealed class DocTools
         var edges = new List<SymbolEdge>();
         try
         {
-            await foreach (var edge in _query.GetReferencesAsync(id, cancellationToken))
+            await foreach (var edge in _query.GetReferencesAsync(id, ct: cancellationToken))
                 edges.Add(edge);
         }
         catch (SymbolNotFoundException)

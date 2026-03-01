@@ -40,7 +40,8 @@ public sealed record SearchResultItem(
     double Score,
     string Snippet,
     SymbolKind Kind,
-    string DisplayName);
+    string DisplayName,
+    string? ProjectName = null);
 
 /// <summary>A symbol with navigation hints for parent, children, and related symbols.</summary>
 public sealed record SymbolDetail(

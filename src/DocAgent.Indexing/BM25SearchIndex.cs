@@ -241,6 +241,7 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
                 new TextField  ("symbolName",         node.DisplayName          ?? string.Empty,  Field.Store.YES),
                 new TextField  ("fullyQualifiedName", node.FullyQualifiedName   ?? string.Empty,  Field.Store.NO),
                 new TextField  ("docText",            node.Docs?.Summary        ?? string.Empty,  Field.Store.NO),
+                new StringField("projectName",        node.ProjectOrigin        ?? string.Empty,  Field.Store.YES),
             };
             writer.AddDocument(doc);
         }

@@ -55,7 +55,7 @@ public interface IKnowledgeQueryService
     Task<QueryResult<ResponseEnvelope<GraphDiff>>> DiffAsync(
         SnapshotRef a, SnapshotRef b, CancellationToken ct = default);
 
-    IAsyncEnumerable<SymbolEdge> GetReferencesAsync(SymbolId id, CancellationToken ct = default);
+    IAsyncEnumerable<SymbolEdge> GetReferencesAsync(SymbolId id, bool crossProjectOnly = false, CancellationToken ct = default);
 }
 
 /// <summary>

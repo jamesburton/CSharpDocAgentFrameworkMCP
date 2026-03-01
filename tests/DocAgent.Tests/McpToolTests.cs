@@ -121,7 +121,7 @@ public sealed class McpToolTests
         }
 
         public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(
-            SymbolId id, [EnumeratorCancellation] CancellationToken ct = default)
+            SymbolId id, bool crossProjectOnly = false, [EnumeratorCancellation] CancellationToken ct = default)
         {
             yield return new SymbolEdge(new SymbolId("MyAssembly::Caller1"), KnownId, SymbolEdgeKind.Calls);
             yield return new SymbolEdge(new SymbolId("MyAssembly::Caller2"), KnownId, SymbolEdgeKind.References);
@@ -145,7 +145,7 @@ public sealed class McpToolTests
             Task.FromResult(QueryResult<ResponseEnvelope<GraphDiff>>.Fail(QueryErrorKind.StaleIndex, "Index is stale"));
 
         public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(
-            SymbolId id, [EnumeratorCancellation] CancellationToken ct = default)
+            SymbolId id, bool crossProjectOnly = false, [EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.CompletedTask;
             yield break;
@@ -183,7 +183,7 @@ public sealed class McpToolTests
             Task.FromResult(QueryResult<ResponseEnvelope<GraphDiff>>.Fail(QueryErrorKind.NotFound, "n/a"));
 
         public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(
-            SymbolId id, [EnumeratorCancellation] CancellationToken ct = default)
+            SymbolId id, bool crossProjectOnly = false, [EnumeratorCancellation] CancellationToken ct = default)
         { await Task.CompletedTask; yield break; }
     }
 

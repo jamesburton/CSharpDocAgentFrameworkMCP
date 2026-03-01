@@ -54,7 +54,9 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
                 continue;
             if (kindFilter.HasValue && node.Kind != kindFilter.Value)
                 continue;
-            filtered.Add(new SearchResultItem(hit.Id, hit.Score, hit.Snippet, node.Kind, node.DisplayName));
+            if (projectFilter is not null && node.ProjectOrigin != projectFilter)
+                continue;
+            filtered.Add(new SearchResultItem(hit.Id, hit.Score, hit.Snippet, node.Kind, node.DisplayName, ProjectName: node.ProjectOrigin));
         }
 
         var page = filtered.Skip(offset).Take(limit).ToList();
@@ -215,6 +217,7 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
 
     public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(
         SymbolId id,
+        bool crossProjectOnly = false,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var (snapshot, _, error) = await ResolveSnapshotAsync(null, ct).ConfigureAwait(false);
@@ -231,7 +234,11 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
         {
             ct.ThrowIfCancellationRequested();
             if (edge.From == id || edge.To == id)
+            {
+                if (crossProjectOnly && edge.Scope != EdgeScope.CrossProject)
+                    continue;
                 yield return edge;
+            }
         }
     }
 

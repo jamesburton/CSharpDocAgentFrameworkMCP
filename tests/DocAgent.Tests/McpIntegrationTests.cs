@@ -312,6 +312,7 @@ file sealed class StubQueryService : IKnowledgeQueryService
 
     public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(
         SymbolId id,
+        bool crossProjectOnly = false,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         await Task.CompletedTask;
