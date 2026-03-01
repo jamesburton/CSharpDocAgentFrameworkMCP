@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-8 (shipped 2026-02-28)
-- **v1.1 Semantic Diff & Change Intelligence** — Phases 9-11
+- **v1.1 Semantic Diff & Change Intelligence** — Phases 9-12
 
 ## Phases
 
@@ -26,6 +26,7 @@ Full details: milestones/v1.0-ROADMAP.md
 - [x] **Phase 9: Semantic Diff Engine** - Core diff types and algorithm for comparing two SymbolGraphSnapshots — detect signature, nullability, constraint, accessibility, and dependency changes (completed 2026-02-28)
 - [x] **Phase 10: Incremental Ingestion** - File change detection and partial re-ingestion — only re-process changed files with precise change tracking (completed 2026-02-28)
 - [x] **Phase 11: Change Intelligence & Review** - MCP tools (review_changes, find_breaking_changes, explain_change) and unusual change review skill with worktree-based remediation proposals (depends on Phase 9) (completed 2026-02-28)
+- [ ] **Phase 12: ChangeTools Security Gate** - Add PathAllowlist enforcement to all ChangeTools MCP methods, closing audit gap (gap closure)
 
 ## Progress
 
@@ -42,6 +43,7 @@ Full details: milestones/v1.0-ROADMAP.md
 | 9. Semantic Diff Engine | v1.1 | 3/3 | Complete | 2026-02-28 |
 | 10. Incremental Ingestion | 3/3 | Complete    | 2026-02-28 | — |
 | 11. Change Intelligence & Review | 1/2 | Complete    | 2026-02-28 | — |
+| 12. ChangeTools Security Gate | v1.1 | 0/1 | Pending | — |
 
 ## Phase Details
 
@@ -82,3 +84,14 @@ Plans:
   3. `explain_change` provides human-readable explanations of symbol-level diffs
   4. Unusual change detection flags suspicious patterns (semantic changes without doc/test updates, large blast-radius changes)
   5. Review findings include actionable remediation suggestions
+
+### Phase 12: ChangeTools Security Gate
+**Goal**: Add PathAllowlist enforcement to all ChangeTools MCP methods — close security gap found by milestone audit
+**Depends on**: Phase 11
+**Requirements**: R-CHANGE-TOOLS
+**Gap Closure**: Closes gaps from v1.1 audit (PathAllowlist injected but never called in ChangeTools)
+**Success Criteria** (what must be TRUE):
+  1. All 3 ChangeTools methods (`ReviewChanges`, `FindBreakingChanges`, `ExplainChange`) call `_allowlist.IsAllowed()` before `_snapshotStore.LoadAsync()`
+  2. Denied paths return structured `ErrorResponse` (not exceptions), matching `DocTools`/`IngestionTools` pattern
+  3. Unit tests verify allowlist enforcement and denial responses
+  4. `dotnet test` passes with all existing + new tests green
