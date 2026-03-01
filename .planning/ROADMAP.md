@@ -126,7 +126,7 @@ Plans:
 | 11. Change Intelligence & Review | v1.1 | 2/2 | Complete | 2026-02-28 |
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
 | 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
-| 14. Solution Ingestion Pipeline | 2/2 | Complete   | 2026-03-01 | - |
+| 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
 | 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
