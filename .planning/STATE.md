@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Multi-Project & Solution-Level Graphs
-status: phase_complete
-last_updated: "2026-03-01T18:10:00.000Z"
+status: unknown
+last_updated: "2026-03-01T17:53:53.347Z"
 progress:
-  total_phases: 17
-  completed_phases: 13
-  total_plans: 3
-  completed_plans: 1
+  total_phases: 2
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 14 of 17 (Solution Ingestion Pipeline) — IN PROGRESS
-Current Plan: 14-01 COMPLETE (SolutionIngestionService)
-Next Plan: 14-02 (ingest_solution MCP tool wiring — if exists)
-Last activity: 2026-03-01 — Phase 14 Plan 01 complete: SolutionIngestionService with 7 unit tests
+Current Plan: 14-02 COMPLETE (ingest_solution MCP tool wiring)
+Next Plan: 14-03 (next plan in phase 14, if exists)
+Last activity: 2026-03-01 — Phase 14 Plan 02 complete: ingest_solution MCP tool wired with PathAllowlist security + 5 tool-level tests
 
 Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
 
@@ -47,6 +47,7 @@ Recent decisions affecting v1.2:
 - [Phase 14-01]: ExtractTfmVersion normalizes legacy net{NN}: short form (< 100) × 10, so net48 → 480 > net472 → 472; modern net{X}.{Y} biased by major+100 so always above legacy
 - [Phase 14-01]: Inline WalkNamespaceInline in SolutionIngestionService (not delegating to RoslynSymbolGraphBuilder) to avoid second per-project MSBuildWorkspace inside open solution
 - [Phase 14-01]: PipelineOverride seam takes (slnPath, warnings, ct) → SolutionIngestionResult for full MSBuild bypass in unit tests
+- [Phase 14-solution-ingestion-pipeline]: IngestSolution mirrors IngestProject security pattern exactly: same allowlist message, progress token extraction, error handling
 
 ### Pending Todos
 
@@ -60,5 +61,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 14 Plan 01 complete (SolutionIngestionService + 7 tests + SUMMARY.md). Ready for Phase 14 Plan 02.
+Stopped at: Phase 14 Plan 02 complete (ingest_solution MCP tool + DI wiring + 5 tool-level tests + SUMMARY.md).
 Resume file: None

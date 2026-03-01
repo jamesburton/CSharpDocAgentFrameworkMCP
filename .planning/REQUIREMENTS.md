@@ -14,7 +14,7 @@ Requirements for multi-project / solution-level graph support. Each maps to road
 - [x] **INGEST-03**: Multi-targeting projects (e.g. net10.0;net48) are deduplicated to a single TFM
 - [x] **INGEST-04**: MSBuildWorkspace load failures are detected and reported (WorkspaceFailed handler, document count validation)
 - [ ] **INGEST-05**: Per-project incremental re-ingestion within a solution — change one project, re-ingest only that project
-- [ ] **INGEST-06**: `ingest_solution` is secured with PathAllowlist enforcement (consistent with existing tool security pattern)
+- [x] **INGEST-06**: `ingest_solution` is secured with PathAllowlist enforcement (consistent with existing tool security pattern)
 
 ### Solution Graph Model
 
@@ -73,7 +73,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INGEST-03 | Phase 14 | Complete |
 | INGEST-04 | Phase 14 | Complete |
 | INGEST-05 | Phase 17 | Pending |
-| INGEST-06 | Phase 14 | Pending |
+| INGEST-06 | Phase 14 | Complete |
 | GRAPH-01 | Phase 13 | Complete |
 | GRAPH-02 | Phase 13 | Complete |
 | GRAPH-03 | Phase 13 | Complete |
