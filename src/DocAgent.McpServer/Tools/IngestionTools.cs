@@ -26,15 +26,18 @@ public sealed class IngestionTools
     };
 
     private readonly IIngestionService _ingestionService;
+    private readonly ISolutionIngestionService _solutionIngestionService;
     private readonly PathAllowlist _allowlist;
     private readonly ILogger<IngestionTools> _logger;
 
     public IngestionTools(
         IIngestionService ingestionService,
+        ISolutionIngestionService solutionIngestionService,
         PathAllowlist allowlist,
         ILogger<IngestionTools> logger)
     {
         _ingestionService = ingestionService;
+        _solutionIngestionService = solutionIngestionService;
         _allowlist = allowlist;
         _logger = logger;
     }
@@ -129,6 +132,107 @@ public sealed class IngestionTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ingestion failed for {Path}", absolutePath);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return ErrorJson("ingestion_failed", ex.Message);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tool: ingest_solution
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "ingest_solution")]
+    [Description("Ingest an entire .NET solution (.sln), building a queryable symbol graph across all C# projects.")]
+    public async Task<string> IngestSolution(
+        ModelContextProtocol.Server.McpServer mcpServer,
+        RequestContext<CallToolRequestParams> requestContext,
+        [Description("Absolute path to .sln file")] string path,
+        CancellationToken cancellationToken = default)
+    {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.ingest_solution", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "ingest_solution");
+
+        // 1. Validate path is not null/empty.
+        if (string.IsNullOrWhiteSpace(path))
+            return ErrorJson("invalid_input", "path is required.");
+
+        // 2. PathAllowlist check — fail fast before any pipeline work.
+        var absolutePath = Path.GetFullPath(path);
+        if (!_allowlist.IsAllowed(absolutePath))
+        {
+            _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
+            activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+            return ErrorJson("access_denied", "Path is not in the configured allow list.");
+        }
+
+        // 3. Extract progress token — may be null if client did not supply one.
+        var progressTokenNode = requestContext?.Params?.Meta?["progressToken"];
+        var progressToken = progressTokenNode?.GetValue<string>();
+
+        // 4. Build progress callback — only invoked when progressToken is non-null (MCP spec requirement).
+        Func<int, int, string, Task>? progressCallback = progressToken is not null
+            ? async (current, total, message) =>
+            {
+                try
+                {
+                    await mcpServer.SendNotificationAsync(
+                        "notifications/progress",
+                        new
+                        {
+                            progressToken,
+                            progress = current,
+                            total,
+                            message,
+                        }).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
+                }
+            }
+            : null;
+
+        try
+        {
+            // 5. Delegate to the solution ingestion service.
+            var result = await _solutionIngestionService.IngestAsync(
+                absolutePath, progressCallback, cancellationToken).ConfigureAwait(false);
+
+            activity?.SetTag("tool.result.totalNodeCount", result.TotalNodeCount);
+            activity?.SetTag("tool.result.ingestedProjectCount", result.IngestedProjectCount);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            // 6. Return success JSON.
+            return JsonSerializer.Serialize(new
+            {
+                snapshotId = result.SnapshotId,
+                solutionName = result.SolutionName,
+                totalProjectCount = result.TotalProjectCount,
+                ingestedProjectCount = result.IngestedProjectCount,
+                totalNodeCount = result.TotalNodeCount,
+                totalEdgeCount = result.TotalEdgeCount,
+                durationMs = result.Duration.TotalMilliseconds,
+                projects = result.Projects.Select(p => new
+                {
+                    name = p.Name,
+                    filePath = p.FilePath,
+                    status = p.Status,
+                    reason = p.Reason,
+                    nodeCount = p.NodeCount,
+                    chosenTfm = p.ChosenTfm,
+                }),
+                warnings = result.Warnings,
+            }, s_jsonOptions);
+        }
+        catch (OperationCanceledException)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Solution ingestion failed for {Path}", absolutePath);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             return ErrorJson("ingestion_failed", ex.Message);
         }

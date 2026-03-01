@@ -33,6 +33,7 @@ public static class DocAgentServiceCollectionExtensions
         services.AddSingleton<ISearchIndex>(sp => new BM25SearchIndex(GetDir(sp)));
         services.AddScoped<IKnowledgeQueryService, KnowledgeQueryService>();
         services.AddSingleton<IIngestionService, IngestionService>();
+        services.AddSingleton<ISolutionIngestionService, SolutionIngestionService>();
 
         return services;
     }
