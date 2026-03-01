@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
+milestone: v1.0
 milestone_name: Multi-Project & Solution-Level Graphs
-status: ready_to_plan
-last_updated: "2026-03-01"
+status: unknown
+last_updated: "2026-03-01T15:00:45.716Z"
 progress:
-  total_phases: 5
+  total_phases: 1
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
 ---
 
 # Project State
@@ -41,6 +41,7 @@ Recent decisions affecting v1.2:
 - MSBuildLocator.RegisterDefaults() must be first statement in Program.cs before any MSBuild type load
 - Serve v1.0/v1.1 artifacts as-is with ProjectOrigin = null; require explicit ingest_solution call for v1.2 enrichment
 - Stub nodes capped to direct PackageReference assemblies only (not transitive closure) to prevent index bloat
+- [Phase 13-core-domain-extensions]: SolutionSnapshot holds per-project SymbolGraphSnapshots as-is (not merged) to preserve project boundaries
 
 ### Pending Todos
 

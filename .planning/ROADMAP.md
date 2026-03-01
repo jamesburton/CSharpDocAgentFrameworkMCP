@@ -58,7 +58,7 @@ Full details: milestones/v1.1-ROADMAP.md
   3. `SymbolGraphSnapshot` has nullable `SolutionName` and an empty-by-default `Projects` list holding `ProjectEntry` records with project name, path, and dependency references
   4. `IKnowledgeQueryService.SearchAsync` accepts an optional `projectFilter` parameter without breaking existing callers
   5. All 220+ existing tests pass without modification after the type changes land
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 13-01-PLAN.md — Extend existing types (SymbolNode, SymbolEdge, SymbolGraphSnapshot) with enums + optional fields; update IKnowledgeQueryService; backward-compat tests
 - [ ] 13-02-PLAN.md — New solution aggregate types (SolutionSnapshot, ProjectEntry, ProjectEdge) with MessagePack roundtrip tests
@@ -122,7 +122,7 @@ Plans:
 | 10. Incremental Ingestion | v1.1 | 3/3 | Complete | 2026-02-28 |
 | 11. Change Intelligence & Review | v1.1 | 2/2 | Complete | 2026-02-28 |
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
-| 13. Core Domain Extensions | v1.2 | 0/2 | Planning | - |
+| 13. Core Domain Extensions | 1/2 | In Progress|  | - |
 | 14. Solution Ingestion Pipeline | v1.2 | 0/? | Not started | - |
 | 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
