@@ -50,6 +50,7 @@ public sealed class DocTools
     public async Task<string> SearchSymbols(
         [Description("Search query")] string query,
         [Description("Symbol kind filter (optional): Namespace, Type, Method, Property, Field, Event, Parameter, Constructor, Delegate, Indexer, Operator, Destructor, EnumMember, TypeParameter")] string? kindFilter = null,
+        [Description("Optional project name filter (exact match, case-sensitive). Omit for all projects.")] string? project = null,
         [Description("Result offset for pagination")] int offset = 0,
         [Description("Result limit (max 100)")] int limit = 20,
         [Description("Include full doc comments in results")] bool fullDocs = false,
@@ -75,7 +76,7 @@ public sealed class DocTools
 
         var result = await _query.SearchAsync(
             query, kind, offset, Math.Min(limit, 100),
-            ct: cancellationToken);
+            projectFilter: project, ct: cancellationToken);
 
         if (!result.Success)
             return ErrorResponse(result.Error!.Value, result.ErrorMessage);
@@ -108,7 +109,7 @@ public sealed class DocTools
                 limit = Math.Min(limit, 100),
                 results = fullDocs
                     ? (object)sanitizedItems
-                    : sanitizedItems.Select(i => new { id = i.Id.Value, score = i.Score, kind = i.Kind.ToString(), displayName = i.DisplayName, snippet = i.Snippet }).ToList()
+                    : sanitizedItems.Select(i => new { id = i.Id.Value, score = i.Score, kind = i.Kind.ToString(), displayName = i.DisplayName, snippet = i.Snippet, projectName = i.ProjectName }).ToList()
             };
             return JsonSerializer.Serialize(payload, s_jsonOptions);
         },
@@ -143,6 +144,81 @@ public sealed class DocTools
         {
         if (string.IsNullOrWhiteSpace(symbolId))
             return ErrorResponse(QueryErrorKind.InvalidInput, "symbolId is required.");
+
+        // FQN disambiguation: if input does not look like a stable SymbolId (no '|' separator),
+        // attempt to resolve it as a fully qualified name.
+        if (!symbolId.Contains('|'))
+        {
+            var fqnResult = await ResolveByFqnAsync(symbolId, cancellationToken);
+            if (fqnResult.IsAmbiguous)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, "AmbiguousFqn");
+                var projectList = string.Join(", ", fqnResult.Projects!.Select(p => $"'{p}'"));
+                return ErrorResponse(QueryErrorKind.InvalidInput,
+                    $"Ambiguous FQN '{symbolId}' found in multiple projects: {projectList}. Specify the stable SymbolId or use search_symbols with project filter to disambiguate.");
+            }
+            if (fqnResult.ResolvedId.HasValue)
+            {
+                var id2 = fqnResult.ResolvedId.Value;
+                var result2 = await _query.GetSymbolAsync(id2, ct: cancellationToken);
+                if (!result2.Success)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, "NotFound");
+                    return ErrorResponse(result2.Error!.Value, result2.ErrorMessage);
+                }
+
+                var envelope2 = result2.Value!;
+                var detail2 = envelope2.Payload;
+
+                bool spansRedacted2 = false;
+                if (includeSourceSpans && detail2.Node.Span is not null)
+                {
+                    if (!_allowlist.IsAllowed(detail2.Node.Span.FilePath))
+                    {
+                        spansRedacted2 = true;
+                        _logger.LogDebug("Source span for {SymbolId} redacted: path outside allowlist", id2.Value);
+                    }
+                }
+
+                bool hasInjectionWarning2 = false;
+                string? sanitizedSummary2 = null;
+                if (detail2.Node.Docs?.Summary is not null)
+                {
+                    var (sanitized2, warn2) = PromptInjectionScanner.Scan(detail2.Node.Docs.Summary);
+                    sanitizedSummary2 = sanitized2;
+                    hasInjectionWarning2 = warn2;
+                }
+
+                activity?.SetTag("tool.result_count", 1);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                return FormatResponse(format, () =>
+                {
+                    var node2 = detail2.Node;
+                    var payload2 = new
+                    {
+                        snapshotVersion = envelope2.SnapshotVersion,
+                        promptInjectionWarning = hasInjectionWarning2,
+                        id = node2.Id.Value,
+                        kind = node2.Kind.ToString(),
+                        displayName = node2.DisplayName,
+                        fullyQualifiedName = node2.FullyQualifiedName,
+                        accessibility = node2.Accessibility.ToString(),
+                        docs = sanitizedSummary2 is not null
+                            ? (object)new { summary = sanitizedSummary2, remarks = node2.Docs?.Remarks, returns = node2.Docs?.Returns }
+                            : null,
+                        span = (includeSourceSpans && !spansRedacted2) ? node2.Span : null,
+                        spansRedacted = spansRedacted2,
+                        parentId = detail2.ParentId?.Value,
+                        childIds = detail2.ChildIds.Select(c => c.Value).ToList(),
+                        relatedIds = detail2.RelatedIds.Select(r => r.Value).ToList(),
+                    };
+                    return JsonSerializer.Serialize(payload2, s_jsonOptions);
+                },
+                () => TronSerializer.SerializeSymbolDetail(detail2),
+                () => RenderSymbolMarkdown(detail2, sanitizedSummary2, includeSourceSpans && !spansRedacted2));
+            }
+            // 0 matches from FQN scan — fall through to normal SymbolId resolution (will return NotFound)
+        }
 
         var id = new SymbolId(symbolId);
         var result = await _query.GetSymbolAsync(id, ct: cancellationToken);
@@ -219,6 +295,7 @@ public sealed class DocTools
     [McpServerTool(Name = "get_references"), Description("Get symbols that reference the given symbol.")]
     public async Task<string> GetReferences(
         [Description("Stable SymbolId")] string symbolId,
+        [Description("When true, returns only cross-project edges (EdgeScope.CrossProject).")] bool crossProjectOnly = false,
         [Description("Include surrounding code context (not yet implemented)")] bool includeContext = false,
         [Description("Output format: json|markdown|tron")] string format = "json",
         CancellationToken cancellationToken = default)
@@ -240,7 +317,7 @@ public sealed class DocTools
         var edges = new List<SymbolEdge>();
         try
         {
-            await foreach (var edge in _query.GetReferencesAsync(id, ct: cancellationToken))
+            await foreach (var edge in _query.GetReferencesAsync(id, crossProjectOnly, cancellationToken))
                 edges.Add(edge);
         }
         catch (SymbolNotFoundException)
@@ -250,6 +327,16 @@ public sealed class DocTools
         }
 
         bool hasInjectionWarning = false; // edges have no doc content
+
+        // Resolve project names for each unique From/To SymbolId
+        var uniqueIds = edges.SelectMany(e => new[] { e.From, e.To }).Distinct().ToList();
+        var nodeProjectCache = new Dictionary<SymbolId, string?>();
+        foreach (var nodeId in uniqueIds)
+        {
+            var nodeResult = await _query.GetSymbolAsync(nodeId, ct: cancellationToken);
+            if (nodeResult.Success)
+                nodeProjectCache[nodeId] = nodeResult.Value!.Payload.Node.ProjectOrigin;
+        }
 
         activity?.SetTag("tool.result_count", edges.Count);
         activity?.SetStatus(ActivityStatusCode.Ok);
@@ -264,6 +351,9 @@ public sealed class DocTools
                     fromId = e.From.Value,
                     toId = e.To.Value,
                     edgeKind = e.Kind.ToString(),
+                    scope = e.Scope.ToString(),
+                    fromProject = nodeProjectCache.GetValueOrDefault(e.From),
+                    toProject = nodeProjectCache.GetValueOrDefault(e.To),
                 }).ToList()
             };
             return JsonSerializer.Serialize(payload, s_jsonOptions);
@@ -465,6 +555,53 @@ public sealed class DocTools
     // ─────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────
+
+    private sealed record FqnResolveResult(bool IsAmbiguous, SymbolId? ResolvedId, IReadOnlyList<string>? Projects);
+
+    /// <summary>
+    /// Attempts to resolve <paramref name="fqn"/> as a fully qualified name by searching and
+    /// checking each candidate's FullyQualifiedName. Returns:
+    /// - ResolvedId set if exactly one match.
+    /// - IsAmbiguous=true if multiple projects have the same FQN.
+    /// - ResolvedId=null and IsAmbiguous=false if no match (caller falls through to NotFound).
+    /// </summary>
+    private async Task<FqnResolveResult> ResolveByFqnAsync(string fqn, CancellationToken ct)
+    {
+        var searchResult = await _query.SearchAsync(fqn, limit: 100, ct: ct);
+        if (!searchResult.Success)
+            return new FqnResolveResult(IsAmbiguous: false, ResolvedId: null, Projects: null);
+
+        var candidates = new List<(SymbolId Id, string? ProjectOrigin)>();
+        foreach (var item in searchResult.Value!.Payload)
+        {
+            var detailResult = await _query.GetSymbolAsync(item.Id, ct: ct);
+            if (!detailResult.Success) continue;
+            var node = detailResult.Value!.Payload.Node;
+            if (node.FullyQualifiedName == fqn)
+                candidates.Add((node.Id, node.ProjectOrigin));
+        }
+
+        if (candidates.Count == 0)
+            return new FqnResolveResult(IsAmbiguous: false, ResolvedId: null, Projects: null);
+
+        if (candidates.Count == 1)
+            return new FqnResolveResult(IsAmbiguous: false, ResolvedId: candidates[0].Id, Projects: null);
+
+        // Multiple matches — group by project
+        var projects = candidates
+            .Select(c => c.ProjectOrigin ?? "(unknown)")
+            .Distinct()
+            .OrderBy(p => p)
+            .ToList();
+
+        if (projects.Count == 1)
+        {
+            // Same project, multiple nodes with same FQN — return first
+            return new FqnResolveResult(IsAmbiguous: false, ResolvedId: candidates[0].Id, Projects: null);
+        }
+
+        return new FqnResolveResult(IsAmbiguous: true, ResolvedId: null, Projects: projects);
+    }
 
     private string FormatResponse(string format, Func<string> jsonFactory, Func<string> tronFactory, Func<string> markdownFactory)
     {
