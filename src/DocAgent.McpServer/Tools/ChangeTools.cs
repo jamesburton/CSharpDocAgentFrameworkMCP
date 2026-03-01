@@ -67,6 +67,14 @@ public sealed class ChangeTools
 
         try
         {
+            // PathAllowlist gate — deny access to snapshot store if directory is not allowed
+            if (!_allowlist.IsAllowed(_snapshotStore.ArtifactsDir))
+            {
+                _logger.LogWarning("ChangeTools: snapshot store directory denied by allowlist");
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorResponse(QueryErrorKind.NotFound, "Access denied.");
+            }
+
             // 1. Load snapshots
             var snapshotA = await _snapshotStore.LoadAsync(versionA, cancellationToken);
             if (snapshotA is null)
@@ -151,6 +159,14 @@ public sealed class ChangeTools
 
         try
         {
+            // PathAllowlist gate — deny access to snapshot store if directory is not allowed
+            if (!_allowlist.IsAllowed(_snapshotStore.ArtifactsDir))
+            {
+                _logger.LogWarning("ChangeTools: snapshot store directory denied by allowlist");
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorResponse(QueryErrorKind.NotFound, "Access denied.");
+            }
+
             // 1. Load snapshots
             var snapshotA = await _snapshotStore.LoadAsync(versionA, cancellationToken);
             if (snapshotA is null)
@@ -210,6 +226,14 @@ public sealed class ChangeTools
 
         try
         {
+            // PathAllowlist gate — deny access to snapshot store if directory is not allowed
+            if (!_allowlist.IsAllowed(_snapshotStore.ArtifactsDir))
+            {
+                _logger.LogWarning("ChangeTools: snapshot store directory denied by allowlist");
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorResponse(QueryErrorKind.NotFound, "Access denied.");
+            }
+
             // 1. Load snapshots
             var snapshotA = await _snapshotStore.LoadAsync(versionA, cancellationToken);
             if (snapshotA is null)
