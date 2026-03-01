@@ -24,18 +24,15 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 - ✓ Doc coverage policy enforcement for public symbols — v1.0
 - ✓ Runtime ingestion trigger via MCP tool — v1.0
 
+- ✓ Symbol-level semantic diff engine (signature, nullability, constraints, accessibility, dependency changes) — v1.1
+- ✓ Incremental ingestion with SHA-256 file change detection, only changed files re-parsed — v1.1
+- ✓ Unusual Change Review skill: ChangeReviewer with four pattern detectors and severity escalation — v1.1
+- ✓ `review_changes`, `find_breaking_changes`, `explain_change` MCP tools with json/markdown/tron output — v1.1
+- ✓ PathAllowlist security enforcement on all ChangeTools methods — v1.1
+
 ### Active
 
-#### Current Milestone: v1.1 Semantic Diff & Change Intelligence
-
-**Goal:** Enable agents to detect, understand, and review code changes through symbol-level semantic diffing and incremental ingestion.
-
-**Target features:**
-- Symbol-level semantic diff engine (signature, nullability, constraints, accessibility, dependency changes)
-- Incremental ingestion (re-ingest only changed files, precise change tracking)
-- Unusual Change Review skill: compare snapshots, flag suspicious diffs, propose worktree-based remediation
-- `review_changes` MCP tool returning structured findings
-- New MCP tools driven by diff capabilities (e.g., `find_breaking_changes`, `explain_change`)
+(No active milestone — run `/gsd:new-milestone` to start next)
 
 ### Out of Scope
 
@@ -51,13 +48,13 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 ## Context
 
-Shipped v1.0 with 4,391 LOC source + 4,747 LOC tests (C#). 177 passing tests.
+Shipped v1.1 with ~8,900 LOC source + ~9,250 LOC tests (C#). ~220 passing tests.
 
-Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, ModelContextProtocol SDK, Aspire, OpenTelemetry.
+Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, ModelContextProtocol SDK, Aspire, OpenTelemetry, SHA-256 file hashing.
 
-Architecture: discover → parse → normalize → index → serve (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Tests).
+Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Tests).
 
-Full pipeline operational: `ingest_project` MCP tool → Roslyn symbol walk → XML doc parsing → deterministic snapshot → BM25 indexing → query via 5 MCP tools.
+Full pipeline operational: 8 MCP tools (`search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`, `review_changes`, `find_breaking_changes`, `explain_change`) + `ingest_project` trigger. Incremental ingestion re-parses only changed files. All tools secured with PathAllowlist enforcement.
 
 ## Constraints
 
@@ -81,6 +78,11 @@ Full pipeline operational: `ingest_project` MCP tool → Roslyn symbol walk → 
 | MessagePack over JSON for snapshot serialization | Performance + determinism; contractless resolver | ✓ Good — byte-identical roundtrips verified |
 | Closure-based singleton path resolution | Prevent SnapshotStore/BM25SearchIndex path divergence | ✓ Good — single GetDir() shared by both |
 | DocAgentServerOptions `set` over `init` | Required for IOptions Configure lambda pattern | ✓ Good — discovered during E2E testing |
+| Pure static SymbolGraphDiffer (no DI) | Stateless algorithm, deterministic output, no dependencies | ✓ Good — simple to test and compose |
+| Per-category nullable detail fields in DiffTypes | MessagePack ContractlessStandardResolver safe; avoids polymorphic serialization | ✓ Good — clean pattern across 7 detail types |
+| SHA-256 file hashing for incremental ingestion | Streaming async, lowercase hex, content-addressed change detection | ✓ Good — precise change detection, proven identical to full re-ingestion |
+| ChangeReviewer as static pure-logic service | No DI needed; four detectors compose cleanly | ✓ Good — 9 tests, easy to extend |
+| Opaque not_found denial for PathAllowlist | Consistent with DocTools/IngestionTools; no information leakage | ✓ Good — unified security pattern across all tool classes |
 
 ---
-*Last updated: 2026-02-28 after v1.1 milestone start*
+*Last updated: 2026-03-01 after v1.1 milestone completion*

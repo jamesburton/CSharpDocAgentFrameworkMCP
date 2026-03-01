@@ -20,3 +20,20 @@
 
 ---
 
+
+## v1.1 Semantic Diff & Change Intelligence (Shipped: 2026-03-01)
+
+**Phases completed:** 4 phases, 9 plans
+
+**Timeline:** 2 days (2026-02-28 → 2026-03-01) | 44 commits | 42 C# files changed, +4,507 LOC
+
+**Key accomplishments:**
+- Symbol-level semantic diff engine detecting signature, nullability, constraint, accessibility, dependency, and doc changes across snapshots
+- Incremental ingestion with SHA-256 file change detection — only re-parses changed files, proven identical to full re-ingestion
+- ChangeReviewer with four unusual-pattern detectors (mass signature change, nullability regression, accessibility escalation, public API removal) and three-tier severity escalation
+- Three new MCP tools: `review_changes`, `find_breaking_changes`, `explain_change` with json/markdown/tron output formats
+- PathAllowlist security enforcement on all ChangeTools methods, closing audit gap to match DocTools/IngestionTools pattern
+- 24 diff-specific tests + 4 incremental correctness tests + 10 ChangeTools tests + 3 security gate tests
+
+---
+
