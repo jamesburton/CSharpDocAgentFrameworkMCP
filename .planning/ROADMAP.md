@@ -42,6 +42,7 @@ Full details: milestones/v1.1-ROADMAP.md
 
 - [x] **Phase 13: Core Domain Extensions** — Extend domain types to carry solution-level identity and cross-project metadata (completed 2026-03-01)
 - [x] **Phase 14: Solution Ingestion Pipeline** — Ingest full .sln files; resolve dependencies; populate enriched snapshots (completed 2026-03-01)
+- [ ] **Phase 14.1: Solution Graph Enrichment** — Populate SolutionSnapshot, classify cross-project edges, synthesize stub nodes (gap closure)
 - [ ] **Phase 15: Project-Aware Indexing & Query** — Thread project attribution through BM25 index and query service
 - [ ] **Phase 16: Solution MCP Tools** — Expose solution-level tools and update existing tools with solution awareness
 - [ ] **Phase 17: Incremental Solution Re-ingestion** — Re-ingest only changed projects within a solution
@@ -78,9 +79,22 @@ Plans:
 - [ ] 14-01-PLAN.md — SolutionIngestionService: result types, interface, implementation with language filter/TFM dedup/partial-success, unit tests
 - [ ] 14-02-PLAN.md — ingest_solution MCP tool method, DI wiring, PathAllowlist security, tool-level tests
 
+### Phase 14.1: Solution Graph Enrichment
+**Goal**: Solution ingestion produces a fully populated `SolutionSnapshot` with project dependency DAG, cross-project edges carry `EdgeScope.CrossProject`, and external type references create `NodeKind.Stub` nodes — closing all integration gaps between Phase 13 domain types and Phase 14 ingestion
+**Depends on**: Phase 14
+**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05
+**Gap Closure**: Closes integration gaps from v1.2 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. `SolutionIngestionService.IngestAsync` constructs and persists a `SolutionSnapshot` containing `ProjectEntry` records with dependency lists and `ProjectEdge` records modeling the project DAG
+  2. Edges between symbols in different projects carry `EdgeScope.CrossProject`; edges within the same project carry `EdgeScope.IntraProject`
+  3. Type references to external/NuGet types create `SymbolNode`s with `NodeKind = NodeKind.Stub` and `IsExternal = true`
+  4. All existing 266+ tests continue to pass after enrichment changes
+  5. New tests verify SolutionSnapshot population, cross-project edge classification, and stub node creation
+**Plans**: TBD
+
 ### Phase 15: Project-Aware Indexing & Query
 **Goal**: BM25 search results carry project attribution; agents can filter results to a single project or cross-project references without changing existing query contracts
-**Depends on**: Phase 14
+**Depends on**: Phase 14.1
 **Requirements**: TOOLS-01, TOOLS-02, TOOLS-03, TOOLS-06
 **Success Criteria** (what must be TRUE):
   1. `search_symbols` called against a solution snapshot returns results from all projects in a single ranked list
@@ -127,6 +141,7 @@ Plans:
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
 | 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
 | 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
+| 14.1 Solution Graph Enrichment | v1.2 | 0/? | Not started | - |
 | 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |

@@ -74,11 +74,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INGEST-04 | Phase 14 | Complete |
 | INGEST-05 | Phase 17 | Pending |
 | INGEST-06 | Phase 14 | Complete |
-| GRAPH-01 | Phase 13 | Complete |
-| GRAPH-02 | Phase 13 | Complete |
-| GRAPH-03 | Phase 13 | Complete |
-| GRAPH-04 | Phase 13 | Complete |
-| GRAPH-05 | Phase 13 | Complete |
+| GRAPH-01 | Phase 13 (types) + Phase 14.1 (populate) | Partial — types defined, population pending |
+| GRAPH-02 | Phase 13 (types) + Phase 14.1 (classify) | Partial — EdgeScope defined, classification pending |
+| GRAPH-03 | Phase 13 (types) + Phase 14.1 (populate) | Partial — ProjectEdge defined, DAG population pending |
+| GRAPH-04 | Phase 13 (types) + Phase 14.1 (synthesize) | Partial — NodeKind defined, stub synthesis pending |
+| GRAPH-05 | Phase 13 (types) + Phase 15 (filter) | Partial — projectFilter param added, filtering pending |
 | GRAPH-06 | Phase 13 | Complete |
 | TOOLS-01 | Phase 15 | Pending |
 | TOOLS-02 | Phase 15 | Pending |
