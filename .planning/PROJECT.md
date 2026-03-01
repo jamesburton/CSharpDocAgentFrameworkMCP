@@ -32,12 +32,22 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start next)
+**Current Milestone: v1.2 Multi-Project & Solution-Level Graphs**
+
+**Goal:** Enable agents to query a unified symbol graph spanning an entire .NET solution, with cross-project dependency tracing and solution-aware MCP tools.
+
+**Target features:**
+- Ingest entire .sln solutions in one shot or add projects incrementally
+- Unified symbol graph spanning all projects with cross-project edges
+- Full graph for local ProjectReferences, stub/metadata nodes for NuGet package types
+- Existing MCP tools (search_symbols, get_references, etc.) become solution-aware
+- New `explain_solution` MCP tool for solution-level architecture overview
+- Cross-project "who calls this?" queries spanning project boundaries
 
 ### Out of Scope
 
-- Multi-project / solution-level symbol graphs — deferred to v1.2
-- Cross-project queries and dependency linking (local/git/NuGet, tiered depth) — deferred to v1.2
+- ~~Multi-project / solution-level symbol graphs~~ — **moved to v1.2 Active**
+- ~~Cross-project queries and dependency linking~~ — **moved to v1.2 Active** (NuGet: stub nodes only)
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
 - Non-stdio MCP transports (HTTP, SSE) — deferred to later
@@ -85,4 +95,4 @@ Full pipeline operational: 8 MCP tools (`search_symbols`, `get_symbol`, `get_ref
 | Opaque not_found denial for PathAllowlist | Consistent with DocTools/IngestionTools; no information leakage | ✓ Good — unified security pattern across all tool classes |
 
 ---
-*Last updated: 2026-03-01 after v1.1 milestone completion*
+*Last updated: 2026-03-01 after v1.2 milestone started*
