@@ -9,10 +9,10 @@ Requirements for multi-project / solution-level graph support. Each maps to road
 
 ### Solution Ingestion
 
-- [ ] **INGEST-01**: Agent can ingest an entire .sln file in one call via `ingest_solution` MCP tool
-- [ ] **INGEST-02**: Non-C# projects in a solution are skipped gracefully with logged warnings
-- [ ] **INGEST-03**: Multi-targeting projects (e.g. net10.0;net48) are deduplicated to a single TFM
-- [ ] **INGEST-04**: MSBuildWorkspace load failures are detected and reported (WorkspaceFailed handler, document count validation)
+- [x] **INGEST-01**: Agent can ingest an entire .sln file in one call via `ingest_solution` MCP tool
+- [x] **INGEST-02**: Non-C# projects in a solution are skipped gracefully with logged warnings
+- [x] **INGEST-03**: Multi-targeting projects (e.g. net10.0;net48) are deduplicated to a single TFM
+- [x] **INGEST-04**: MSBuildWorkspace load failures are detected and reported (WorkspaceFailed handler, document count validation)
 - [ ] **INGEST-05**: Per-project incremental re-ingestion within a solution — change one project, re-ingest only that project
 - [ ] **INGEST-06**: `ingest_solution` is secured with PathAllowlist enforcement (consistent with existing tool security pattern)
 
@@ -68,10 +68,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INGEST-01 | Phase 14 | Pending |
-| INGEST-02 | Phase 14 | Pending |
-| INGEST-03 | Phase 14 | Pending |
-| INGEST-04 | Phase 14 | Pending |
+| INGEST-01 | Phase 14 | Complete |
+| INGEST-02 | Phase 14 | Complete |
+| INGEST-03 | Phase 14 | Complete |
+| INGEST-04 | Phase 14 | Complete |
 | INGEST-05 | Phase 17 | Pending |
 | INGEST-06 | Phase 14 | Pending |
 | GRAPH-01 | Phase 13 | Complete |

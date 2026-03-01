@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Multi-Project & Solution-Level Graphs
 status: phase_complete
-last_updated: "2026-03-01T18:00:00.000Z"
+last_updated: "2026-03-01T18:10:00.000Z"
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_phases: 17
+  completed_phases: 13
+  total_plans: 3
+  completed_plans: 1
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 
 ## Current Position
 
-Phase: 13 of 17 (Core Domain Extensions) — COMPLETE
-Next: Phase 14 (Solution Ingestion Pipeline)
-Status: Phase 13 complete, Phase 14 not yet planned
-Last activity: 2026-03-01 — Phase 13 complete: both plans done (domain extensions + solution types)
+Phase: 14 of 17 (Solution Ingestion Pipeline) — IN PROGRESS
+Current Plan: 14-01 COMPLETE (SolutionIngestionService)
+Next Plan: 14-02 (ingest_solution MCP tool wiring — if exists)
+Last activity: 2026-03-01 — Phase 14 Plan 01 complete: SolutionIngestionService with 7 unit tests
 
-Progress: [████████░░░░░░░░░░░░] ~47% (13/17 phases complete across all milestones)
+Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
 
 ## Accumulated Context
 
@@ -44,6 +44,9 @@ Recent decisions affecting v1.2:
 - NodeKind.Real=0 and EdgeScope.IntraProject=0 chosen as enum defaults for MessagePack backward compat with old artifacts
 - projectFilter on IKnowledgeQueryService.SearchAsync accepted but not applied until Phase 15
 - [Phase 13-core-domain-extensions]: SolutionSnapshot holds per-project SymbolGraphSnapshots as-is (not merged) to preserve project boundaries
+- [Phase 14-01]: ExtractTfmVersion normalizes legacy net{NN}: short form (< 100) × 10, so net48 → 480 > net472 → 472; modern net{X}.{Y} biased by major+100 so always above legacy
+- [Phase 14-01]: Inline WalkNamespaceInline in SolutionIngestionService (not delegating to RoslynSymbolGraphBuilder) to avoid second per-project MSBuildWorkspace inside open solution
+- [Phase 14-01]: PipelineOverride seam takes (slnPath, warnings, ct) → SolutionIngestionResult for full MSBuild bypass in unit tests
 
 ### Pending Todos
 
@@ -57,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 13 fully complete (both plans). Ready for Phase 14 planning.
+Stopped at: Phase 14 Plan 01 complete (SolutionIngestionService + 7 tests + SUMMARY.md). Ready for Phase 14 Plan 02.
 Resume file: None
