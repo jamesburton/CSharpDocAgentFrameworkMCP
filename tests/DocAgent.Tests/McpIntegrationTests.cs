@@ -274,6 +274,7 @@ file sealed class StubQueryService : IKnowledgeQueryService
         int offset = 0,
         int limit = 20,
         string? snapshotVersion = null,
+        string? projectFilter = null,
         CancellationToken ct = default)
     {
         var items = _searchItems ?? [];

@@ -44,6 +44,7 @@ public interface IKnowledgeQueryService
         int offset = 0,
         int limit = 20,
         string? snapshotVersion = null,
+        string? projectFilter = null,
         CancellationToken ct = default);
 
     Task<QueryResult<ResponseEnvelope<SymbolDetail>>> GetSymbolAsync(
