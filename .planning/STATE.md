@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Multi-Project & Solution-Level Graphs
 status: unknown
-last_updated: "2026-03-01T18:01:28.459Z"
+last_updated: "2026-03-01T19:28:34.754Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 14.1 of 17 (Solution Graph Enrichment) — IN PROGRESS
-Current Plan: 14.1-01 COMPLETE (SolutionSnapshot enrichment — project DAG, edge classification, stub nodes)
-Next Plan: 14.1-02 (if exists, else phase complete)
-Last activity: 2026-03-01 — Phase 14.1 Plan 01 complete: SolutionIngestionService populates SolutionSnapshot with ProjectEntry DAG, EdgeScope classification, NodeKind.Stub synthesis, circular reference detection; 7 new tests; 273 total passing
+Current Plan: 14.1-02 COMPLETE (stub node filtering in BM25SearchIndex and InMemorySearchIndex)
+Next Plan: 14.1-03 (if exists, else phase complete)
+Last activity: 2026-03-01 — Phase 14.1 Plan 02 complete: NodeKind.Stub nodes excluded at index construction time from both BM25SearchIndex and InMemorySearchIndex; 4 new tests; 277 total passing
 
 Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
 
@@ -52,6 +52,7 @@ Recent decisions affecting v1.2:
 - [Phase 14.1-01]: ProjectWalkContext readonly record struct with shared seenStubIds HashSet across all projects deduplicates external type stub nodes
 - [Phase 14.1-01]: Primitive filter with 30 common framework types (System.String, Task, IEnumerable<T>, etc.) prevents stub bloat
 - [Phase 14.1-01]: SolutionIngestionResult.Snapshot defaults to null — fully backward-compatible with existing positional record callers
+- [Phase 14.1]: Stub filter applied at index construction in both WriteDocuments and PopulateNodes in BM25, and IndexAsync in InMemory — covers SearchAsync and GetAsync exclusion paths without query-time overhead
 
 ### Pending Todos
 
@@ -65,5 +66,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 14.1 Plan 01 complete (SolutionSnapshot enrichment: project DAG, EdgeScope classification, stub nodes, circular detection + 7 tests + SUMMARY.md).
+Stopped at: Phase 14.1 Plan 02 complete (stub node filtering: BM25SearchIndex + InMemorySearchIndex exclude NodeKind.Stub at index construction time + 4 tests + SUMMARY.md).
 Resume file: None
