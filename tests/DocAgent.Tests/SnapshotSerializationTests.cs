@@ -136,6 +136,103 @@ public class SnapshotSerializationTests
         deserialized!.Should().BeEquivalentTo(snapshot);
     }
 
+    // -------------------------------------------------------------------------
+    // Backward compatibility tests for new v1.2 fields
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void OldSnapshot_Deserializes_With_NodeKind_Real_Default()
+    {
+        var node = new SymbolNode(
+            Id: new SymbolId("DocAgent.Core.OldSymbol"),
+            Kind: SymbolKind.Type,
+            DisplayName: "OldSymbol",
+            FullyQualifiedName: "DocAgent.Core.OldSymbol",
+            PreviousIds: [],
+            Accessibility: Accessibility.Public,
+            Docs: null,
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
+
+        byte[] bytes = MessagePackSerializer.Serialize(node, Options);
+        var deserialized = MessagePackSerializer.Deserialize<SymbolNode>(bytes, Options);
+
+        deserialized.NodeKind.Should().Be(NodeKind.Real, "NodeKind must default to Real for old artifacts");
+    }
+
+    [Fact]
+    public void OldSnapshot_Deserializes_With_EdgeScope_IntraProject_Default()
+    {
+        var edge = new SymbolEdge(
+            From: new SymbolId("A"),
+            To: new SymbolId("B"),
+            Kind: SymbolEdgeKind.Contains);
+
+        byte[] bytes = MessagePackSerializer.Serialize(edge, Options);
+        var deserialized = MessagePackSerializer.Deserialize<SymbolEdge>(bytes, Options);
+
+        deserialized.Scope.Should().Be(EdgeScope.IntraProject, "Scope must default to IntraProject for old artifacts");
+    }
+
+    [Fact]
+    public void OldSnapshot_Deserializes_With_ProjectOrigin_Null_Default()
+    {
+        var node = new SymbolNode(
+            Id: new SymbolId("DocAgent.Core.OldSymbol2"),
+            Kind: SymbolKind.Method,
+            DisplayName: "OldMethod",
+            FullyQualifiedName: "DocAgent.Core.OldSymbol2.OldMethod",
+            PreviousIds: [],
+            Accessibility: Accessibility.Internal,
+            Docs: null,
+            Span: null,
+            ReturnType: "void",
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>());
+
+        byte[] bytes = MessagePackSerializer.Serialize(node, Options);
+        var deserialized = MessagePackSerializer.Deserialize<SymbolNode>(bytes, Options);
+
+        deserialized.ProjectOrigin.Should().BeNull("ProjectOrigin must be null for old artifacts");
+    }
+
+    [Fact]
+    public void NewFields_Roundtrip_Correctly()
+    {
+        var node = new SymbolNode(
+            Id: new SymbolId("MyProject.MyType"),
+            Kind: SymbolKind.Type,
+            DisplayName: "MyType",
+            FullyQualifiedName: "MyProject.MyType",
+            PreviousIds: [],
+            Accessibility: Accessibility.Public,
+            Docs: null,
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>(),
+            ProjectOrigin: "MyProject",
+            NodeKind: NodeKind.Stub);
+
+        var edge = new SymbolEdge(
+            From: new SymbolId("MyProject.MyType"),
+            To: new SymbolId("External.Type"),
+            Kind: SymbolEdgeKind.References,
+            Scope: EdgeScope.CrossProject);
+
+        byte[] nodeBytes = MessagePackSerializer.Serialize(node, Options);
+        var deserializedNode = MessagePackSerializer.Deserialize<SymbolNode>(nodeBytes, Options);
+
+        byte[] edgeBytes = MessagePackSerializer.Serialize(edge, Options);
+        var deserializedEdge = MessagePackSerializer.Deserialize<SymbolEdge>(edgeBytes, Options);
+
+        deserializedNode.ProjectOrigin.Should().Be("MyProject");
+        deserializedNode.NodeKind.Should().Be(NodeKind.Stub);
+        deserializedEdge.Scope.Should().Be(EdgeScope.CrossProject);
+    }
+
     [Fact]
     public void ContentHash_differs_for_different_snapshots()
     {
