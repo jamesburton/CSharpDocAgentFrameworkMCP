@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 
 ## Current Position
 
-Phase: 15 of 17 (Project-Aware Indexing & Query) — IN PROGRESS
-Current Plan: 15-01 COMPLETE (project attribution in indexing/query layers)
-Next Plan: 15-02 (if exists)
-Last activity: 2026-03-01 — Phase 15 Plan 01 complete: SearchResultItem.ProjectName, projectFilter in SearchAsync, crossProjectOnly in GetReferencesAsync, projectName Lucene field; 9 new tests; 286 total passing
+Phase: 15 of 17 (Project-Aware Indexing & Query) — COMPLETE
+Current Plan: 15-02 COMPLETE (MCP tool project parameters and FQN disambiguation)
+Next Plan: 16-01
+Last activity: 2026-03-01 — Phase 15 Plan 02 complete: search_symbols project parameter, get_references crossProjectOnly + edge scope/project names, get_symbol FQN disambiguation; 4 new tests; 290 total passing
 
 Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
 
@@ -44,6 +44,9 @@ Recent decisions affecting v1.2:
 - NodeKind.Real=0 and EdgeScope.IntraProject=0 chosen as enum defaults for MessagePack backward compat with old artifacts
 - projectFilter on IKnowledgeQueryService.SearchAsync now applied in Phase 15 (service layer only, not ISearchIndex)
 - crossProjectOnly on GetReferencesAsync filters by EdgeScope.CrossProject (exact match, case-sensitive)
+- [Phase 15-02]: FQN heuristic: input without pipe '|' treated as FQN candidate; stable SymbolIds always contain '|'
+- [Phase 15-02]: Same FQN in same project (multiple nodes) returns first match; disambiguation is cross-project only
+- [Phase 15-02]: nodeProjectCache in GetReferences built via GetSymbolAsync per unique id (stays within IKnowledgeQueryService contract)
 - [Phase 13-core-domain-extensions]: SolutionSnapshot holds per-project SymbolGraphSnapshots as-is (not merged) to preserve project boundaries
 - [Phase 14-01]: ExtractTfmVersion normalizes legacy net{NN}: short form (< 100) × 10, so net48 → 480 > net472 → 472; modern net{X}.{Y} biased by major+100 so always above legacy
 - [Phase 14-01]: Inline WalkNamespaceInline in SolutionIngestionService (not delegating to RoslynSymbolGraphBuilder) to avoid second per-project MSBuildWorkspace inside open solution
@@ -67,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 15 Plan 01 complete (project attribution: SearchResultItem.ProjectName, projectFilter in SearchAsync, crossProjectOnly in GetReferencesAsync, projectName Lucene field + 9 tests + SUMMARY.md).
+Stopped at: Phase 15 Plan 02 complete (MCP tool project parameters: search_symbols project filter, get_references crossProjectOnly + edge scope/project names, get_symbol FQN disambiguation + 4 tests; 290 total passing).
 Resume file: None
