@@ -73,7 +73,10 @@ Plans:
   3. Multi-targeting projects (e.g., `net10.0;net48`) produce exactly one set of nodes, not duplicates
   4. `workspace.Diagnostics` failures are logged and projects with null compilations are skipped, with the tool returning a partial-success response describing skipped projects
   5. Calling `ingest_solution` with a path outside the configured PathAllowlist returns the same opaque not-found denial as all other secured tools
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 14-01-PLAN.md — SolutionIngestionService: result types, interface, implementation with language filter/TFM dedup/partial-success, unit tests
+- [ ] 14-02-PLAN.md — ingest_solution MCP tool method, DI wiring, PathAllowlist security, tool-level tests
 
 ### Phase 15: Project-Aware Indexing & Query
 **Goal**: BM25 search results carry project attribution; agents can filter results to a single project or cross-project references without changing existing query contracts
@@ -123,7 +126,7 @@ Plans:
 | 11. Change Intelligence & Review | v1.1 | 2/2 | Complete | 2026-02-28 |
 | 12. ChangeTools Security Gate | v1.1 | 1/1 | Complete | 2026-03-01 |
 | 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
-| 14. Solution Ingestion Pipeline | v1.2 | 0/? | Not started | - |
+| 14. Solution Ingestion Pipeline | v1.2 | 0/2 | Planning complete | - |
 | 15. Project-Aware Indexing & Query | v1.2 | 0/? | Not started | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
