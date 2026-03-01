@@ -37,11 +37,11 @@ public sealed class ChangeToolTests : IDisposable
     // Test helper
     // ─────────────────────────────────────────────────────────────────
 
-    private ChangeTools CreateTools(SnapshotStore? store = null)
+    private ChangeTools CreateTools(SnapshotStore? store = null, PathAllowlist? allowlist = null)
     {
         store ??= _store;
         var opts = new DocAgentServerOptions { VerboseErrors = true };
-        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions { AllowedPaths = ["**"] }));
+        allowlist ??= new PathAllowlist(Options.Create(new DocAgentServerOptions { AllowedPaths = ["**"] }));
         var logger = NullLogger<ChangeTools>.Instance;
         return new ChangeTools(store, allowlist, logger, Options.Create(opts));
     }
@@ -301,6 +301,53 @@ public sealed class ChangeToolTests : IDisposable
         var explainMd = await tools.ExplainChange(hashA, hashB, symbolId, format: "markdown");
         explainMd.Should().NotBeNullOrEmpty();
         explainMd.Should().NotStartWith("{");
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test: PathAllowlist denial tests (one per tool method)
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ReviewChanges_PathDenied_ReturnsAccessDenied()
+    {
+        var (hashA, hashB) = await SaveBreakingPairAsync();
+        // Default DocAgentServerOptions has no AllowedPaths — only CWD allowed — _tempDir denied
+        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        var tools = CreateTools(allowlist: allowlist);
+
+        var json = await tools.ReviewChanges(hashA, hashB);
+        var root = Parse(json);
+
+        root.TryGetProperty("error", out var err).Should().BeTrue();
+        err.GetString().Should().Be("not_found");
+    }
+
+    [Fact]
+    public async Task FindBreakingChanges_PathDenied_ReturnsAccessDenied()
+    {
+        var (hashA, hashB) = await SaveBreakingPairAsync();
+        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        var tools = CreateTools(allowlist: allowlist);
+
+        var json = await tools.FindBreakingChanges(hashA, hashB);
+        var root = Parse(json);
+
+        root.TryGetProperty("error", out var err).Should().BeTrue();
+        err.GetString().Should().Be("not_found");
+    }
+
+    [Fact]
+    public async Task ExplainChange_PathDenied_ReturnsAccessDenied()
+    {
+        var (hashA, hashB) = await SaveBreakingPairAsync();
+        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        var tools = CreateTools(allowlist: allowlist);
+
+        var json = await tools.ExplainChange(hashA, hashB, "TestProject.TestClass.MyMethod");
+        var root = Parse(json);
+
+        root.TryGetProperty("error", out var err).Should().BeTrue();
+        err.GetString().Should().Be("not_found");
     }
 
     // ─────────────────────────────────────────────────────────────────
