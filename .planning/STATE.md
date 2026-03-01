@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 14 — Solution Ingestion Pipeline
+**Current focus:** Phase 15 — Project-Aware Indexing & Query
 
 ## Current Position
 
-Phase: 14.1 of 17 (Solution Graph Enrichment) — IN PROGRESS
-Current Plan: 14.1-02 COMPLETE (stub node filtering in BM25SearchIndex and InMemorySearchIndex)
-Next Plan: 14.1-03 (if exists, else phase complete)
-Last activity: 2026-03-01 — Phase 14.1 Plan 02 complete: NodeKind.Stub nodes excluded at index construction time from both BM25SearchIndex and InMemorySearchIndex; 4 new tests; 277 total passing
+Phase: 15 of 17 (Project-Aware Indexing & Query) — IN PROGRESS
+Current Plan: 15-01 COMPLETE (project attribution in indexing/query layers)
+Next Plan: 15-02 (if exists)
+Last activity: 2026-03-01 — Phase 15 Plan 01 complete: SearchResultItem.ProjectName, projectFilter in SearchAsync, crossProjectOnly in GetReferencesAsync, projectName Lucene field; 9 new tests; 286 total passing
 
 Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
 
@@ -42,7 +42,8 @@ Recent decisions affecting v1.2:
 - Serve v1.0/v1.1 artifacts as-is with ProjectOrigin = null; require explicit ingest_solution call for v1.2 enrichment
 - Stub nodes capped to direct PackageReference assemblies only (not transitive closure) to prevent index bloat
 - NodeKind.Real=0 and EdgeScope.IntraProject=0 chosen as enum defaults for MessagePack backward compat with old artifacts
-- projectFilter on IKnowledgeQueryService.SearchAsync accepted but not applied until Phase 15
+- projectFilter on IKnowledgeQueryService.SearchAsync now applied in Phase 15 (service layer only, not ISearchIndex)
+- crossProjectOnly on GetReferencesAsync filters by EdgeScope.CrossProject (exact match, case-sensitive)
 - [Phase 13-core-domain-extensions]: SolutionSnapshot holds per-project SymbolGraphSnapshots as-is (not merged) to preserve project boundaries
 - [Phase 14-01]: ExtractTfmVersion normalizes legacy net{NN}: short form (< 100) × 10, so net48 → 480 > net472 → 472; modern net{X}.{Y} biased by major+100 so always above legacy
 - [Phase 14-01]: Inline WalkNamespaceInline in SolutionIngestionService (not delegating to RoslynSymbolGraphBuilder) to avoid second per-project MSBuildWorkspace inside open solution
@@ -66,5 +67,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 14.1 Plan 02 complete (stub node filtering: BM25SearchIndex + InMemorySearchIndex exclude NodeKind.Stub at index construction time + 4 tests + SUMMARY.md).
+Stopped at: Phase 15 Plan 01 complete (project attribution: SearchResultItem.ProjectName, projectFilter in SearchAsync, crossProjectOnly in GetReferencesAsync, projectName Lucene field + 9 tests + SUMMARY.md).
 Resume file: None

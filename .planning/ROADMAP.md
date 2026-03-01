@@ -104,7 +104,7 @@ Plans:
   2. `search_symbols` called with an optional `project` filter returns only symbols from that project
   3. `get_symbol` resolves a fully qualified name that exists in any project in the solution, not just the first project processed
   4. `get_references` with optional `crossProjectOnly` filter returns only edges whose `EdgeScope` is `CrossProject`, enabling "who across project boundaries calls this?" queries
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 15-01-PLAN.md — Core types, service layer (SearchResultItem.ProjectName, projectFilter, crossProjectOnly, BM25 projectName field) + tests
 - [ ] 15-02-PLAN.md — MCP tool layer (project param on search_symbols, crossProjectOnly on get_references, enriched JSON output)
@@ -154,6 +154,6 @@ Plans:
 | 13. Core Domain Extensions | 2/2 | Complete   | 2026-03-01 | - |
 | 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
 | 14.1 Solution Graph Enrichment | 2/2 | Complete    | 2026-03-01 | - |
-| 15. Project-Aware Indexing & Query | v1.2 | 0/2 | Not started | - |
+| 15. Project-Aware Indexing & Query | 1/2 | In Progress|  | - |
 | 16. Solution MCP Tools | v1.2 | 0/? | Not started | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
