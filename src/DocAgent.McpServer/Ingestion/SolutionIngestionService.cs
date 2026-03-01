@@ -16,6 +16,8 @@ namespace DocAgent.McpServer.Ingestion;
 /// Implements <see cref="ISolutionIngestionService"/> by opening a .sln via MSBuildWorkspace,
 /// processing each C# project sequentially (MSBuildWorkspace is not thread-safe), and producing
 /// a flat merged <see cref="SymbolGraphSnapshot"/> stamped with per-project <c>ProjectOrigin</c>.
+/// Also builds a <see cref="SolutionSnapshot"/> with the project dependency DAG, cross-project
+/// edge classification, and stub nodes for external type references.
 /// </summary>
 public sealed class SolutionIngestionService : ISolutionIngestionService
 {
@@ -26,6 +28,43 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
     // Optional injectable pipeline for testing. When set, bypasses real MSBuild entirely.
     // Receives (slnPath, warnings, ct) and returns the final SolutionIngestionResult.
     internal Func<string, List<string>, CancellationToken, Task<SolutionIngestionResult>>? PipelineOverride { get; set; }
+
+    // ── Primitive filter ─────────────────────────────────────────────────────
+    // Common types that should NOT generate stub nodes to avoid noise.
+    private static readonly HashSet<string> s_primitiveTypeNames = new(StringComparer.Ordinal)
+    {
+        "System.Object",
+        "System.String",
+        "System.Boolean",
+        "System.Byte",
+        "System.SByte",
+        "System.Int16",
+        "System.UInt16",
+        "System.Int32",
+        "System.UInt32",
+        "System.Int64",
+        "System.UInt64",
+        "System.Single",
+        "System.Double",
+        "System.Decimal",
+        "System.Char",
+        "System.Void",
+        "System.IntPtr",
+        "System.UIntPtr",
+        "System.Threading.Tasks.Task",
+        "System.Threading.Tasks.Task`1",
+        "System.Collections.Generic.IEnumerable`1",
+        "System.Collections.Generic.IList`1",
+        "System.Collections.Generic.IReadOnlyList`1",
+        "System.Collections.Generic.ICollection`1",
+        "System.Collections.Generic.IDictionary`2",
+        "System.ValueType",
+        "System.Enum",
+        "System.Attribute",
+        "System.Exception",
+        "System.IDisposable",
+        "System.EventArgs",
+    };
 
     public SolutionIngestionService(
         SnapshotStore store,
@@ -56,6 +95,15 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         var statuses = new List<ProjectIngestionStatus>();
         var allNodes = new List<SymbolNode>();
         var allEdges = new List<SymbolEdge>();
+
+        // SolutionSnapshot accumulators
+        var projectEntries = new List<ProjectEntry>();
+        var projectEdges = new List<ProjectEdge>();
+        var perProjectSnapshots = new List<SymbolGraphSnapshot>();
+
+        // Stub node accumulators — shared across all projects to deduplicate across project boundaries
+        var stubNodes = new List<SymbolNode>();
+        var seenStubIds = new HashSet<string>(StringComparer.Ordinal);
 
         // Stage 1 — Open solution
         if (reportProgress is not null)
@@ -122,6 +170,22 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
                 tfmChoices[best.FilePath ?? string.Empty] = tfmMatch.Success ? tfmMatch.Groups[1].Value : null;
             }
         }
+
+        // Build a lookup: ProjectId → projectName (using FilePath-based name for stability)
+        var projectIdToName = new Dictionary<ProjectId, string>();
+        foreach (var p in chosenProjects)
+        {
+            var filePath = p.FilePath ?? string.Empty;
+            var name = string.IsNullOrEmpty(filePath)
+                ? p.Name
+                : Path.GetFileNameWithoutExtension(filePath);
+            projectIdToName[p.Id] = name;
+        }
+
+        // Build the set of all solution project names for scope classification
+        var solutionProjectNames = new HashSet<string>(
+            projectIdToName.Values,
+            StringComparer.OrdinalIgnoreCase);
 
         var parser = new XmlDocParser();
         var resolver = new InheritDocResolver();
@@ -196,8 +260,9 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
             // Walk the namespace tree via the shared builder
             var projectNodes = new List<SymbolNode>();
-            var projectEdges = new List<SymbolEdge>();
-            await WalkCompilationAsync(builder, compilation, projectNodes, projectEdges, cancellationToken)
+            var projectEdgesLocal = new List<SymbolEdge>();
+            var ctx = new ProjectWalkContext(projectName, solutionProjectNames, stubNodes, seenStubIds);
+            await WalkCompilationAsync(builder, compilation, projectNodes, projectEdgesLocal, in ctx, cancellationToken)
                 .ConfigureAwait(false);
 
             // Stamp ProjectOrigin on every node
@@ -206,7 +271,33 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
                 .ToList();
 
             allNodes.AddRange(stampedNodes);
-            allEdges.AddRange(projectEdges);
+            allEdges.AddRange(projectEdgesLocal);
+
+            // Build project dependency info from Roslyn ProjectReferences
+            var directDeps = new List<string>();
+            foreach (var projRef in project.ProjectReferences)
+            {
+                if (projectIdToName.TryGetValue(projRef.ProjectId, out var depName))
+                {
+                    directDeps.Add(depName);
+                    projectEdges.Add(new ProjectEdge(projectName, depName));
+                }
+            }
+
+            projectEntries.Add(new ProjectEntry(projectName, filePath, directDeps.AsReadOnly()));
+
+            // Build per-project SymbolGraphSnapshot
+            var perProjectSnapshot = new SymbolGraphSnapshot(
+                SchemaVersion: "1.2",
+                ProjectName: projectName,
+                SourceFingerprint: ComputeFingerprint(filePath),
+                ContentHash: null,
+                CreatedAt: DateTimeOffset.UtcNow,
+                Nodes: SymbolSorter.SortNodes(stampedNodes),
+                Edges: SymbolSorter.SortEdges(projectEdgesLocal),
+                IngestionMetadata: null,
+                SolutionName: solutionName);
+            perProjectSnapshots.Add(perProjectSnapshot);
 
             statuses.Add(new ProjectIngestionStatus(
                 Name: projectName,
@@ -216,6 +307,18 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
                 NodeCount: stampedNodes.Count,
                 ChosenTfm: chosenTfm));
         }
+
+        // Detect circular references in project DAG
+        var cycles = DetectCycles(projectEdges);
+        foreach (var cycle in cycles)
+        {
+            var cycleStr = string.Join(" -> ", cycle);
+            _logger.LogWarning("Circular project reference detected: {Cycle}", cycleStr);
+            warnings.Add($"Circular project reference detected: {cycleStr}");
+        }
+
+        // Add stub nodes to the all-nodes collection
+        allNodes.AddRange(stubNodes);
 
         // Stage 3 — Merge and save
         if (reportProgress is not null)
@@ -254,6 +357,14 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
         var ingestedCount = statuses.Count(s => s.Status == "ok");
 
+        // Build SolutionSnapshot
+        var solutionSnapshot = new SolutionSnapshot(
+            SolutionName: solutionName,
+            Projects: projectEntries.AsReadOnly(),
+            ProjectDependencies: projectEdges.AsReadOnly(),
+            ProjectSnapshots: perProjectSnapshots.AsReadOnly(),
+            CreatedAt: DateTimeOffset.UtcNow);
+
         return new SolutionIngestionResult(
             SnapshotId: saved.ContentHash ?? saved.SourceFingerprint,
             SolutionName: solutionName,
@@ -263,7 +374,8 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             TotalEdgeCount: saved.Edges.Count,
             Duration: sw.Elapsed,
             Projects: statuses.AsReadOnly(),
-            Warnings: warnings.AsReadOnly());
+            Warnings: warnings.AsReadOnly(),
+            Snapshot: solutionSnapshot);
     }
 
     // ── Walk compilation namespace tree via builder reflection ───────────────
@@ -277,6 +389,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         Compilation compilation,
         List<SymbolNode> nodes,
         List<SymbolEdge> edges,
+        in ProjectWalkContext ctx,
         CancellationToken ct)
     {
         // Walk via public BuildAsync is not available per-compilation.
@@ -284,14 +397,15 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         // Since we own the compilation, delegate to a local walk using reflection or
         // duplicate the walk inline. We duplicate the walk here to keep coupling minimal
         // and avoid reflection.
-        WalkNamespaceInline(compilation.GlobalNamespace, nodes, edges);
+        WalkNamespaceInline(compilation.GlobalNamespace, nodes, edges, in ctx);
         return Task.CompletedTask;
     }
 
     private static void WalkNamespaceInline(
         INamespaceSymbol ns,
         List<SymbolNode> nodes,
-        List<SymbolEdge> edges)
+        List<SymbolEdge> edges,
+        in ProjectWalkContext ctx)
     {
         var members = ns.GetMembers()
             .OrderBy(m => m.GetDocumentationCommentId() ?? m.ToDisplayString(), StringComparer.Ordinal);
@@ -300,7 +414,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         {
             if (member is INamespaceSymbol childNs)
             {
-                WalkNamespaceInline(childNs, nodes, edges);
+                WalkNamespaceInline(childNs, nodes, edges, in ctx);
             }
             else if (member is INamedTypeSymbol typeSymbol)
             {
@@ -309,7 +423,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
                 var typeNode = CreateSimpleNode(typeSymbol);
                 nodes.Add(typeNode);
-                WalkTypeInline(typeSymbol, typeNode.Id, nodes, edges);
+                WalkTypeInline(typeSymbol, typeNode.Id, nodes, edges, in ctx);
             }
         }
     }
@@ -318,19 +432,26 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         INamedTypeSymbol type,
         SymbolId typeId,
         List<SymbolNode> nodes,
-        List<SymbolEdge> edges)
+        List<SymbolEdge> edges,
+        in ProjectWalkContext ctx)
     {
         // Inheritance edge
         if (type.BaseType is not null && type.BaseType.SpecialType != SpecialType.System_Object)
         {
             var baseId = GetSymbolId(type.BaseType);
-            edges.Add(new SymbolEdge(typeId, baseId, SymbolEdgeKind.Inherits));
+            var scope = ClassifyScope(type.BaseType, ctx.ProjectName, ctx.SolutionProjectNames);
+            edges.Add(new SymbolEdge(typeId, baseId, SymbolEdgeKind.Inherits, scope));
+            if (scope == EdgeScope.External)
+                MaybeAddStubNode(type.BaseType, in ctx);
         }
 
         // Interface edges
         foreach (var iface in type.Interfaces)
         {
-            edges.Add(new SymbolEdge(typeId, GetSymbolId(iface), SymbolEdgeKind.Implements));
+            var scope = ClassifyScope(iface, ctx.ProjectName, ctx.SolutionProjectNames);
+            edges.Add(new SymbolEdge(typeId, GetSymbolId(iface), SymbolEdgeKind.Implements, scope));
+            if (scope == EdgeScope.External)
+                MaybeAddStubNode(iface, in ctx);
         }
 
         // Nested types
@@ -341,7 +462,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             var nestedNode = CreateSimpleNode(nested);
             nodes.Add(nestedNode);
             edges.Add(new SymbolEdge(typeId, nestedNode.Id, SymbolEdgeKind.Contains));
-            WalkTypeInline(nested, nestedNode.Id, nodes, edges);
+            WalkTypeInline(nested, nestedNode.Id, nodes, edges, in ctx);
         }
 
         // Members
@@ -354,6 +475,131 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             edges.Add(new SymbolEdge(typeId, memberNode.Id, SymbolEdgeKind.Contains));
         }
     }
+
+    // ── Edge scope classification ────────────────────────────────────────────
+
+    private static EdgeScope ClassifyScope(
+        ITypeSymbol targetType,
+        string currentProjectName,
+        HashSet<string> solutionProjectNames)
+    {
+        var assemblyName = targetType.ContainingAssembly?.Name;
+        if (assemblyName is null)
+            return EdgeScope.External;
+        if (!solutionProjectNames.Contains(assemblyName))
+            return EdgeScope.External;
+        if (!string.Equals(assemblyName, currentProjectName, StringComparison.OrdinalIgnoreCase))
+            return EdgeScope.CrossProject;
+        return EdgeScope.IntraProject;
+    }
+
+    // ── Stub node synthesis ──────────────────────────────────────────────────
+
+    private static bool IsPrimitive(ITypeSymbol type)
+    {
+        var fqn = type.OriginalDefinition.ToDisplayString();
+        return s_primitiveTypeNames.Contains(fqn);
+    }
+
+    private static void MaybeAddStubNode(ITypeSymbol externalType, in ProjectWalkContext ctx)
+    {
+        if (IsPrimitive(externalType))
+            return;
+
+        var originalDef = externalType.OriginalDefinition;
+        var id = GetSymbolId(originalDef);
+
+        // Deduplicate across projects
+        if (!ctx.SeenStubIds.Add(id.Value))
+            return;
+
+        var stubNode = new SymbolNode(
+            Id: id,
+            Kind: CoreSymbolKind.Type,
+            DisplayName: originalDef.Name,
+            FullyQualifiedName: originalDef.ToDisplayString(),
+            PreviousIds: Array.Empty<SymbolId>(),
+            Accessibility: Core.Accessibility.Public,
+            Docs: null,
+            Span: null,
+            ReturnType: null,
+            Parameters: Array.Empty<ParameterInfo>(),
+            GenericConstraints: Array.Empty<GenericConstraint>(),
+            ProjectOrigin: externalType.ContainingAssembly?.Name,
+            NodeKind: NodeKind.Stub);
+
+        ctx.StubNodes.Add(stubNode);
+    }
+
+    // ── Cycle detection ──────────────────────────────────────────────────────
+
+    private static List<List<string>> DetectCycles(IReadOnlyList<ProjectEdge> edges)
+    {
+        // Build adjacency list
+        var graph = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var edge in edges)
+        {
+            if (!graph.TryGetValue(edge.From, out var neighbors))
+            {
+                neighbors = new List<string>();
+                graph[edge.From] = neighbors;
+            }
+            neighbors.Add(edge.To);
+        }
+
+        var cycles = new List<List<string>>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var inStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var path = new List<string>();
+
+        foreach (var node in graph.Keys)
+        {
+            if (!visited.Contains(node))
+                DfsCycleDetect(node, graph, visited, inStack, path, cycles);
+        }
+
+        return cycles;
+    }
+
+    private static void DfsCycleDetect(
+        string node,
+        Dictionary<string, List<string>> graph,
+        HashSet<string> visited,
+        HashSet<string> inStack,
+        List<string> path,
+        List<List<string>> cycles)
+    {
+        visited.Add(node);
+        inStack.Add(node);
+        path.Add(node);
+
+        if (graph.TryGetValue(node, out var neighbors))
+        {
+            foreach (var neighbor in neighbors)
+            {
+                if (!visited.Contains(neighbor))
+                {
+                    DfsCycleDetect(neighbor, graph, visited, inStack, path, cycles);
+                }
+                else if (inStack.Contains(neighbor))
+                {
+                    // Found a cycle — extract the cycle path
+                    var cycleStart = path.IndexOf(neighbor);
+                    if (cycleStart >= 0)
+                    {
+                        var cycle = new List<string>(path.Skip(cycleStart));
+                        cycle.Add(neighbor); // close the cycle
+                        cycles.Add(cycle);
+                    }
+                }
+            }
+        }
+
+        path.RemoveAt(path.Count - 1);
+        inStack.Remove(node);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static SymbolNode CreateSimpleNode(ISymbol symbol)
     {
@@ -464,4 +710,17 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
+
+    // ── Inner types ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Context passed through the namespace/type walk for a single project.
+    /// Carries the project name and solution-level state for edge classification
+    /// and stub node accumulation.
+    /// </summary>
+    private readonly record struct ProjectWalkContext(
+        string ProjectName,
+        HashSet<string> SolutionProjectNames,
+        List<SymbolNode> StubNodes,
+        HashSet<string> SeenStubIds);
 }

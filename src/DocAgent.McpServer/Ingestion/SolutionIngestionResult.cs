@@ -1,3 +1,5 @@
+using DocAgent.Core;
+
 namespace DocAgent.McpServer.Ingestion;
 
 /// <summary>
@@ -29,6 +31,7 @@ public sealed record ProjectIngestionStatus(
 /// <param name="Duration">Wall-clock time for the ingestion run.</param>
 /// <param name="Projects">Per-project status details.</param>
 /// <param name="Warnings">Non-fatal warnings accumulated during ingestion (e.g., MSBuildWorkspace diagnostics).</param>
+/// <param name="Snapshot">Optional solution-level snapshot with project DAG and per-project symbol snapshots. Null for legacy results.</param>
 public sealed record SolutionIngestionResult(
     string SnapshotId,
     string SolutionName,
@@ -38,4 +41,5 @@ public sealed record SolutionIngestionResult(
     int TotalEdgeCount,
     TimeSpan Duration,
     IReadOnlyList<ProjectIngestionStatus> Projects,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    SolutionSnapshot? Snapshot = null);
