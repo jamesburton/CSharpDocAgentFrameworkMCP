@@ -46,7 +46,7 @@ Full details: milestones/v1.1-ROADMAP.md
 - [x] **Phase 15: Project-Aware Indexing & Query** — Thread project attribution through BM25 index and query service (completed 2026-03-01)
 - [x] **Phase 16: Solution MCP Tools** — Expose solution-level tools and update existing tools with solution awareness (completed 2026-03-02)
 - [ ] **Phase 17: Incremental Solution Re-ingestion** — Re-ingest only changed projects within a solution
-- [ ] **Phase 18: Fix diff_snapshots Tool Name Collision** — Rename SolutionTools.DiffSnapshots to resolve duplicate MCP tool name (gap closure)
+- [x] **Phase 18: Fix diff_snapshots Tool Name Collision** — Rename SolutionTools.DiffSnapshots to resolve duplicate MCP tool name (gap closure) (completed 2026-03-02)
 
 ## Phase Details
 
@@ -146,7 +146,7 @@ Plans:
   2. MCP server starts without errors when both DocTools and SolutionTools are registered via `WithToolsFromAssembly()`
   3. All existing unit tests pass with the renamed tool
   4. `diff_snapshots` (DocTools, Phase 5) continues to work unchanged
-**Plans:** 0/?
+**Plans:** 1/1 plans complete
 
 ## Progress
 
@@ -170,4 +170,4 @@ Plans:
 | 15. Project-Aware Indexing & Query | 2/2 | Complete    | 2026-03-01 | - |
 | 16. Solution MCP Tools | 2/2 | Complete    | 2026-03-02 | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
-| 18. Fix diff_snapshots Tool Name Collision | v1.2 | 0/? | Not started | - |
+| 18. Fix diff_snapshots Tool Name Collision | 1/1 | Complete   | 2026-03-02 | - |

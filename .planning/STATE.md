@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Multi-Project & Solution-Level Graphs
 status: unknown
-last_updated: "2026-03-02T11:15:20.641Z"
+last_updated: "2026-03-02T12:10:28.082Z"
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 11
+  completed_plans: 11
 ---
 
 # Project State
@@ -64,6 +64,7 @@ Recent decisions affecting v1.2:
 - [Phase 16-02]: ExtractProjectSnapshot filters IntraProject edges with From-or-To membership — same inclusive rule as explain_solution edge counting
 - [Phase 16-02]: Cross-project edge equality keyed on (From.Value, To.Value, Kind) — Scope excluded since all are CrossProject by definition
 - [Phase 16-02]: FormatEdgeEndpoint uses Project::SymbolId format; falls back to bare symbolId if node not in map
+- [Phase 18-fix-diff-snapshots-collision]: SolutionTools.DiffSnapshots wire name changed to diff_solution_snapshots; C# method name unchanged
 
 ### Pending Todos
 
