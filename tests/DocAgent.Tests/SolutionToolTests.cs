@@ -322,4 +322,212 @@ public sealed class SolutionToolTests : IDisposable
         errProp.GetString().Should().Be("not_found");
         root.GetProperty("message").GetString().Should().Contain("Solution not found");
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // diff_snapshots tests
+    // ─────────────────────────────────────────────────────────────────
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 8: surviving projects with symbol added returns per-project diffs
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DiffSnapshots_SurvivingProjects_ReturnsPerProjectDiffs()
+    {
+        // Arrange: before has 2 projects with 1 node each; after adds 1 node to ProjectA
+        var beforeNodes = new[]
+        {
+            BuildNode("ProjectA.TypeA1", "ProjectA", SymbolKind.Type),
+            BuildNode("ProjectB.TypeB1", "ProjectB", SymbolKind.Type),
+        };
+        var afterNodes = new[]
+        {
+            BuildNode("ProjectA.TypeA1", "ProjectA", SymbolKind.Type),
+            BuildNode("ProjectA.TypeA2", "ProjectA", SymbolKind.Method),  // added
+            BuildNode("ProjectB.TypeB1", "ProjectB", SymbolKind.Type),
+        };
+
+        var beforeSnapshot = BuildSolutionSnapshot("MySolution", beforeNodes, []);
+        var afterSnapshot = BuildSolutionSnapshot("MySolution", afterNodes, []);
+
+        var savedBefore = await _store.SaveAsync(beforeSnapshot);
+        var savedAfter = await _store.SaveAsync(afterSnapshot);
+        var tools = CreateTools();
+
+        // Act
+        var json = await tools.DiffSnapshots(savedBefore.ContentHash!, savedAfter.ContentHash!);
+        var root = Parse(json);
+
+        // Assert
+        root.TryGetProperty("error", out _).Should().BeFalse("should not be an error");
+        root.GetProperty("before").GetString().Should().Be(savedBefore.ContentHash);
+        root.GetProperty("after").GetString().Should().Be(savedAfter.ContentHash);
+
+        var projectDiffs = root.GetProperty("projectDiffs");
+        projectDiffs.TryGetProperty("ProjectA", out var projA).Should().BeTrue("ProjectA should have diff");
+        projA.GetProperty("added").GetInt32().Should().Be(1, "ProjectA.TypeA2 was added");
+
+        projectDiffs.TryGetProperty("ProjectB", out var projB).Should().BeTrue("ProjectB should have diff");
+        projB.GetProperty("added").GetInt32().Should().Be(0, "nothing added to ProjectB");
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 9: project added between snapshots
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DiffSnapshots_ProjectAdded_ReportsInProjectsAdded()
+    {
+        // Arrange: before has 1 project; after has 2 projects
+        var beforeNodes = new[] { BuildNode("ProjectA.TypeA", "ProjectA", SymbolKind.Type) };
+        var afterNodes = new[]
+        {
+            BuildNode("ProjectA.TypeA", "ProjectA", SymbolKind.Type),
+            BuildNode("ProjectB.TypeB", "ProjectB", SymbolKind.Type),
+        };
+
+        var beforeSnapshot = BuildSolutionSnapshot("MySolution", beforeNodes, []);
+        var afterSnapshot = BuildSolutionSnapshot("MySolution", afterNodes, []);
+
+        var savedBefore = await _store.SaveAsync(beforeSnapshot);
+        var savedAfter = await _store.SaveAsync(afterSnapshot);
+        var tools = CreateTools();
+
+        // Act
+        var json = await tools.DiffSnapshots(savedBefore.ContentHash!, savedAfter.ContentHash!);
+        var root = Parse(json);
+
+        // Assert
+        root.TryGetProperty("error", out _).Should().BeFalse();
+        var projectsAdded = root.GetProperty("projectsAdded").EnumerateArray()
+            .Select(e => e.GetString()).ToList();
+        projectsAdded.Should().Contain("ProjectB");
+        root.GetProperty("projectsRemoved").GetArrayLength().Should().Be(0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 10: project removed between snapshots
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DiffSnapshots_ProjectRemoved_ReportsInProjectsRemoved()
+    {
+        // Arrange: before has 2 projects; after removes ProjectB
+        var beforeNodes = new[]
+        {
+            BuildNode("ProjectA.TypeA", "ProjectA", SymbolKind.Type),
+            BuildNode("ProjectB.TypeB", "ProjectB", SymbolKind.Type),
+        };
+        var afterNodes = new[] { BuildNode("ProjectA.TypeA", "ProjectA", SymbolKind.Type) };
+
+        var beforeSnapshot = BuildSolutionSnapshot("MySolution", beforeNodes, []);
+        var afterSnapshot = BuildSolutionSnapshot("MySolution", afterNodes, []);
+
+        var savedBefore = await _store.SaveAsync(beforeSnapshot);
+        var savedAfter = await _store.SaveAsync(afterSnapshot);
+        var tools = CreateTools();
+
+        // Act
+        var json = await tools.DiffSnapshots(savedBefore.ContentHash!, savedAfter.ContentHash!);
+        var root = Parse(json);
+
+        // Assert
+        root.TryGetProperty("error", out _).Should().BeFalse();
+        var projectsRemoved = root.GetProperty("projectsRemoved").EnumerateArray()
+            .Select(e => e.GetString()).ToList();
+        projectsRemoved.Should().Contain("ProjectB");
+        root.GetProperty("projectsAdded").GetArrayLength().Should().Be(0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 11: cross-project edge added
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DiffSnapshots_CrossProjectEdgeAdded_ReportsInCrossProjectSection()
+    {
+        // Arrange: before has no cross-project edges; after adds one
+        var nodes = new[]
+        {
+            BuildNode("ProjectA.TypeA", "ProjectA", SymbolKind.Type),
+            BuildNode("ProjectB.TypeB", "ProjectB", SymbolKind.Type),
+        };
+
+        var beforeSnapshot = BuildSolutionSnapshot("MySolution", nodes, []);
+        var afterEdges = new[] { BuildEdge("ProjectA.TypeA", "ProjectB.TypeB", EdgeScope.CrossProject) };
+        var afterSnapshot = BuildSolutionSnapshot("MySolution", nodes, afterEdges);
+
+        var savedBefore = await _store.SaveAsync(beforeSnapshot);
+        var savedAfter = await _store.SaveAsync(afterSnapshot);
+        var tools = CreateTools();
+
+        // Act
+        var json = await tools.DiffSnapshots(savedBefore.ContentHash!, savedAfter.ContentHash!);
+        var root = Parse(json);
+
+        // Assert
+        root.TryGetProperty("error", out _).Should().BeFalse();
+        var added = root.GetProperty("crossProjectEdgeChanges").GetProperty("added");
+        added.GetArrayLength().Should().Be(1, "one cross-project edge was added");
+
+        var edge = added.EnumerateArray().First();
+        edge.GetProperty("from").GetString().Should().Contain("ProjectA");
+        edge.GetProperty("to").GetString().Should().Contain("ProjectB");
+
+        var removed = root.GetProperty("crossProjectEdgeChanges").GetProperty("removed");
+        removed.GetArrayLength().Should().Be(0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 12: PathAllowlist denied returns opaque denial on diff_snapshots
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DiffSnapshots_PathAllowlistDenied_ReturnsOpaqueDenial()
+    {
+        // Arrange: save snapshots, then use restricted allowlist
+        var nodes = new[] { BuildNode("ProjectA.Type", "ProjectA", SymbolKind.Type) };
+        var snapshot = BuildSolutionSnapshot("DeniedSolution", nodes, []);
+        var saved = await _store.SaveAsync(snapshot);
+
+        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        var tools = CreateTools(allowlist);
+
+        // Act
+        var json = await tools.DiffSnapshots(saved.ContentHash!, saved.ContentHash!);
+        var root = Parse(json);
+
+        // Assert: opaque error
+        root.TryGetProperty("error", out var errProp).Should().BeTrue();
+        errProp.GetString().Should().Be("not_found");
+        root.GetProperty("message").GetString().Should().Be("Solution not found.");
+        json.Should().NotContain("allowlist");
+        json.Should().NotContain(_tempDir);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 13: missing snapshot hash returns not found
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DiffSnapshots_MissingSnapshot_ReturnsNotFound()
+    {
+        // Arrange: save one valid snapshot; use non-existent hash for the other
+        var nodes = new[] { BuildNode("ProjectA.Type", "ProjectA", SymbolKind.Type) };
+        var snapshot = BuildSolutionSnapshot("MySolution", nodes, []);
+        var saved = await _store.SaveAsync(snapshot);
+        var tools = CreateTools();
+
+        // Act — bad before hash
+        var json1 = await tools.DiffSnapshots("non-existent-hash-000000", saved.ContentHash!);
+        var root1 = Parse(json1);
+        root1.TryGetProperty("error", out var err1).Should().BeTrue();
+        err1.GetString().Should().Be("not_found");
+
+        // Act — bad after hash
+        var json2 = await tools.DiffSnapshots(saved.ContentHash!, "non-existent-hash-000000");
+        var root2 = Parse(json2);
+        root2.TryGetProperty("error", out var err2).Should().BeTrue();
+        err2.GetString().Should().Be("not_found");
+    }
 }
