@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DocAgent.Core;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
@@ -457,5 +458,238 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         second.TotalProjectCount.Should().Be(3);
         second.Projects.Should().AllSatisfy(p => p.Status.Should().Be("ok"));
         second.ProjectsReingestedCount.Should().Be(3);
+    }
+
+    // ── Production Path Tests (no PipelineOverride) ──────────────────────────
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true
+    };
+
+    /// <summary>
+    /// Creates a real project directory with .cs files, saves snapshot + manifests + pointer
+    /// so the production path has real state to work with.
+    /// </summary>
+    private async Task<(string slnPath, SolutionIngestionService fullSvc, IncrementalSolutionIngestionService incrSvc)>
+        SetupProductionPathAsync(
+            IReadOnlyList<ProjectEntry> projects,
+            IReadOnlyList<ProjectEdge> projectEdges,
+            IReadOnlyList<SymbolNode> nodes,
+            IReadOnlyList<SymbolEdge> edges)
+    {
+        // Create real project directories with .cs files
+        var slnPath = Path.Combine(_tempDir, "Test.sln");
+        await File.WriteAllTextAsync(slnPath, "# fake sln");
+
+        foreach (var project in projects)
+        {
+            var projDir = Path.GetDirectoryName(project.Path)!;
+            Directory.CreateDirectory(projDir);
+            await File.WriteAllTextAsync(project.Path, $"<Project />");
+
+            // Create a .cs file per project
+            var csFile = Path.Combine(projDir, $"{project.Name}.cs");
+            await File.WriteAllTextAsync(csFile, $"namespace {project.Name} {{ public class Type1 {{ }} }}");
+        }
+
+        // Build per-project snapshots
+        var stubsAssigned = false;
+        var perProjectSnapshots = projects.Select(p =>
+        {
+            var projectNodes = nodes.Where(n => n.ProjectOrigin == p.Name).ToList();
+            if (!stubsAssigned)
+            {
+                projectNodes.AddRange(nodes.Where(n => n.NodeKind == NodeKind.Stub));
+                stubsAssigned = true;
+            }
+            return new SymbolGraphSnapshot("1.2", p.Name, $"fp-{p.Name}", null, DateTimeOffset.UtcNow,
+                projectNodes,
+                edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList(),
+                null, "Test");
+        }).ToList();
+
+        // Save solution snapshot
+        var solutionSnapshot = new SolutionSnapshot("Test", projects, projectEdges, perProjectSnapshots, DateTimeOffset.UtcNow);
+        var solutionSnapshotJson = JsonSerializer.Serialize(solutionSnapshot, s_jsonOptions);
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "latest-Test.solution.json"), solutionSnapshotJson);
+
+        // Save merged SymbolGraphSnapshot via store (for pointer)
+        var merged = new SymbolGraphSnapshot("1.2", "Test", "fp-merged", null, DateTimeOffset.UtcNow,
+            SymbolSorter.SortNodes(nodes.ToList()),
+            SymbolSorter.SortEdges(edges.ToList()),
+            null, "Test");
+        var saved = await _store.SaveAsync(merged);
+
+        // Save pointer file
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "latest-Test.ptr"), saved.ContentHash!);
+
+        // Save per-project manifests
+        foreach (var project in projects)
+        {
+            var refPaths = project.DependsOn
+                .Select(dep => projects.FirstOrDefault(p => p.Name == dep)?.Path ?? string.Empty)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToList();
+
+            var manifest = await SolutionManifestStore.ComputeProjectManifestAsync(
+                project.Path, refPaths, null, CancellationToken.None);
+            await SolutionManifestStore.SaveAsync(_tempDir, slnPath, project.Path, manifest, CancellationToken.None);
+        }
+
+        // Create services
+        var fullSvc = new SolutionIngestionService(
+            _store, new InMemorySearchIndex(), NullLogger<SolutionIngestionService>.Instance);
+        var incrSvc = new IncrementalSolutionIngestionService(
+            _store, fullSvc, NullLogger<IncrementalSolutionIngestionService>.Instance);
+
+        return (slnPath, fullSvc, incrSvc);
+    }
+
+    [Fact]
+    public async Task ProductionPath_NothingChanged_SkipsAll()
+    {
+        // Arrange: two projects with real files on disk, pre-saved state
+        var projects = new List<ProjectEntry>
+        {
+            new("ProjA", Path.Combine(_tempDir, "src", "ProjA", "ProjA.csproj"), []),
+            new("ProjB", Path.Combine(_tempDir, "src", "ProjB", "ProjB.csproj"), []),
+        };
+        var nodes = new List<SymbolNode>
+        {
+            MakeNode("T:ProjA.TypeA", "ProjA"),
+            MakeNode("T:ProjB.TypeB", "ProjB"),
+        };
+
+        var (slnPath, fullSvc, incrSvc) = await SetupProductionPathAsync(projects, [], nodes, []);
+
+        // Set full service to throw if called — proving skip path works
+        fullSvc.PipelineOverride = (_, _, _) =>
+            throw new InvalidOperationException("Full ingest should NOT be called when nothing changed");
+
+        // Act: call IngestAsync WITHOUT PipelineOverride on incremental service
+        var result = await incrSvc.IngestAsync(slnPath, null, CancellationToken.None);
+
+        // Assert
+        result.Projects.Should().AllSatisfy(p =>
+        {
+            p.Status.Should().Be("skipped");
+            p.Reason.Should().Be("unchanged");
+        });
+        result.ProjectsSkippedCount.Should().Be(2);
+        result.IngestedProjectCount.Should().Be(0);
+        result.Snapshot.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ProductionPath_FileChanged_DelegatesToFullIngest()
+    {
+        // Arrange
+        var projects = new List<ProjectEntry>
+        {
+            new("ProjA", Path.Combine(_tempDir, "src", "ProjA", "ProjA.csproj"), []),
+        };
+        var nodes = new List<SymbolNode> { MakeNode("T:ProjA.TypeA", "ProjA") };
+
+        var (slnPath, fullSvc, incrSvc) = await SetupProductionPathAsync(projects, [], nodes, []);
+
+        // Modify a .cs file so manifest changes
+        var csFile = Path.Combine(_tempDir, "src", "ProjA", "ProjA.cs");
+        await File.WriteAllTextAsync(csFile, "namespace ProjA { public class TypeA { public int NewProp { get; set; } } }");
+
+        // Set full service to return a controlled result
+        bool fullIngestCalled = false;
+        fullSvc.PipelineOverride = (sln, warnings, ct) =>
+        {
+            fullIngestCalled = true;
+            var snapshot = new SolutionSnapshot("Test", projects, [], [
+                new SymbolGraphSnapshot("1.2", "ProjA", "fp-ProjA", null, DateTimeOffset.UtcNow, nodes, [], null, "Test")
+            ], DateTimeOffset.UtcNow);
+            var merged = new SymbolGraphSnapshot("1.2", "Test", "fp-new", null, DateTimeOffset.UtcNow, nodes, [], null, "Test");
+            var saved = _store.SaveAsync(merged, ct: ct).GetAwaiter().GetResult();
+            return Task.FromResult(new SolutionIngestionResult(
+                saved.ContentHash ?? "hash", "Test", 1, 1, 1, 0, TimeSpan.FromMilliseconds(10),
+                [OkStatus("ProjA", 1)], [], snapshot));
+        };
+
+        // Act
+        var result = await incrSvc.IngestAsync(slnPath, null, CancellationToken.None);
+
+        // Assert
+        fullIngestCalled.Should().BeTrue("dirty set non-empty should trigger full ingest");
+        result.Projects.Should().Contain(p => p.Status == "ok");
+    }
+
+    [Fact]
+    public async Task ProductionPath_NothingChanged_PreservesStubs()
+    {
+        // Arrange: project with stubs, pre-saved on disk
+        var projects = new List<ProjectEntry>
+        {
+            new("ProjA", Path.Combine(_tempDir, "src", "ProjA", "ProjA.csproj"), []),
+        };
+        var stubNode = MakeNode("T:ExternalLib.IFoo", "ExternalLib", NodeKind.Stub);
+        var realNode = MakeNode("T:ProjA.MyClass", "ProjA");
+        var stubEdge = MakeEdge("T:ProjA.MyClass", "T:ExternalLib.IFoo", SymbolEdgeKind.Implements, EdgeScope.External);
+
+        var (slnPath, fullSvc, incrSvc) = await SetupProductionPathAsync(
+            projects, [], [realNode, stubNode], [stubEdge]);
+
+        // Full service should NOT be called
+        fullSvc.PipelineOverride = (_, _, _) =>
+            throw new InvalidOperationException("Full ingest should NOT be called");
+
+        // Act
+        var result = await incrSvc.IngestAsync(slnPath, null, CancellationToken.None);
+
+        // Assert: stubs preserved in the returned snapshot
+        result.Snapshot.Should().NotBeNull();
+        var allNodes = result.Snapshot!.ProjectSnapshots.SelectMany(s => s.Nodes).ToList();
+        allNodes.Should().Contain(n => n.NodeKind == NodeKind.Stub,
+            "stubs from skipped projects must be preserved in production skip path");
+        result.ProjectsSkippedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ProductionPath_NoPreviousSnapshot_DelegatesToFullIngest()
+    {
+        // Arrange: create services with NO pre-saved state
+        var slnPath = Path.Combine(_tempDir, "Test.sln");
+        await File.WriteAllTextAsync(slnPath, "# fake sln");
+
+        var fullSvc = new SolutionIngestionService(
+            _store, new InMemorySearchIndex(), NullLogger<SolutionIngestionService>.Instance);
+        var incrSvc = new IncrementalSolutionIngestionService(
+            _store, fullSvc, NullLogger<IncrementalSolutionIngestionService>.Instance);
+
+        bool fullIngestCalled = false;
+        var projects = new List<ProjectEntry>
+        {
+            new("ProjA", Path.Combine(_tempDir, "src", "ProjA", "ProjA.csproj"), []),
+        };
+        var projDir = Path.GetDirectoryName(projects[0].Path)!;
+        Directory.CreateDirectory(projDir);
+        await File.WriteAllTextAsync(projects[0].Path, "<Project />");
+
+        fullSvc.PipelineOverride = (sln, warnings, ct) =>
+        {
+            fullIngestCalled = true;
+            var nodes = new List<SymbolNode> { MakeNode("T:ProjA.TypeA", "ProjA") };
+            var snapshot = new SolutionSnapshot("Test", projects, [],
+                [new SymbolGraphSnapshot("1.2", "ProjA", "fp", null, DateTimeOffset.UtcNow, nodes, [], null, "Test")],
+                DateTimeOffset.UtcNow);
+            var merged = new SymbolGraphSnapshot("1.2", "Test", "fp", null, DateTimeOffset.UtcNow, nodes, [], null, "Test");
+            var saved = _store.SaveAsync(merged, ct: ct).GetAwaiter().GetResult();
+            return Task.FromResult(new SolutionIngestionResult(
+                saved.ContentHash ?? "hash", "Test", 1, 1, 1, 0, TimeSpan.FromMilliseconds(10),
+                [OkStatus("ProjA", 1)], [], snapshot));
+        };
+
+        // Act
+        var result = await incrSvc.IngestAsync(slnPath, null, CancellationToken.None);
+
+        // Assert
+        fullIngestCalled.Should().BeTrue("no previous snapshot should trigger full ingest");
     }
 }
