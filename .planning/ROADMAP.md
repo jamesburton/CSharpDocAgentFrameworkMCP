@@ -155,5 +155,5 @@ Plans:
 | 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
 | 14.1 Solution Graph Enrichment | 2/2 | Complete    | 2026-03-01 | - |
 | 15. Project-Aware Indexing & Query | 2/2 | Complete    | 2026-03-01 | - |
-| 16. Solution MCP Tools | 2/2 | Complete   | 2026-03-02 | - |
+| 16. Solution MCP Tools | 2/2 | Complete    | 2026-03-02 | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
