@@ -74,10 +74,12 @@ Known gap: Phase 17 (Incremental Solution Re-ingestion / INGEST-05) deferred to 
   3. Per-project manifests use path-based keys so two projects with the same name in different directories never collide
   4. Stub nodes from the prior ingestion are correctly regenerated after an incremental run — no accumulation of stale stubs
   5. Incremental solution result is byte-identical to a full re-ingestion when no files changed (verified by determinism test)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 19-01: TBD
+- [ ] 19-01-PLAN.md — SolutionManifestStore + DependencyCascade helpers with tests
+- [ ] 19-02-PLAN.md — IncrementalSolutionIngestionService implementation with stub lifecycle
+- [ ] 19-03-PLAN.md — Byte-identity determinism test (INGEST-05) + telemetry
 
 ### Phase 20: MSBuild Performance Benchmarks
 **Goal**: MSBuild workspace open latency and solution ingestion memory usage are measured, baselined, and guarded against regression
