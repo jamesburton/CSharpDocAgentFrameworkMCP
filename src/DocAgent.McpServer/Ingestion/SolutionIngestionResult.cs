@@ -42,4 +42,11 @@ public sealed record SolutionIngestionResult(
     TimeSpan Duration,
     IReadOnlyList<ProjectIngestionStatus> Projects,
     IReadOnlyList<string> Warnings,
-    SolutionSnapshot? Snapshot = null);
+    SolutionSnapshot? Snapshot = null)
+{
+    /// <summary>Number of projects skipped due to no changes (incremental ingestion).</summary>
+    public int ProjectsSkippedCount => Projects.Count(p => p.Status == "skipped" && p.Reason == "unchanged");
+
+    /// <summary>Number of projects that were re-ingested (dirty or new).</summary>
+    public int ProjectsReingestedCount => Projects.Count(p => p.Status == "ok");
+}

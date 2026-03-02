@@ -108,7 +108,8 @@ public sealed class SolutionIngestionToolTests
         public Task<SolutionIngestionResult> IngestAsync(
             string slnPath,
             Func<int, int, string, Task>? reportProgress,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool forceFullReingest = false)
         {
             WasCalled = true;
             LastPath = slnPath;

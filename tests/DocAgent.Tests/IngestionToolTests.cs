@@ -111,7 +111,8 @@ public sealed class IngestionToolTests
         public Task<SolutionIngestionResult> IngestAsync(
             string slnPath,
             Func<int, int, string, Task>? reportProgress,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool forceFullReingest = false)
             => Task.FromResult(new SolutionIngestionResult(
                 "stub", "stub", 0, 0, 0, 0, TimeSpan.Zero, [], []));
     }

@@ -80,7 +80,8 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
     public async Task<SolutionIngestionResult> IngestAsync(
         string slnPath,
         Func<int, int, string, Task>? reportProgress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceFullReingest = false)
     {
         var sw = Stopwatch.StartNew();
         var warnings = new List<string>();

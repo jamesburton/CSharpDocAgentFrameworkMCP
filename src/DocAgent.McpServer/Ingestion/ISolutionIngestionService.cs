@@ -18,5 +18,6 @@ public interface ISolutionIngestionService
     Task<SolutionIngestionResult> IngestAsync(
         string slnPath,
         Func<int, int, string, Task>? reportProgress,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool forceFullReingest = false);
 }
