@@ -158,6 +158,140 @@ public sealed class SolutionTools
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // Tool: diff_snapshots
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "diff_snapshots")]
+    [Description("Diff two solution snapshots showing per-project changes, projects added/removed, and cross-project edge changes.")]
+    public async Task<string> DiffSnapshots(
+        [Description("Before snapshot version (content hash)")] string before,
+        [Description("After snapshot version (content hash)")] string after,
+        CancellationToken cancellationToken = default)
+    {
+        // PathAllowlist gate
+        if (!_allowlist.IsAllowed(_snapshotStore.ArtifactsDir))
+        {
+            _logger.LogWarning("SolutionTools: snapshot store directory denied by allowlist");
+            return ErrorResponse("Solution not found.");
+        }
+
+        // Load both snapshots
+        var beforeSnapshot = await _snapshotStore.LoadAsync(before, cancellationToken);
+        if (beforeSnapshot is null)
+            return ErrorResponse("Solution not found.");
+
+        var afterSnapshot = await _snapshotStore.LoadAsync(after, cancellationToken);
+        if (afterSnapshot is null)
+            return ErrorResponse("Solution not found.");
+
+        // Group Real nodes by ProjectOrigin for both snapshots
+        var beforeProjects = GroupByProject(beforeSnapshot);
+        var afterProjects = GroupByProject(afterSnapshot);
+
+        // Detect added/removed/surviving projects
+        var beforeProjectNames = new HashSet<string>(beforeProjects.Keys, StringComparer.Ordinal);
+        var afterProjectNames = new HashSet<string>(afterProjects.Keys, StringComparer.Ordinal);
+
+        var projectsAdded = afterProjectNames
+            .Except(beforeProjectNames, StringComparer.Ordinal)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        var projectsRemoved = beforeProjectNames
+            .Except(afterProjectNames, StringComparer.Ordinal)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        var survivingProjects = beforeProjectNames
+            .Intersect(afterProjectNames, StringComparer.Ordinal)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        // Per-project diffs for surviving projects
+        var projectDiffs = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var projectName in survivingProjects)
+        {
+            var beforeProjectSnapshot = ExtractProjectSnapshot(beforeSnapshot, projectName, beforeProjects[projectName]);
+            var afterProjectSnapshot = ExtractProjectSnapshot(afterSnapshot, projectName, afterProjects[projectName]);
+
+            var diff = SymbolGraphDiffer.Diff(beforeProjectSnapshot, afterProjectSnapshot);
+
+            var changes = diff.Changes.Select(c => new
+            {
+                changeType = c.ChangeType.ToString(),
+                category = c.Category.ToString(),
+                severity = c.Severity.ToString(),
+                symbolId = c.SymbolId.Value,
+                description = c.Description,
+            }).ToList();
+
+            projectDiffs[projectName] = new
+            {
+                added = diff.Summary.Added,
+                removed = diff.Summary.Removed,
+                modified = diff.Summary.Modified,
+                changes,
+            };
+        }
+
+        // Cross-project edge diff
+        var beforeCrossEdges = beforeSnapshot.Edges
+            .Where(e => e.Scope == EdgeScope.CrossProject)
+            .ToList();
+
+        var afterCrossEdges = afterSnapshot.Edges
+            .Where(e => e.Scope == EdgeScope.CrossProject)
+            .ToList();
+
+        var beforeEdgeKeys = new HashSet<(string From, string To, SymbolEdgeKind Kind)>(
+            beforeCrossEdges.Select(e => (e.From.Value, e.To.Value, e.Kind)));
+
+        var afterEdgeKeys = new HashSet<(string From, string To, SymbolEdgeKind Kind)>(
+            afterCrossEdges.Select(e => (e.From.Value, e.To.Value, e.Kind)));
+
+        // Build node→project maps for attribution
+        var beforeNodeProject = BuildNodeProjectMap(beforeSnapshot);
+        var afterNodeProject = BuildNodeProjectMap(afterSnapshot);
+
+        var addedCrossEdges = afterCrossEdges
+            .Where(e => !beforeEdgeKeys.Contains((e.From.Value, e.To.Value, e.Kind)))
+            .Select(e => new
+            {
+                from = FormatEdgeEndpoint(e.From.Value, afterNodeProject),
+                to = FormatEdgeEndpoint(e.To.Value, afterNodeProject),
+                kind = e.Kind.ToString(),
+            })
+            .ToList();
+
+        var removedCrossEdges = beforeCrossEdges
+            .Where(e => !afterEdgeKeys.Contains((e.From.Value, e.To.Value, e.Kind)))
+            .Select(e => new
+            {
+                from = FormatEdgeEndpoint(e.From.Value, beforeNodeProject),
+                to = FormatEdgeEndpoint(e.To.Value, beforeNodeProject),
+                kind = e.Kind.ToString(),
+            })
+            .ToList();
+
+        // Build response
+        var result = new
+        {
+            before,
+            after,
+            projectsAdded,
+            projectsRemoved,
+            projectDiffs,
+            crossProjectEdgeChanges = new
+            {
+                added = addedCrossEdges,
+                removed = removedCrossEdges,
+            },
+        };
+
+        return JsonSerializer.Serialize(result, s_jsonOptions);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────
 
@@ -190,6 +324,56 @@ public sealed class SolutionTools
 
         var documented = docCandidates.Count(n => n.Docs?.Summary is not null);
         return Math.Round((double)documented / docCandidates.Count * 100.0, 1);
+    }
+
+    private static Dictionary<string, List<SymbolNode>> GroupByProject(SymbolGraphSnapshot snapshot)
+    {
+        var result = new Dictionary<string, List<SymbolNode>>(StringComparer.Ordinal);
+        foreach (var node in snapshot.Nodes.Where(n => n.NodeKind == NodeKind.Real))
+        {
+            var proj = node.ProjectOrigin ?? snapshot.ProjectName;
+            if (!result.TryGetValue(proj, out var list))
+                result[proj] = list = new List<SymbolNode>();
+            list.Add(node);
+        }
+        return result;
+    }
+
+    private static SymbolGraphSnapshot ExtractProjectSnapshot(
+        SymbolGraphSnapshot flat,
+        string projectName,
+        IReadOnlyList<SymbolNode> nodes)
+    {
+        var nodeIdSet = new HashSet<string>(
+            nodes.Select(n => n.Id.Value),
+            StringComparer.Ordinal);
+
+        var intraEdges = flat.Edges
+            .Where(e => e.Scope == EdgeScope.IntraProject
+                && (nodeIdSet.Contains(e.From.Value) || nodeIdSet.Contains(e.To.Value)))
+            .ToList();
+
+        return flat with
+        {
+            ProjectName = projectName,
+            Nodes = nodes.ToList(),
+            Edges = intraEdges,
+        };
+    }
+
+    private static Dictionary<string, string> BuildNodeProjectMap(SymbolGraphSnapshot snapshot)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var node in snapshot.Nodes.Where(n => n.NodeKind == NodeKind.Real))
+            map[node.Id.Value] = node.ProjectOrigin ?? snapshot.ProjectName;
+        return map;
+    }
+
+    private static string FormatEdgeEndpoint(string symbolId, Dictionary<string, string> nodeProjectMap)
+    {
+        if (nodeProjectMap.TryGetValue(symbolId, out var project))
+            return $"{project}::{symbolId}";
+        return symbolId;
     }
 
     private string ErrorResponse(string message)
