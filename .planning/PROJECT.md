@@ -2,11 +2,11 @@
 
 ## What This Is
 
-A .NET 10 / C# framework that turns code documentation (XML docs) and code structure (Roslyn symbols) into agent-consumable memory, exposed via a securable MCP server. Agents reason over compiler truth — not approximations — through a versioned, diffable symbol graph and narrow tool surface.
+A .NET 10 / C# framework that turns code documentation (XML docs) and code structure (Roslyn symbols) into agent-consumable memory, exposed via a securable MCP server. Agents reason over compiler truth — not approximations — through a versioned, diffable symbol graph with solution-wide scope and narrow tool surface.
 
 ## Core Value
 
-Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
+Agents can query a stable, compiler-grade symbol graph of any .NET codebase — from single projects to entire solutions — via MCP tools, getting precise answers about types, members, relationships, and documentation.
 
 ## Requirements
 
@@ -23,31 +23,27 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 - ✓ Roslyn analyzers that detect suspicious edits (semantic changes without doc/test updates) — v1.0
 - ✓ Doc coverage policy enforcement for public symbols — v1.0
 - ✓ Runtime ingestion trigger via MCP tool — v1.0
-
 - ✓ Symbol-level semantic diff engine (signature, nullability, constraints, accessibility, dependency changes) — v1.1
 - ✓ Incremental ingestion with SHA-256 file change detection, only changed files re-parsed — v1.1
 - ✓ Unusual Change Review skill: ChangeReviewer with four pattern detectors and severity escalation — v1.1
 - ✓ `review_changes`, `find_breaking_changes`, `explain_change` MCP tools with json/markdown/tron output — v1.1
 - ✓ PathAllowlist security enforcement on all ChangeTools methods — v1.1
+- ✓ Solution-level domain types (SolutionSnapshot, ProjectEntry, ProjectEdge, NodeKind, EdgeScope) with backward compat — v1.2
+- ✓ Ingest entire .sln solutions via `ingest_solution` MCP tool with language filtering, TFM dedup, MSBuild failure handling — v1.2
+- ✓ Cross-project edge classification (EdgeScope.CrossProject) and stub node synthesis for NuGet types — v1.2
+- ✓ Stub node filtering at index time to prevent BM25 search pollution — v1.2
+- ✓ Project-aware search, get_symbol FQN disambiguation, cross-project get_references — v1.2
+- ✓ `explain_solution` MCP tool for solution-level architecture overview — v1.2
+- ✓ `diff_solution_snapshots` MCP tool for solution-level diff — v1.2
+- ✓ PathAllowlist security on all SolutionTools methods — v1.2
 
 ### Active
 
-**Current Milestone: v1.2 Multi-Project & Solution-Level Graphs**
-
-**Goal:** Enable agents to query a unified symbol graph spanning an entire .NET solution, with cross-project dependency tracing and solution-aware MCP tools.
-
-**Target features:**
-- Ingest entire .sln solutions in one shot or add projects incrementally
-- Unified symbol graph spanning all projects with cross-project edges
-- Full graph for local ProjectReferences, stub/metadata nodes for NuGet package types
-- Existing MCP tools (search_symbols, get_references, etc.) become solution-aware
-- New `explain_solution` MCP tool for solution-level architecture overview
-- Cross-project "who calls this?" queries spanning project boundaries
+(No active milestone — use `/gsd:new-milestone` to start v1.3)
 
 ### Out of Scope
 
-- ~~Multi-project / solution-level symbol graphs~~ — **moved to v1.2 Active**
-- ~~Cross-project queries and dependency linking~~ — **moved to v1.2 Active** (NuGet: stub nodes only)
+- Per-project incremental solution re-ingestion — deferred from v1.2 to v1.3 (INGEST-05)
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
 - Non-stdio MCP transports (HTTP, SSE) — deferred to later
@@ -58,13 +54,13 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase via 
 
 ## Context
 
-Shipped v1.1 with ~8,900 LOC source + ~9,250 LOC tests (C#). ~220 passing tests.
+Shipped v1.2 with ~8,170 LOC C#. 303 passing tests.
 
-Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, ModelContextProtocol SDK, Aspire, OpenTelemetry, SHA-256 file hashing.
+Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, SHA-256 file hashing.
 
-Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Tests).
+Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers).
 
-Full pipeline operational: 8 MCP tools (`search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`, `review_changes`, `find_breaking_changes`, `explain_change`) + `ingest_project` trigger. Incremental ingestion re-parses only changed files. All tools secured with PathAllowlist enforcement.
+Full pipeline operational: 11 MCP tools (`search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`, `review_changes`, `find_breaking_changes`, `explain_change`, `ingest_project`, `ingest_solution`, `explain_solution`, `diff_solution_snapshots`) + `ingest_project` / `ingest_solution` triggers. Incremental ingestion re-parses only changed files. All tools secured with PathAllowlist enforcement. Solution-level graphs span entire .sln with cross-project edges and stub nodes.
 
 ## Constraints
 
@@ -93,6 +89,13 @@ Full pipeline operational: 8 MCP tools (`search_symbols`, `get_symbol`, `get_ref
 | SHA-256 file hashing for incremental ingestion | Streaming async, lowercase hex, content-addressed change detection | ✓ Good — precise change detection, proven identical to full re-ingestion |
 | ChangeReviewer as static pure-logic service | No DI needed; four detectors compose cleanly | ✓ Good — 9 tests, easy to extend |
 | Opaque not_found denial for PathAllowlist | Consistent with DocTools/IngestionTools; no information leakage | ✓ Good — unified security pattern across all tool classes |
+| Single flat snapshot for solution ingestion | Preserves existing contracts; per-project sub-snapshots would break consumers | ✓ Good — backward compat maintained |
+| NodeKind.Real=0, EdgeScope.IntraProject=0 as enum defaults | MessagePack backward compat with v1.0/v1.1 artifacts | ✓ Good — old artifacts deserialize correctly |
+| PipelineOverride seam for MSBuild-free tests | Full MSBuild bypass in unit tests; mirrors IngestionService pattern | ✓ Good — 7+ tests with zero MSBuild dependency |
+| Stub nodes capped to direct PackageReference assemblies | Prevents index bloat from transitive closure | ✓ Good — manageable stub count |
+| EdgeScope classified at construction time | No post-classification pass; locked design constraint | ✓ Good — clean single-pass pipeline |
+| explain_solution derives DAG from CrossProject edges at query time | No pre-computed adjacency stored | ✓ Good — always fresh, no stale cache |
+| diff_solution_snapshots wire name (not diff_snapshots) | Avoids tool name collision with DocTools | ✓ Good — 11 unique MCP tool names |
 
 ---
-*Last updated: 2026-03-01 after v1.2 milestone started*
+*Last updated: 2026-03-02 after v1.2 milestone*

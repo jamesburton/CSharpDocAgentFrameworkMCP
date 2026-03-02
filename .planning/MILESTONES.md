@@ -37,3 +37,23 @@
 
 ---
 
+
+## v1.2 Multi-Project & Solution-Level Graphs (Shipped: 2026-03-02)
+
+**Phases completed:** 6 phases, 11 plans, 0 tasks
+
+**Timeline:** 2 days (2026-03-01 → 2026-03-02) | 67 commits | 14 C# files changed, +1,494 LOC
+
+**Key accomplishments:**
+- Extended core domain types with solution-level identity (SolutionSnapshot, ProjectEntry, ProjectEdge, NodeKind, EdgeScope) with full MessagePack backward compatibility
+- Built SolutionIngestionService: ingest entire .sln files with language filtering, TFM dedup, MSBuild failure handling, and PathAllowlist security
+- Enriched solution graphs with cross-project edge classification, project dependency DAG, and stub node synthesis for NuGet types
+- Made BM25 and InMemory indexes project-aware with stub node filtering to prevent search pollution
+- Extended all MCP tools (search_symbols, get_symbol, get_references) with project filtering, FQN disambiguation, and cross-project query support
+- Added explain_solution and diff_solution_snapshots MCP tools for solution-level architecture overview and diffing
+
+### Known Gaps
+- INGEST-05: Per-project incremental re-ingestion (Phase 17 — deferred to v1.3)
+
+---
+

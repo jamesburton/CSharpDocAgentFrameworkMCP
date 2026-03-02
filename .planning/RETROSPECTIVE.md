@@ -89,6 +89,50 @@
 
 ---
 
+## Milestone: v1.2 — Multi-Project & Solution-Level Graphs
+
+**Shipped:** 2026-03-02
+**Phases:** 6 | **Plans:** 11 | **Commits:** 67
+
+### What Was Built
+- Solution-level domain types (SolutionSnapshot, ProjectEntry, ProjectEdge) with backward-compatible MessagePack serialization
+- SolutionIngestionService: ingest entire .sln files with language filtering, TFM dedup, MSBuild failure handling
+- Cross-project edge classification and stub node synthesis for NuGet type references
+- Stub node filtering at index time (BM25 + InMemory) to prevent search pollution
+- Project-aware MCP tools: project filter, FQN disambiguation, cross-project references
+- Two new MCP tools (explain_solution, diff_solution_snapshots) for solution-level architecture overview and diffing
+- 303 passing tests (83 new across 6 phases)
+
+### What Worked
+- Gap closure phases (14.1 and 18) integrated cleanly — audit-driven pattern now well-established
+- PipelineOverride seam pattern enabled comprehensive testing of SolutionIngestionService without MSBuild dependency
+- Building on v1.1 patterns (opaque denial, tool class structure) kept SolutionTools consistent
+- Re-audit after Phase 18 gave clean confirmation before milestone completion
+
+### What Was Inefficient
+- Phase 17 (incremental solution re-ingestion) was scoped into v1.2 but never started — should have been flagged as stretch goal earlier
+- ROADMAP.md Phase Details had duplicate plan listings for Phases 16 and 17 (copy-paste from Phase 15)
+- Traceability table in REQUIREMENTS.md showed some GRAPH requirements as "Partial" even after Phase 14.1 completed them
+
+### Patterns Established
+- ProjectWalkContext readonly record struct for shared state across solution project walks
+- Primitive framework type filter (30 common types) to cap stub node count
+- ExtractProjectSnapshot helper for decomposing flat snapshots back into per-project views
+- FQN heuristic: input without pipe `|` treated as FQN candidate (SymbolIds always contain `|`)
+
+### Key Lessons
+1. Milestone audits continue to prove value — Phase 14.1 (gap closure) and Phase 18 (tool name collision) both created by audit findings
+2. Scope management: defer stretch goals early rather than leaving them as unstarted phases at milestone completion
+3. Wire name collisions between tool classes should be caught by automated registration tests, not manual audit
+4. PipelineOverride/BuildOverride seam pattern is the gold standard for testing services that wrap expensive external tools (MSBuild, Roslyn)
+
+### Cost Observations
+- Model mix: primarily sonnet for execution, opus for planning/verification/audit
+- Timeline: 2 days (2026-03-01 → 2026-03-02) for 6 phases, 11 plans
+- Notable: Gap closure phases (14.1 and 18) were small and fast — audit-driven micro-phases work well
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -97,6 +141,7 @@
 |-----------|---------|--------|------------|
 | v1.0 | 121 | 8 | Established full GSD workflow with audit-driven gap closure |
 | v1.1 | 44 | 4 | Smaller scope, audit-driven gap closure pattern repeated |
+| v1.2 | 67 | 6 | Gap closure phases (14.1, 18) as first-class workflow; deferred stretch goal |
 
 ### Cumulative Quality
 
@@ -104,9 +149,11 @@
 |-----------|-------|-----------|-------------|
 | v1.0 | 177 | 4,391 | 4,747 |
 | v1.1 | ~220 | ~8,900 | ~9,250 |
+| v1.2 | 303 | ~8,170 | — |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. Milestone audits catch integration gaps that per-phase testing misses (v1.0: env var + forceReindex, v1.1: PathAllowlist gap)
+1. Milestone audits catch integration gaps that per-phase testing misses (v1.0: env var + forceReindex, v1.1: PathAllowlist gap, v1.2: tool name collision + graph enrichment gaps)
 2. E2E tests through real DI are the strongest proof of pipeline correctness
 3. Pure static services are the right default for algorithmic code — verified across SymbolGraphDiffer, ChangeReviewer, FileHasher
+4. Seam-based test isolation (PipelineOverride, BuildOverride) enables comprehensive testing of expensive-dependency services — verified across v1.1 and v1.2
