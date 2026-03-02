@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 16 of 17 (Solution MCP Tools) — IN PROGRESS
-Current Plan: 16-01 COMPLETE (SolutionTools explain_solution)
-Next Plan: 16-02
-Last activity: 2026-03-02 — Phase 16 Plan 01 complete: SolutionTools with explain_solution tool (per-project stats, DAG derivation, stub count, single-project detection); 7 new tests; 297 total passing
+Current Plan: 16-02 COMPLETE (SolutionTools diff_snapshots)
+Next Plan: Phase 16 COMPLETE — Phase 17
+Last activity: 2026-03-02 — Phase 16 Plan 02 complete: diff_snapshots MCP tool added to SolutionTools (per-project diffs, projects added/removed, cross-project edge attribution); 6 new tests; 293 total passing
 
 Progress: [████████░░░░░░░░░░░░] ~50% (14/17 phases)
 
@@ -61,6 +61,9 @@ Recent decisions affecting v1.2:
 - [Phase 16-01]: isSingleProject detection via unique ProjectOrigin count <= 1 (null ProjectOrigin falls back to snapshot.ProjectName)
 - [Phase 16-01]: Doc coverage counts only public/protected/protectedInternal nodes of kinds: Type, Method, Property, Constructor, Delegate, Event, Field
 - [Phase 16-01]: Stub nodes excluded from project stats — counted globally as totalStubNodeCount only
+- [Phase 16-02]: ExtractProjectSnapshot filters IntraProject edges with From-or-To membership — same inclusive rule as explain_solution edge counting
+- [Phase 16-02]: Cross-project edge equality keyed on (From.Value, To.Value, Kind) — Scope excluded since all are CrossProject by definition
+- [Phase 16-02]: FormatEdgeEndpoint uses Project::SymbolId format; falls back to bare symbolId if node not in map
 
 ### Pending Todos
 
@@ -74,5 +77,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Phase 16 Plan 01 complete (SolutionTools explain_solution: per-project stats, DAG derivation, stub count, single-project detection; 7 new tests; 297 total passing).
+Stopped at: Phase 16 Plan 02 complete (SolutionTools diff_snapshots: per-project diffs via SymbolGraphDiffer, projects added/removed, cross-project edge attribution; 6 new tests; 293 total passing).
 Resume file: None

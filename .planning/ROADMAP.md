@@ -44,7 +44,7 @@ Full details: milestones/v1.1-ROADMAP.md
 - [x] **Phase 14: Solution Ingestion Pipeline** — Ingest full .sln files; resolve dependencies; populate enriched snapshots (completed 2026-03-01)
 - [x] **Phase 14.1: Solution Graph Enrichment** — Populate SolutionSnapshot, classify cross-project edges, synthesize stub nodes (gap closure) (completed 2026-03-01)
 - [x] **Phase 15: Project-Aware Indexing & Query** — Thread project attribution through BM25 index and query service (completed 2026-03-01)
-- [ ] **Phase 16: Solution MCP Tools** — Expose solution-level tools and update existing tools with solution awareness
+- [x] **Phase 16: Solution MCP Tools** — Expose solution-level tools and update existing tools with solution awareness (completed 2026-03-02)
 - [ ] **Phase 17: Incremental Solution Re-ingestion** — Re-ingest only changed projects within a solution
 
 ## Phase Details
@@ -117,7 +117,7 @@ Plans:
   1. `explain_solution` returns a structured overview: project list with node/edge counts, the project dependency DAG, per-project doc coverage percentages, and total stub node count
   2. `diff_snapshots` called with two `SolutionSnapshot`s produces a diff that spans all projects, including cross-project edge additions and removals
   3. `SolutionTools` enforces PathAllowlist on all operations with opaque not-found denial, matching the pattern of `DocTools` and `ChangeTools`
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 15-01-PLAN.md — Core types, service layer (SearchResultItem.ProjectName, projectFilter, crossProjectOnly, BM25 projectName field) + tests
 - [ ] 15-02-PLAN.md — MCP tool layer (project param on search_symbols, crossProjectOnly on get_references, enriched JSON output)
@@ -155,5 +155,5 @@ Plans:
 | 14. Solution Ingestion Pipeline | 2/2 | Complete    | 2026-03-01 | - |
 | 14.1 Solution Graph Enrichment | 2/2 | Complete    | 2026-03-01 | - |
 | 15. Project-Aware Indexing & Query | 2/2 | Complete    | 2026-03-01 | - |
-| 16. Solution MCP Tools | 1/2 | In Progress|  | - |
+| 16. Solution MCP Tools | 2/2 | Complete   | 2026-03-02 | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
