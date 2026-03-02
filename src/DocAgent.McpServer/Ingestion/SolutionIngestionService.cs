@@ -309,7 +309,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         }
 
         // Detect circular references in project DAG
-        var cycles = DetectCycles(projectEdges);
+        var cycles = DependencyCascade.DetectCycles(projectEdges);
         foreach (var cycle in cycles)
         {
             var cycleStr = string.Join(" -> ", cycle);
@@ -529,74 +529,6 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             NodeKind: NodeKind.Stub);
 
         ctx.StubNodes.Add(stubNode);
-    }
-
-    // ── Cycle detection ──────────────────────────────────────────────────────
-
-    private static List<List<string>> DetectCycles(IReadOnlyList<ProjectEdge> edges)
-    {
-        // Build adjacency list
-        var graph = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var edge in edges)
-        {
-            if (!graph.TryGetValue(edge.From, out var neighbors))
-            {
-                neighbors = new List<string>();
-                graph[edge.From] = neighbors;
-            }
-            neighbors.Add(edge.To);
-        }
-
-        var cycles = new List<List<string>>();
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var inStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var path = new List<string>();
-
-        foreach (var node in graph.Keys)
-        {
-            if (!visited.Contains(node))
-                DfsCycleDetect(node, graph, visited, inStack, path, cycles);
-        }
-
-        return cycles;
-    }
-
-    private static void DfsCycleDetect(
-        string node,
-        Dictionary<string, List<string>> graph,
-        HashSet<string> visited,
-        HashSet<string> inStack,
-        List<string> path,
-        List<List<string>> cycles)
-    {
-        visited.Add(node);
-        inStack.Add(node);
-        path.Add(node);
-
-        if (graph.TryGetValue(node, out var neighbors))
-        {
-            foreach (var neighbor in neighbors)
-            {
-                if (!visited.Contains(neighbor))
-                {
-                    DfsCycleDetect(neighbor, graph, visited, inStack, path, cycles);
-                }
-                else if (inStack.Contains(neighbor))
-                {
-                    // Found a cycle — extract the cycle path
-                    var cycleStart = path.IndexOf(neighbor);
-                    if (cycleStart >= 0)
-                    {
-                        var cycle = new List<string>(path.Skip(cycleStart));
-                        cycle.Add(neighbor); // close the cycle
-                        cycles.Add(cycle);
-                    }
-                }
-            }
-        }
-
-        path.RemoveAt(path.Count - 1);
-        inStack.Remove(node);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
