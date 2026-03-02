@@ -161,8 +161,8 @@ public sealed class SolutionTools
     // Tool: diff_snapshots
     // ─────────────────────────────────────────────────────────────────
 
-    [McpServerTool(Name = "diff_snapshots")]
-    [Description("Diff two solution snapshots showing per-project changes, projects added/removed, and cross-project edge changes.")]
+    [McpServerTool(Name = "diff_solution_snapshots")]
+    [Description("Diff two solution snapshots at the solution level: per-project symbol changes (added/removed/modified), projects added or removed from the solution, and cross-project edge changes between snapshots.")]
     public async Task<string> DiffSnapshots(
         [Description("Before snapshot version (content hash)")] string before,
         [Description("After snapshot version (content hash)")] string after,
