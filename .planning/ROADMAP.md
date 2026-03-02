@@ -170,4 +170,4 @@ Plans:
 | 15. Project-Aware Indexing & Query | 2/2 | Complete    | 2026-03-01 | - |
 | 16. Solution MCP Tools | 2/2 | Complete    | 2026-03-02 | - |
 | 17. Incremental Solution Re-ingestion | v1.2 | 0/? | Not started | - |
-| 18. Fix diff_snapshots Tool Name Collision | 1/1 | Complete   | 2026-03-02 | - |
+| 18. Fix diff_snapshots Tool Name Collision | 1/1 | Complete    | 2026-03-02 | - |
