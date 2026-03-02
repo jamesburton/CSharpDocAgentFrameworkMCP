@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
 using DocAgent.Core;
 using DocAgent.Ingestion;
 using DocAgent.McpServer.Telemetry;
@@ -78,8 +79,8 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
         var solutionName = Path.GetFileNameWithoutExtension(slnPath);
         var artifactsDir = _store.ArtifactsDir;
 
-        // Step 1: Load previous snapshot via pointer file
-        var previousSnapshot = await LoadPreviousSnapshotAsync(artifactsDir, solutionName, cancellationToken)
+        // Step 1: Load previous solution snapshot
+        var previousSnapshot = await LoadPreviousSolutionSnapshotAsync(artifactsDir, solutionName, cancellationToken)
             .ConfigureAwait(false);
 
         if (previousSnapshot is null)
@@ -92,26 +93,109 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
             if (fullResult.SnapshotId is not null && fullResult.SnapshotId != string.Empty)
                 await SavePointerAsync(artifactsDir, solutionName, fullResult.SnapshotId, cancellationToken).ConfigureAwait(false);
 
-            // Save per-project manifests for next incremental run
+            // Save per-project manifests and solution snapshot for next incremental run
             if (fullResult.Snapshot is not null)
+            {
                 await SaveProjectManifestsAsync(artifactsDir, slnPath, fullResult.Snapshot, cancellationToken).ConfigureAwait(false);
+                await SaveSolutionSnapshotAsync(artifactsDir, solutionName, fullResult.Snapshot, cancellationToken).ConfigureAwait(false);
+            }
 
             EmitTelemetry(activity, fullResult);
             return fullResult;
         }
 
         // Step 2: We have a previous snapshot. Check for structural changes.
-        // For incremental, we need the current project list. We delegate to full service
-        // which handles MSBuild workspace opening. But we need project info before deciding.
-        // Since we can't open MSBuild without doing full work, we delegate structural detection
-        // to the full service via a two-pass approach: compute manifests from disk, then decide.
+        var currentProjectPaths = previousSnapshot.Projects.Select(p => p.Path).ToList();
+        if (DependencyCascade.HasStructuralChange(previousSnapshot.Projects, currentProjectPaths))
+        {
+            _logger.LogInformation("Structural change detected for {Solution} — performing full re-ingest", solutionName);
+            var structResult = await _fullIngestionService.IngestAsync(slnPath, reportProgress, cancellationToken)
+                .ConfigureAwait(false);
 
-        // For now, delegate to full ingestion and use manifests to detect skip-ability.
-        // The real incremental path requires workspace access which is tightly coupled to
-        // SolutionIngestionService. We use the PipelineOverride seam for testing.
+            if (structResult.SnapshotId is not null && structResult.SnapshotId != string.Empty)
+                await SavePointerAsync(artifactsDir, solutionName, structResult.SnapshotId, cancellationToken).ConfigureAwait(false);
 
-        // In production, fall through to full ingest with manifest-based optimization later.
-        _logger.LogInformation("Incremental check for {Solution} — delegating to full ingest (production path)", solutionName);
+            if (structResult.Snapshot is not null)
+            {
+                await SaveProjectManifestsAsync(artifactsDir, slnPath, structResult.Snapshot, cancellationToken).ConfigureAwait(false);
+                await SaveSolutionSnapshotAsync(artifactsDir, solutionName, structResult.Snapshot, cancellationToken).ConfigureAwait(false);
+            }
+
+            EmitTelemetry(activity, structResult);
+            return structResult;
+        }
+
+        // Step 3: Compare per-project manifests to find directly changed projects.
+        var directlyChanged = new List<string>();
+        foreach (var project in previousSnapshot.Projects)
+        {
+            var previousManifest = await SolutionManifestStore.LoadAsync(artifactsDir, slnPath, project.Path, cancellationToken)
+                .ConfigureAwait(false);
+
+            var refPaths = project.DependsOn
+                .Select(dep => previousSnapshot.Projects.FirstOrDefault(p => p.Name == dep)?.Path ?? string.Empty)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToList();
+
+            var currentManifest = await SolutionManifestStore.ComputeProjectManifestAsync(
+                project.Path, refPaths, null, cancellationToken).ConfigureAwait(false);
+
+            var diff = FileHasher.Diff(previousManifest, currentManifest);
+            if (diff.HasChanges)
+            {
+                directlyChanged.Add(project.Name);
+            }
+        }
+
+        // Step 4: Compute dirty set via dependency cascade.
+        var projectEdges = previousSnapshot.ProjectDependencies;
+        var dirtySet = DependencyCascade.ComputeDirtySet(directlyChanged, projectEdges);
+
+        // Step 5: Topological sort for processing order (used in result metadata).
+        var topoOrder = DependencyCascade.TopologicalSort(previousSnapshot.Projects, projectEdges);
+
+        // Step 6: If dirty set is empty, return cached snapshot (nothing changed).
+        if (dirtySet.Count == 0)
+        {
+            _logger.LogInformation("All projects unchanged for {Solution} — returning cached snapshot", solutionName);
+
+            // Read the pointer to get the snapshot ID
+            var ptrPath = PointerPath(artifactsDir, solutionName);
+            var snapshotId = (await File.ReadAllTextAsync(ptrPath, cancellationToken).ConfigureAwait(false)).Trim();
+
+            var projectStatuses = topoOrder.Select(name =>
+            {
+                var proj = previousSnapshot.Projects.First(p => p.Name == name);
+                var nodeCount = previousSnapshot.ProjectSnapshots
+                    .FirstOrDefault(s => s.ProjectName == name)?.Nodes.Count;
+                return new ProjectIngestionStatus(
+                    Name: name,
+                    FilePath: proj.Path,
+                    Status: "skipped",
+                    Reason: "unchanged",
+                    NodeCount: nodeCount,
+                    ChosenTfm: null);
+            }).ToList();
+
+            var cachedResult = new SolutionIngestionResult(
+                SnapshotId: snapshotId,
+                SolutionName: solutionName,
+                TotalProjectCount: previousSnapshot.Projects.Count,
+                IngestedProjectCount: 0,
+                TotalNodeCount: previousSnapshot.ProjectSnapshots.Sum(s => s.Nodes.Count),
+                TotalEdgeCount: previousSnapshot.ProjectSnapshots.Sum(s => s.Edges.Count),
+                Duration: sw.Elapsed,
+                Projects: projectStatuses,
+                Warnings: warnings.AsReadOnly(),
+                Snapshot: previousSnapshot);
+
+            EmitTelemetry(activity, cachedResult);
+            return cachedResult;
+        }
+
+        // Step 7: Dirty set non-empty — delegate to full re-ingest.
+        _logger.LogInformation("Detected {DirtyCount} dirty projects for {Solution} — performing full re-ingest",
+            dirtySet.Count, solutionName);
         var result = await _fullIngestionService.IngestAsync(slnPath, reportProgress, cancellationToken)
             .ConfigureAwait(false);
 
@@ -119,7 +203,10 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
             await SavePointerAsync(artifactsDir, solutionName, result.SnapshotId, cancellationToken).ConfigureAwait(false);
 
         if (result.Snapshot is not null)
+        {
             await SaveProjectManifestsAsync(artifactsDir, slnPath, result.Snapshot, cancellationToken).ConfigureAwait(false);
+            await SaveSolutionSnapshotAsync(artifactsDir, solutionName, result.Snapshot, cancellationToken).ConfigureAwait(false);
+        }
 
         EmitTelemetry(activity, result);
         return result;
@@ -158,20 +245,40 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
     private static string PointerPath(string artifactsDir, string solutionName)
         => Path.Combine(artifactsDir, $"latest-{solutionName}.ptr");
 
-    private async Task<SymbolGraphSnapshot?> LoadPreviousSnapshotAsync(
+    // ── Solution snapshot persistence ──────────────────────────────────────
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static string SolutionSnapshotPath(string artifactsDir, string solutionName)
+        => Path.Combine(artifactsDir, $"latest-{solutionName}.solution.json");
+
+    private static async Task<SolutionSnapshot?> LoadPreviousSolutionSnapshotAsync(
         string artifactsDir,
         string solutionName,
         CancellationToken ct)
     {
-        var ptrPath = PointerPath(artifactsDir, solutionName);
-        if (!File.Exists(ptrPath))
+        var path = SolutionSnapshotPath(artifactsDir, solutionName);
+        if (!File.Exists(path))
             return null;
 
-        var contentHash = (await File.ReadAllTextAsync(ptrPath, ct).ConfigureAwait(false)).Trim();
-        if (string.IsNullOrEmpty(contentHash))
-            return null;
+        var json = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+        return JsonSerializer.Deserialize<SolutionSnapshot>(json, s_jsonOptions);
+    }
 
-        return await _store.LoadAsync(contentHash, ct).ConfigureAwait(false);
+    private static async Task SaveSolutionSnapshotAsync(
+        string artifactsDir,
+        string solutionName,
+        SolutionSnapshot snapshot,
+        CancellationToken ct)
+    {
+        Directory.CreateDirectory(artifactsDir);
+        var path = SolutionSnapshotPath(artifactsDir, solutionName);
+        var json = JsonSerializer.Serialize(snapshot, s_jsonOptions);
+        await File.WriteAllTextAsync(path, json, ct).ConfigureAwait(false);
     }
 
     private static async Task SavePointerAsync(
