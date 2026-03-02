@@ -13,7 +13,7 @@ Requirements for v1.3 Housekeeping milestone. Each maps to roadmap phases.
 - [x] **INGEST-02**: Dependency cascade marks downstream projects dirty when their dependencies change
 - [x] **INGEST-03**: Per-project manifests use path-based keys to prevent collision
 - [x] **INGEST-04**: Stub nodes from prior ingestions are correctly regenerated, not accumulated
-- [ ] **INGEST-05**: Incremental solution result is byte-identical to full re-ingestion for unchanged input
+- [x] **INGEST-05**: Incremental solution result is byte-identical to full re-ingestion for unchanged input
 
 ### Performance
 
@@ -65,7 +65,7 @@ Deferred to future milestones. Tracked but not in v1.3 roadmap.
 | INGEST-02 | Phase 19 | Complete |
 | INGEST-03 | Phase 19 | Complete |
 | INGEST-04 | Phase 19 | Complete |
-| INGEST-05 | Phase 19 | Pending |
+| INGEST-05 | Phase 19 | Complete |
 | PERF-01 | Phase 20 | Pending |
 | PERF-02 | Phase 20 | Pending |
 | PERF-03 | Phase 20 | Pending |

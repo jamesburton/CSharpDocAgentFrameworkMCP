@@ -57,7 +57,7 @@ Known gap: Phase 17 (Incremental Solution Re-ingestion / INGEST-05) deferred to 
 
 **Milestone Goal:** Clear accumulated backlog — deliver deferred INGEST-05, benchmark MSBuild performance, remove stale code artifacts, and refresh documentation to reflect v1.0-v1.2 reality.
 
-- [ ] **Phase 19: Incremental Solution Re-ingestion** - Per-project skip in SolutionIngestionService with dependency cascade and correctness guarantee
+- [x] **Phase 19: Incremental Solution Re-ingestion** - Per-project skip in SolutionIngestionService with dependency cascade and correctness guarantee (completed 2026-03-02)
 - [ ] **Phase 20: MSBuild Performance Benchmarks** - Latency/memory baselines and regression guard for solution ingestion
 - [ ] **Phase 21: Code and Audit Cleanup** - Remove stale TODOs and resolve v1.2 audit artifact issues
 - [ ] **Phase 22: Documentation Refresh** - Align Architecture.md, Plan.md, Testing.md to v1.0-v1.2 shipped reality
@@ -142,7 +142,7 @@ Plans:
 | 15. Project-Aware Indexing & Query | v1.2 | 2/2 | Complete | 2026-03-01 |
 | 16. Solution MCP Tools | v1.2 | 2/2 | Complete | 2026-03-02 |
 | 18. Fix diff_snapshots Collision | v1.2 | 1/1 | Complete | 2026-03-02 |
-| 19. Incremental Solution Re-ingestion | 2/3 | In Progress|  | - |
+| 19. Incremental Solution Re-ingestion | 3/3 | Complete   | 2026-03-02 | - |
 | 20. MSBuild Performance Benchmarks | v1.3 | 0/? | Not started | - |
 | 21. Code and Audit Cleanup | v1.3 | 0/? | Not started | - |
 | 22. Documentation Refresh | v1.3 | 0/? | Not started | - |
