@@ -31,7 +31,7 @@ Requirements for multi-project / solution-level graph support. Each maps to road
 - [x] **TOOLS-02**: `get_symbol` resolves by fully qualified name across any project in the solution
 - [x] **TOOLS-03**: `get_references` spans project boundaries for cross-project "who calls this?" queries
 - [ ] **TOOLS-04**: `diff_snapshots` works at solution level (diff two SolutionSnapshots)
-- [ ] **TOOLS-05**: New `explain_solution` MCP tool provides solution-level architecture overview (project list, dependency DAG, node/edge counts, doc coverage per project)
+- [x] **TOOLS-05**: New `explain_solution` MCP tool provides solution-level architecture overview (project list, dependency DAG, node/edge counts, doc coverage per project)
 - [x] **TOOLS-06**: Existing tools accept optional `project` filter parameter to scope results to a single project
 
 ## Future Requirements
@@ -84,7 +84,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TOOLS-02 | Phase 15 | Complete |
 | TOOLS-03 | Phase 15 | Complete |
 | TOOLS-04 | Phase 16 | Pending |
-| TOOLS-05 | Phase 16 | Pending |
+| TOOLS-05 | Phase 16 | Complete |
 | TOOLS-06 | Phase 15 | Complete |
 
 **Coverage:**

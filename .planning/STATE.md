@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 15 — Project-Aware Indexing & Query
+**Current focus:** Phase 16 — Solution MCP Tools
 
 ## Current Position
 
-Phase: 15 of 17 (Project-Aware Indexing & Query) — COMPLETE
-Current Plan: 15-02 COMPLETE (MCP tool project parameters and FQN disambiguation)
-Next Plan: 16-01
-Last activity: 2026-03-01 — Phase 15 Plan 02 complete: search_symbols project parameter, get_references crossProjectOnly + edge scope/project names, get_symbol FQN disambiguation; 4 new tests; 290 total passing
+Phase: 16 of 17 (Solution MCP Tools) — IN PROGRESS
+Current Plan: 16-01 COMPLETE (SolutionTools explain_solution)
+Next Plan: 16-02
+Last activity: 2026-03-02 — Phase 16 Plan 01 complete: SolutionTools with explain_solution tool (per-project stats, DAG derivation, stub count, single-project detection); 7 new tests; 297 total passing
 
-Progress: [████████░░░░░░░░░░░░] ~47% (13.5/17 phases)
+Progress: [████████░░░░░░░░░░░░] ~50% (14/17 phases)
 
 ## Accumulated Context
 
@@ -57,6 +57,10 @@ Recent decisions affecting v1.2:
 - [Phase 14.1-01]: Primitive filter with 30 common framework types (System.String, Task, IEnumerable<T>, etc.) prevents stub bloat
 - [Phase 14.1-01]: SolutionIngestionResult.Snapshot defaults to null — fully backward-compatible with existing positional record callers
 - [Phase 14.1]: Stub filter applied at index construction in both WriteDocuments and PopulateNodes in BM25, and IndexAsync in InMemory — covers SearchAsync and GetAsync exclusion paths without query-time overhead
+- [Phase 16-01]: explain_solution derives dependency DAG from CrossProject edge scope at query time — no pre-computed adjacency stored
+- [Phase 16-01]: isSingleProject detection via unique ProjectOrigin count <= 1 (null ProjectOrigin falls back to snapshot.ProjectName)
+- [Phase 16-01]: Doc coverage counts only public/protected/protectedInternal nodes of kinds: Type, Method, Property, Constructor, Delegate, Event, Field
+- [Phase 16-01]: Stub nodes excluded from project stats — counted globally as totalStubNodeCount only
 
 ### Pending Todos
 
@@ -69,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Phase 15 Plan 02 complete (MCP tool project parameters: search_symbols project filter, get_references crossProjectOnly + edge scope/project names, get_symbol FQN disambiguation + 4 tests; 290 total passing).
+Last session: 2026-03-02
+Stopped at: Phase 16 Plan 01 complete (SolutionTools explain_solution: per-project stats, DAG derivation, stub count, single-project detection; 7 new tests; 297 total passing).
 Resume file: None
