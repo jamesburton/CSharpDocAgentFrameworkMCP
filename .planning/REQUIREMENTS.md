@@ -9,10 +9,10 @@ Requirements for v1.3 Housekeeping milestone. Each maps to roadmap phases.
 
 ### Incremental Ingestion
 
-- [ ] **INGEST-01**: Solution re-ingestion skips unchanged projects (per-project SHA-256 manifest comparison)
+- [x] **INGEST-01**: Solution re-ingestion skips unchanged projects (per-project SHA-256 manifest comparison)
 - [x] **INGEST-02**: Dependency cascade marks downstream projects dirty when their dependencies change
 - [x] **INGEST-03**: Per-project manifests use path-based keys to prevent collision
-- [ ] **INGEST-04**: Stub nodes from prior ingestions are correctly regenerated, not accumulated
+- [x] **INGEST-04**: Stub nodes from prior ingestions are correctly regenerated, not accumulated
 - [ ] **INGEST-05**: Incremental solution result is byte-identical to full re-ingestion for unchanged input
 
 ### Performance
@@ -61,10 +61,10 @@ Deferred to future milestones. Tracked but not in v1.3 roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INGEST-01 | Phase 19 | Pending |
+| INGEST-01 | Phase 19 | Complete |
 | INGEST-02 | Phase 19 | Complete |
 | INGEST-03 | Phase 19 | Complete |
-| INGEST-04 | Phase 19 | Pending |
+| INGEST-04 | Phase 19 | Complete |
 | INGEST-05 | Phase 19 | Pending |
 | PERF-01 | Phase 20 | Pending |
 | PERF-02 | Phase 20 | Pending |
