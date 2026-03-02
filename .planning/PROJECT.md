@@ -39,11 +39,18 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 
 ### Active
 
-(No active milestone — use `/gsd:new-milestone` to start v1.3)
+## Current Milestone: v1.3 Housekeeping
+
+**Goal:** Clear accumulated backlog — deliver deferred INGEST-05, fix stale code/comments, benchmark MSBuild performance, and refresh documentation to reflect v1.0–v1.2 reality.
+
+**Target features:**
+- Per-project incremental solution re-ingestion (INGEST-05)
+- MSBuild memory/latency benchmarking and regression guards
+- Stale TODO/comment cleanup across codebase
+- Documentation refresh (Architecture.md, Plan.md aligned to current state)
+- Audit artifact cleanup from v1.2
 
 ### Out of Scope
-
-- Per-project incremental solution re-ingestion — deferred from v1.2 to v1.3 (INGEST-05)
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
 - Non-stdio MCP transports (HTTP, SSE) — deferred to later
@@ -98,4 +105,4 @@ Full pipeline operational: 11 MCP tools (`search_symbols`, `get_symbol`, `get_re
 | diff_solution_snapshots wire name (not diff_snapshots) | Avoids tool name collision with DocTools | ✓ Good — 11 unique MCP tool names |
 
 ---
-*Last updated: 2026-03-02 after v1.2 milestone*
+*Last updated: 2026-03-02 after v1.3 milestone start*
