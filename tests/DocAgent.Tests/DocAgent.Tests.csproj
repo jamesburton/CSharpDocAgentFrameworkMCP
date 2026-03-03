@@ -7,6 +7,12 @@
     <!-- Suppress transitive vulnerability from Microsoft.Build.Tasks.Core 17.7.2
          brought in by Microsoft.CodeAnalysis.Workspaces.MSBuild via DocAgent.Ingestion -->
     <NuGetAuditMode>direct</NuGetAuditMode>
+    <!-- BenchmarkDotNet 0.15.8 transitively resolves Microsoft.CodeAnalysis.Common 4.14.0
+         which conflicts with the 4.12.0 pin used by production projects.
+         Suppress NU1608/NU1107/NU1605 — BDN is test-only and the version conflict is harmless.
+         Also requires TreatWarningsAsErrors=false for restore to succeed. -->
+    <NoWarn>$(NoWarn);NU1608;NU1107;NU1605</NoWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DocAgent.Core\DocAgent.Core.csproj" />
@@ -25,5 +31,11 @@
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" />
     <PackageReference Include="Microsoft.CodeAnalysis.Testing.Verifiers.XUnit" />
+    <!-- Pin to 4.14.0 to resolve NU1107: BDN->Roslyn 4.14 conflicts with Testing.XUnit->Roslyn 4.12 -->
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" VersionOverride="4.14.0" />
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\tests\DocAgent.Benchmarks\DocAgent.Benchmarks.csproj" />
   </ItemGroup>
 </Project>
