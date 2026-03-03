@@ -119,10 +119,10 @@ Plans:
   1. Architecture.md names all 6 projects and all 12 MCP tools correctly
   2. Plan.md reflects v1.0-v1.2 as shipped — no phantom features or missing accomplishments
   3. Testing.md states the current test count and describes the strategy as it actually exists
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 22-01: TBD
+- [ ] 22-01-PLAN.md — Rewrite Architecture.md, Plan.md, and Testing.md to match shipped reality
 
 ## Progress
 
