@@ -212,7 +212,7 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
     }
 
     // -------------------------------------------------------------------------
-    // GetReferencesAsync (stub — MCPS-03, Phase 5/6 concern)
+    // GetReferencesAsync
     // -------------------------------------------------------------------------
 
     public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(

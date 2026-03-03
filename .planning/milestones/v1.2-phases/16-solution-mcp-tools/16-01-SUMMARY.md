@@ -22,6 +22,7 @@ decisions:
   - "Edge count per project: IntraProject edges where From or To belongs to that project's node set (not exclusive containment)"
   - "Stub nodes excluded from project stats — counted globally as totalStubNodeCount only"
   - "ErrorResponse always returns opaque 'Solution not found.' regardless of VerboseErrors for allowlist denials"
+requirements_completed: [TOOLS-05]
 metrics:
   duration: "~15 minutes"
   completed: "2026-03-02"

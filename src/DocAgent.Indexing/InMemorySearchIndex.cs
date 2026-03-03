@@ -24,7 +24,6 @@ public sealed class InMemorySearchIndex : ISearchIndex
         string query,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        // TODO: replace with BM25/inverted index
         foreach (var n in _nodes.Values)
         {
             if ((n.DisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
