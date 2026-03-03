@@ -17,8 +17,8 @@ Requirements for v1.3 Housekeeping milestone. Each maps to roadmap phases.
 
 ### Performance
 
-- [ ] **PERF-01**: MSBuild workspace open and per-project compilation latency is measured and baselined
-- [ ] **PERF-02**: Memory high-water mark during solution ingestion is measured and baselined
+- [x] **PERF-01**: MSBuild workspace open and per-project compilation latency is measured and baselined
+- [x] **PERF-02**: Memory high-water mark during solution ingestion is measured and baselined
 - [ ] **PERF-03**: Regression guard test asserts ingestion stays under defined thresholds
 
 ### Code Quality
@@ -66,8 +66,8 @@ Deferred to future milestones. Tracked but not in v1.3 roadmap.
 | INGEST-03 | Phase 19 | Complete |
 | INGEST-04 | Phase 19 | Complete |
 | INGEST-05 | Phase 19 | Complete |
-| PERF-01 | Phase 20 | Pending |
-| PERF-02 | Phase 20 | Pending |
+| PERF-01 | Phase 20 | Complete |
+| PERF-02 | Phase 20 | Complete |
 | PERF-03 | Phase 20 | Pending |
 | QUAL-01 | Phase 21 | Pending |
 | QUAL-02 | Phase 21 | Pending |

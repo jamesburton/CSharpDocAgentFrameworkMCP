@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 19 — Incremental Solution Re-ingestion
+**Current focus:** Phase 20 — MSBuild Performance Benchmarks
 
 ## Current Position
 
-Phase: 19 of 22 (Incremental Solution Re-ingestion) — COMPLETE
-Plan: 4 of 4 in current phase (19-04 complete)
-Status: Phase 19 Complete — Ready for Phase 20
-Last activity: 2026-03-02 — Completed 19-04 (Production Skip Path Gap Closure)
+Phase: 20 of 22 (MSBuild Performance Benchmarks) — IN PROGRESS
+Plan: 1 of ? in current phase (20-01 complete)
+Status: Phase 20 Plan 1 Complete
+Last activity: 2026-03-03 — Completed 20-01 (BenchmarkDotNet Benchmark Project)
 
 Progress: [███░░░░░░░] 25% (v1.3: 1/4 phases, 4/? plans complete)
 
@@ -61,6 +61,9 @@ Recent decisions affecting current work:
 - [v1.3-19-03]: SourceFingerprint normalized alongside other non-deterministic fields for byte comparison
 - [v1.3-19-04]: SolutionSnapshot JSON sidecar persistence for incremental state across runs
 - [v1.3-19-04]: Empty dirty set returns cached snapshot; non-empty delegates to full ingest
+- [v1.3-20-01]: Benchmark project suppresses NU1608/NU1903 — BDN 0.15.8 transitive Roslyn deps conflict with pinned 4.12.0; measurement infrastructure not production code
+- [v1.3-20-01]: TreatWarningsAsErrors=false in benchmark project — overrides root Directory.Build.props for measurement tooling
+- [v1.3-20-01]: IncrementalNoChange benchmark runs two passes per iteration — first populates store, second exercises skip path
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 19-04-PLAN.md (Production Skip Path Gap Closure). Phase 19 fully complete (4/4 plans). Ready for Phase 20.
+Last session: 2026-03-03
+Stopped at: Completed 20-01-PLAN.md (BenchmarkDotNet benchmark project). Phase 20 plan 1 complete.
 Resume file: None
