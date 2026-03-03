@@ -1,0 +1,26 @@
+{
+  "_note": "Placeholder values. Run benchmarks and update with real measurements. Absolute ceilings left null until first real baseline.",
+  "benchmarks": {
+    "FullSolutionIngestion": {
+      "meanNanoseconds": 60000000000,
+      "allocatedBytes": 209715200,
+      "absoluteCeilingMeanNanoseconds": null,
+      "absoluteCeilingAllocatedBytes": null,
+      "description": "Full solution ingestion (forceFullReingest=true). Measures PERF-01 latency and PERF-02 memory."
+    },
+    "IncrementalNoChange": {
+      "meanNanoseconds": 5000000000,
+      "allocatedBytes": 10485760,
+      "absoluteCeilingMeanNanoseconds": null,
+      "absoluteCeilingAllocatedBytes": null,
+      "description": "Incremental ingest with no changes. Second pass should exercise skip path."
+    },
+    "ColdWorkspaceOpen": {
+      "meanNanoseconds": 30000000000,
+      "allocatedBytes": 104857600,
+      "absoluteCeilingMeanNanoseconds": null,
+      "absoluteCeilingAllocatedBytes": null,
+      "description": "Raw MSBuildWorkspace.Create() + OpenSolutionAsync() latency without ingestion pipeline."
+    }
+  }
+}
