@@ -105,10 +105,10 @@ Plans:
   3. v1.2 audit artifacts have clean frontmatter and no remaining documentation gaps flagged
   4. `IncrementalNoChange` benchmark uses `IncrementalSolutionIngestionService` (not bare `SolutionIngestionService`)
   5. `Program.cs` registers `metrics.AddMeter("DocAgent.Ingestion")` for OTel counter collection
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 21-01: TBD
+- [ ] 21-01-PLAN.md — Remove stale comments, fix audit frontmatter, wire benchmark to decorator, register OTel meter
 
 ### Phase 22: Documentation Refresh
 **Goal**: Architecture.md, Plan.md, and Testing.md accurately reflect the v1.0-v1.2 shipped codebase and current test suite
