@@ -31,6 +31,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Benchmarks
+BenchmarkDotNet.Artifacts/
+
 # ---- local agentic artifacts (common) ----
 # Claude / Anthropic
 .claude/

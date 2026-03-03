@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <!-- Measurement infrastructure: override global TreatWarningsAsErrors -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Suppress NuGet version-constraint warnings caused by BenchmarkDotNet's Roslyn transitive deps -->
+    <NoWarn>$(NoWarn);NU1608;NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/DocAgent.McpServer/DocAgent.McpServer.csproj" />
+    <ProjectReference Include="../../src/DocAgent.Ingestion/DocAgent.Ingestion.csproj" />
+  </ItemGroup>
+
+</Project>
