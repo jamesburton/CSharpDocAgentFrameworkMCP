@@ -17,7 +17,7 @@ public class SolutionIngestionBenchmarks
 {
     private string _slnPath = null!;
     private string _tempDir = null!;
-    private SolutionIngestionService _service = null!;
+    private ISolutionIngestionService _service = null!;
     private MSBuildWorkspace? _warmWorkspace;
 
     [GlobalSetup]
@@ -34,8 +34,12 @@ public class SolutionIngestionBenchmarks
 
         var store = new SnapshotStore(_tempDir);
         var index = new InMemorySearchIndex();
-        var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<SolutionIngestionService>();
-        _service = new SolutionIngestionService(store, index, logger);
+        var fullLogger = LoggerFactory.Create(b => b.AddConsole())
+            .CreateLogger<SolutionIngestionService>();
+        var fullService = new SolutionIngestionService(store, index, fullLogger);
+        var incrLogger = LoggerFactory.Create(b => b.AddConsole())
+            .CreateLogger<IncrementalSolutionIngestionService>();
+        _service = new IncrementalSolutionIngestionService(store, fullService, incrLogger);
 
         // Open a warm workspace and cache it for the warm benchmark
         _warmWorkspace = MSBuildWorkspace.Create();

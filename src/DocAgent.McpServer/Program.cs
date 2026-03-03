@@ -46,6 +46,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(metrics =>
     {
         metrics.AddRuntimeInstrumentation();
+        metrics.AddMeter("DocAgent.Ingestion");
         metrics.AddOtlpExporter();
     });
 
