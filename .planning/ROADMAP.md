@@ -59,7 +59,7 @@ Known gap: Phase 17 (Incremental Solution Re-ingestion / INGEST-05) deferred to 
 
 - [x] **Phase 19: Incremental Solution Re-ingestion** - Per-project skip in SolutionIngestionService with dependency cascade and correctness guarantee (completed 2026-03-02)
 - [x] **Phase 20: MSBuild Performance Benchmarks** - Latency/memory baselines and regression guard for solution ingestion (completed 2026-03-03)
-- [ ] **Phase 21: Code and Audit Cleanup** - Remove stale TODOs and resolve v1.2 audit artifact issues
+- [x] **Phase 21: Code and Audit Cleanup** - Remove stale TODOs and resolve v1.2 audit artifact issues (completed 2026-03-03)
 - [ ] **Phase 22: Documentation Refresh** - Align Architecture.md, Plan.md, Testing.md to v1.0-v1.2 shipped reality
 
 ## Phase Details
@@ -148,5 +148,5 @@ Plans:
 | 18. Fix diff_snapshots Collision | v1.2 | 1/1 | Complete | 2026-03-02 |
 | 19. Incremental Solution Re-ingestion | 4/4 | Complete    | 2026-03-02 | - |
 | 20. MSBuild Performance Benchmarks | 2/2 | Complete    | 2026-03-03 | - |
-| 21. Code and Audit Cleanup | v1.3 | 0/? | Not started | - |
+| 21. Code and Audit Cleanup | 1/1 | Complete    | 2026-03-03 | - |
 | 22. Documentation Refresh | v1.3 | 0/? | Not started | - |
