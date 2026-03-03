@@ -95,13 +95,16 @@ Plans:
 - [ ] 20-01: TBD
 
 ### Phase 21: Code and Audit Cleanup
-**Goal**: All known stale comments are removed and v1.2 audit artifact issues are resolved
+**Goal**: All known stale comments are removed, v1.2 audit artifact issues are resolved, and integration gaps from v1.3 audit are fixed
 **Depends on**: Phase 19
 **Requirements**: QUAL-01, QUAL-02, QUAL-03
+**Gap Closure:** Closes requirement gaps QUAL-01/02/03 + integration gaps from v1.3 audit
 **Success Criteria** (what must be TRUE):
   1. `InMemorySearchIndex.cs` no longer contains the stale "TODO: replace with BM25" comment
   2. `KnowledgeQueryService.cs` line 215 no longer contains the stale "stub" comment
   3. v1.2 audit artifacts have clean frontmatter and no remaining documentation gaps flagged
+  4. `IncrementalNoChange` benchmark uses `IncrementalSolutionIngestionService` (not bare `SolutionIngestionService`)
+  5. `Program.cs` registers `metrics.AddMeter("DocAgent.Ingestion")` for OTel counter collection
 **Plans**: TBD
 
 Plans:
@@ -111,6 +114,7 @@ Plans:
 **Goal**: Architecture.md, Plan.md, and Testing.md accurately reflect the v1.0-v1.2 shipped codebase and current test suite
 **Depends on**: Phase 21
 **Requirements**: DOCS-01, DOCS-02, DOCS-03
+**Gap Closure:** Closes requirement gaps DOCS-01/02/03 from v1.3 audit
 **Success Criteria** (what must be TRUE):
   1. Architecture.md names all 6 projects and all 12 MCP tools correctly
   2. Plan.md reflects v1.0-v1.2 as shipped — no phantom features or missing accomplishments
