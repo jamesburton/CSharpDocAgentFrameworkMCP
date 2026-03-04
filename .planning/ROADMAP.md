@@ -6,6 +6,7 @@
 - ✅ **v1.1 Semantic Diff & Change Intelligence** — Phases 9-12 (shipped 2026-03-01)
 - ✅ **v1.2 Multi-Project & Solution-Level Graphs** — Phases 13-18 (shipped 2026-03-02)
 - ✅ **v1.3 Housekeeping** — Phases 19-22 (shipped 2026-03-04)
+- 🚧 **v1.5 Robustness** — Phases 23-27 (in progress)
 
 ## Phases
 
@@ -65,6 +66,75 @@ Full details: milestones/v1.3-ROADMAP.md
 
 </details>
 
+### 🚧 v1.5 Robustness (In Progress)
+
+**Milestone Goal:** Harden the query pipeline, extend the tool surface, upgrade dependencies, and polish operational readiness — making DocAgentFramework production-grade.
+
+**Build order:** Dependencies first (PKG), then performance (PERF), then server infrastructure (OPS-02/03) in parallel with performance, then API tools (API), then documentation last (OPS-01). This order reflects technical dependencies; user priority (operational polish first) governs scope decisions within each phase.
+
+- [ ] **Phase 23: Dependency Foundation** — Roslyn 4.14 upgrade and full NuGet audit
+- [ ] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching
+- [ ] **Phase 25: Server Infrastructure** — Startup validation and rate limiting
+- [ ] **Phase 26: API Extensions** — Pagination, find_implementations, get_doc_coverage tools
+- [ ] **Phase 27: Documentation Refresh** — CLAUDE.md updated to 14-tool surface
+
+## Phase Details
+
+### Phase 23: Dependency Foundation
+**Goal**: The build is clean on Roslyn 4.14.0 with no version conflicts and all NuGet dependencies audited for vulnerabilities
+**Depends on**: Nothing (first phase of milestone)
+**Requirements**: PKG-01, PKG-02
+**Success Criteria** (what must be TRUE):
+  1. `dotnet restore` completes with zero NU1107 warnings across all projects including Benchmarks and Analyzers
+  2. The VersionOverride workaround in DocAgent.Tests.csproj is removed from the solution
+  3. `NuGetAudit` is enabled in Directory.Build.props and `dotnet restore` reports no known vulnerabilities
+  4. All five Microsoft.CodeAnalysis.* packages are at 4.14.0 and the package audit baseline is recorded
+**Plans**: TBD
+
+### Phase 24: Query Performance
+**Goal**: Symbol lookups and edge traversals operate in O(1) time using pre-built index dictionaries, eliminating linear scans from the hot query path
+**Depends on**: Phase 23
+**Requirements**: PERF-01, PERF-02, PERF-03
+**Success Criteria** (what must be TRUE):
+  1. `GetSymbolAsync` and symbol existence checks use dictionary lookup instead of list scan (verifiable by code inspection and existing benchmark baseline holding)
+  2. `GetReferencesAsync` edge traversal uses pre-built `_edgesByFrom`/`_edgesByTo` dictionaries built at index time
+  3. `SearchAsync` metadata retrieval uses a TTL-cached node map instead of per-hit async disk reads
+  4. All 330 existing tests continue to pass with identical output (determinism preserved — no Dictionary ordering in serialisation paths)
+**Plans**: TBD
+
+### Phase 25: Server Infrastructure
+**Goal**: The MCP server fails fast on invalid startup configuration and throttles tool invocations to prevent stuck-agent retry storms
+**Depends on**: Phase 23
+**Requirements**: OPS-02, OPS-03
+**Success Criteria** (what must be TRUE):
+  1. Starting the server with AllowedPaths empty or ArtifactsDir non-writable prints a diagnostic error to stderr and exits non-zero before accepting any tool calls
+  2. A client that exceeds the configured token-bucket limit receives a structured error response (not an unhandled exception) and the server continues operating normally for subsequent calls
+  3. The rate limiter is a DI singleton — ingestion tool calls are not counted against the query rate limit
+  4. The startup validator is unit-testable in isolation via ServiceCollection without requiring Aspire or a running process
+**Plans**: TBD
+
+### Phase 26: API Extensions
+**Goal**: Agents can paginate large reference lists, navigate to implementations of interfaces/base classes, and query documentation coverage metrics — all via MCP tools
+**Depends on**: Phase 24, Phase 25
+**Requirements**: API-01, API-02, API-03
+**Success Criteria** (what must be TRUE):
+  1. `get_references` called without `offset`/`limit` returns the same response shape as before this phase (no silent truncation of existing callers)
+  2. `get_references` called with explicit `offset`/`limit` returns a paginated envelope with `totalCount`, consistent with `search_symbols` pagination behavior
+  3. `find_implementations` returns all types implementing a given interface or deriving from a base class, with stub nodes (NodeKind.Stub) excluded from results
+  4. `get_doc_coverage` returns documentation coverage metrics grouped by project, namespace, and symbol kind, derived from snapshot post-processing
+  5. All new tools are secured with PathAllowlist enforcement matching the pattern of existing tools
+**Plans**: TBD
+
+### Phase 27: Documentation Refresh
+**Goal**: CLAUDE.md accurately documents all 14 MCP tools with correct parameter signatures, format options, and projectFilter behavior, enabling agents to call tools correctly on first attempt
+**Depends on**: Phase 26
+**Requirements**: OPS-01
+**Success Criteria** (what must be TRUE):
+  1. CLAUDE.md lists all 14 MCP tools (12 existing + find_implementations + get_doc_coverage) with their parameters, return shapes, and format options
+  2. Each tool entry is verified against the actual `[McpServerTool]`-decorated method signatures in the codebase — no provisional or stale signatures
+  3. The projectFilter parameter is documented for all tools that accept it
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -91,3 +161,8 @@ Full details: milestones/v1.3-ROADMAP.md
 | 20. MSBuild Performance Benchmarks | v1.3 | 2/2 | Complete | 2026-03-03 |
 | 21. Code and Audit Cleanup | v1.3 | 1/1 | Complete | 2026-03-03 |
 | 22. Documentation Refresh | v1.3 | 1/1 | Complete | 2026-03-04 |
+| 23. Dependency Foundation | v1.5 | 0/TBD | Not started | - |
+| 24. Query Performance | v1.5 | 0/TBD | Not started | - |
+| 25. Server Infrastructure | v1.5 | 0/TBD | Not started | - |
+| 26. API Extensions | v1.5 | 0/TBD | Not started | - |
+| 27. Documentation Refresh | v1.5 | 0/TBD | Not started | - |

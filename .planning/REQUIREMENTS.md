@@ -65,23 +65,23 @@ Deferred to future milestones. Tracked but not in v1.5 roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | TBD | Pending |
-| OPS-02 | TBD | Pending |
-| OPS-03 | TBD | Pending |
-| PKG-01 | TBD | Pending |
-| PKG-02 | TBD | Pending |
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| PERF-02 | TBD | Pending |
-| PERF-03 | TBD | Pending |
+| PKG-01 | Phase 23 | Pending |
+| PKG-02 | Phase 23 | Pending |
+| PERF-01 | Phase 24 | Pending |
+| PERF-02 | Phase 24 | Pending |
+| PERF-03 | Phase 24 | Pending |
+| OPS-02 | Phase 25 | Pending |
+| OPS-03 | Phase 25 | Pending |
+| API-01 | Phase 26 | Pending |
+| API-02 | Phase 26 | Pending |
+| API-03 | Phase 26 | Pending |
+| OPS-01 | Phase 27 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-04 after initial definition*
+*Last updated: 2026-03-04 — traceability updated after roadmap creation (Phases 23-27)*
