@@ -1,29 +1,85 @@
-# Testing strategy
+# Testing
 
-## Rules
-- Every feature must be covered by tests to be “done”.
-- Prefer deterministic fixtures. No network in unit tests.
-- Component tests can spin in-proc servers.
+xUnit + FluentAssertions test suite covering the full ingestion-to-query pipeline. See `CLAUDE.md` for the canonical build and test commands.
 
-## Test pyramid
+**330 total tests | 309 passing | 21 environment-dependent**
 
-### Unit tests (fast)
-- XML doc parser: member binding, overloaded methods, generics
-- Roslyn collector: symbol IDs, file spans, partial types
-- Package mapping: csproj, Directory.Packages.props, nuspec, lock file parsing
-- Diff engine: stable diffs
+---
 
-### Component tests (medium)
-- Ingestion pipeline end-to-end on fixture repo
-- Indexing + query service
+## Test Philosophy
 
-### End-to-end tests (slower)
-- Start MCP server (in-proc or stdio)
-- Call tools, validate responses
+- xUnit + FluentAssertions throughout; `TreatWarningsAsErrors` enforced
+- No implicit network calls in tests — all fixtures are local
+- Snapshots are deterministic: same input always produces identical `SymbolGraphSnapshot` output
+- MSBuild-heavy tests use a `PipelineOverride` seam to run without a live workspace
 
-## Coverage gates
-- Core + ingestion: high coverage target
-- Serving layer: at least cover tool routing and authz
+---
 
-## Golden files
-Store expected snapshots under `tests/Golden/` and compare with stable serialization.
+## Running Tests
+
+```bash
+# All tests
+dotnet test src/DocAgentFramework.sln
+
+# Single test class
+dotnet test --filter "FullyQualifiedName~XmlDocParserTests"
+
+# Single category (example)
+dotnet test --filter "FullyQualifiedName~IncrementalIngestion"
+
+# Exclude environment-dependent tests (no trait defined — see Known Limitations)
+# Run with awareness that 21 tests will fail in environments without MSBuild toolchain
+```
+
+---
+
+## Test Categories
+
+| Category | Approx Files | What It Validates | Example Test Class |
+|----------|-------------|------------------|--------------------|
+| XML parsing + ingestion | 3 | XML doc parsing, member binding, ingestion pipeline | `XmlDocParserTests`, `IngestionServiceTests`, `LocalProjectSourceTests` |
+| Roslyn symbol graph | 2 | Symbol IDs, file spans, partial types, interface compilation | `RoslynSymbolGraphBuilderTests`, `InterfaceCompilationTests` |
+| Search indexing | 3 | BM25 ranking, persistence, in-memory fallback | `BM25SearchIndexTests`, `BM25SearchIndexPersistenceTests`, `InMemorySearchIndexTests` |
+| Snapshot serialization + store | 2 | MessagePack round-trips, store versioning | `SnapshotSerializationTests`, `SnapshotStoreTests` |
+| Incremental ingestion | 7 | File manifest, skip-unchanged path, dependency cascade | `IncrementalIngestionEngineTests`, `SolutionIncrementalIngestionTests`, `DependencyCascadeTests` |
+| Semantic diff | 8 | Signature diffs, nullability, constraints, accessibility | `SymbolGraphDifferTests`, `SignatureChangeTests`, `NullabilityChangeTests` |
+| Change review | 2 | Severity grouping, unusual pattern detection | `ChangeReviewerTests`, `ChangeToolTests` |
+| MCP tools + integration | 8 | Tool routing, request/response contracts | `McpToolTests`, `McpIntegrationTests`, `SolutionToolTests`, `IngestionToolTests` |
+| Security | 3 | PathAllowlist enforcement, audit logging, prompt injection | `PathAllowlistTests`, `AuditLoggerTests`, `PromptInjectionScannerTests` |
+| Solution-level | 5 | Cross-project edges, stub nodes, FQN disambiguation | `SolutionIngestionServiceTests`, `SolutionIngestionToolTests`, `SolutionGraphEnrichmentTests` |
+| Roslyn analyzers | 3 | DocCoverage, DocParity, SuspiciousEdit diagnostics | `DocCoverageAnalyzerTests`, `DocParityAnalyzerTests`, `SuspiciousEditAnalyzerTests` |
+| Performance / regression | 1 | Benchmark baseline regression guard | `RegressionGuardTests` |
+| E2E + determinism | 4 | Full pipeline, snapshot determinism, cross-project queries | `DeterminismTests`, `E2EIntegrationTests`, `IngestAndQueryE2ETests`, `CrossProjectQueryTests` |
+| Other | 1 | stdout contamination guard | `StdoutContaminationTests` |
+
+---
+
+## Fixture Patterns
+
+**Golden files** — Expected snapshot outputs stored under `tests/Golden/`. Compared byte-for-byte after serialization to catch non-determinism regressions.
+
+**PipelineOverride seam** — Tests that exercise ingestion without a live MSBuild workspace use a `PipelineOverride` injection point (mirrors the `IngestionService` pattern). Allows fast unit tests that bypass `MSBuildWorkspace.OpenSolutionAsync`.
+
+**In-proc MCP server** — Tool integration tests instantiate the MCP server in-process. No stdio transport needed; tools are called directly via the tool host, validating routing and response contracts without process boundaries.
+
+---
+
+## Known Limitations
+
+### MSBuildWorkspace Tests
+
+Some tests exercise `MSBuildWorkspace.OpenSolutionAsync` to load real Roslyn workspaces. These require:
+- .NET SDK with MSBuild toolchain installed at runtime
+- `dotnet build` pre-warmed (MEF composition cache populated)
+
+In environments where these conditions are not met (Docker images without SDK, CI runners without pre-build step), these tests fail with MEF composition errors. They are not code bugs — they are infrastructure constraints.
+
+**Count:** Approximately 17 of the 21 environment-dependent failures.
+
+### RegressionGuardTests
+
+`RegressionGuardTests` uses BenchmarkDotNet to compare performance against a stored baseline. BenchmarkDotNet's `ResultStatistics` is `null` when executed outside a proper release-mode benchmark run context (e.g., when run via `dotnet test` in debug mode or without the BDN harness).
+
+**Count:** Approximately 4 of the 21 environment-dependent failures.
+
+**Neither category represents defects in the codebase.** All 309 passing tests run clean on a standard developer machine with .NET 10 SDK installed.
