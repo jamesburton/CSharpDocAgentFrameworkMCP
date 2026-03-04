@@ -44,7 +44,15 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 
 ### Active
 
-(No active milestone — all v1.0–v1.3 requirements shipped)
+## Current Milestone: v1.5 Robustness
+
+**Goal:** Harden the query pipeline, extend the tool surface, upgrade dependencies, and polish operational readiness — making DocAgentFramework production-grade.
+
+**Target features:**
+- CLAUDE.md refresh with all 12 tools, startup config validation, rate limiting
+- Roslyn 4.14 upgrade, full package audit
+- Pagination for large result sets, find_implementations tool, doc coverage metrics tool
+- O(1) symbol lookup, batched project resolution, search metadata caching
 
 ### Out of Scope
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
@@ -107,4 +115,4 @@ Full pipeline operational: 12 MCP tools (`search_symbols`, `get_symbol`, `get_re
 | Dict-keyed BaselineModels for baselines.json | Matches actual BDN output schema | ✓ Good — no schema mismatch |
 
 ---
-*Last updated: 2026-03-04 after v1.3 Housekeeping milestone*
+*Last updated: 2026-03-04 after v1.5 Robustness milestone start*
