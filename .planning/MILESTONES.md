@@ -57,3 +57,18 @@
 
 ---
 
+
+## v1.3 Housekeeping (Shipped: 2026-03-04)
+
+**Phases completed:** 4 phases, 8 plans
+
+**Timeline:** 3 days (2026-03-02 → 2026-03-04) | 28 commits
+
+**Key accomplishments:**
+- Incremental solution re-ingestion with per-project SHA-256 manifest comparison, dependency cascade (topological sort + dirty propagation), and byte-identity determinism guarantee (INGEST-05)
+- BenchmarkDotNet performance suite measuring MSBuild workspace open, full solution ingestion, and incremental no-change latency with regression guard tests
+- Stale code cleanup: removed dead TODO comments, resolved v1.2 audit artifact frontmatter issues, wired benchmark to IncrementalSolutionIngestionService decorator, registered OTel meter
+- Documentation refresh: Architecture.md (6 projects, 12 MCP tools, Mermaid diagrams), Plan.md (v1.0–v1.2 shipped milestone history), Testing.md (330/309/21 test counts, category breakdown, known limitations)
+
+---
+

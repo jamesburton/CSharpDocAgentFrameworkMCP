@@ -133,6 +133,46 @@
 
 ---
 
+## Milestone: v1.3 — Housekeeping
+
+**Shipped:** 2026-03-04
+**Phases:** 4 | **Plans:** 8 | **Commits:** 28
+
+### What Was Built
+- Incremental solution re-ingestion: per-project SHA-256 manifest comparison, dependency cascade via topological sort, byte-identity determinism guarantee (INGEST-05)
+- BenchmarkDotNet performance suite: MSBuild workspace open, full solution ingestion, incremental no-change latency with regression guard tests
+- Stale code cleanup: dead TODO comments, v1.2 audit artifact frontmatter, benchmark wiring to decorator, OTel meter registration
+- Documentation refresh: Architecture.md (6 projects, 12 MCP tools, Mermaid diagrams), Plan.md (milestone history), Testing.md (330/309/21 counts)
+
+### What Worked
+- Gap closure phases (21, 22) created directly from v1.3 milestone audit — audit-driven pattern now fully mature
+- Research phase for Phase 22 produced ground truth data that prevented hallucinated doc content
+- Separating benchmark project with relaxed warnings avoided version conflicts with BDN transitive deps
+- Pointer file pattern for incremental state was simple and effective
+
+### What Was Inefficient
+- v1.3 audit ran before phases 21-22 existed, so audit showed gaps_found for work that was already planned — audit timing could be smarter
+- REQUIREMENTS.md QUAL-01/02/03 checkboxes not auto-updated when Phase 21 completed — required manual fix during milestone completion
+
+### Patterns Established
+- Decorator pattern for incremental services (IncrementalSolutionIngestionService wraps SolutionIngestionService)
+- Solution-relative path keys with __ separator for manifest filename collision avoidance
+- Pointer file pattern (latest-{sln}.ptr) for referencing previous snapshots
+- Research-first documentation: ground truth gathered before writing prevents phantom features
+
+### Key Lessons
+1. Research phases before documentation tasks prevent hallucination — 22-RESEARCH.md was essential for accurate docs
+2. Decorator pattern cleanly separates incremental logic from core ingestion — easier to test each independently
+3. Audit timing: run audit only after all planned phases complete, not mid-milestone
+4. REQUIREMENTS.md should be auto-updated by verification — manual checkbox management is error-prone
+
+### Cost Observations
+- Model mix: primarily sonnet for execution, opus for planning/verification
+- Timeline: 3 days (2026-03-02 → 2026-03-04) for 4 phases
+- Notable: Housekeeping milestone was efficient — small focused phases with clear scope
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -142,6 +182,7 @@
 | v1.0 | 121 | 8 | Established full GSD workflow with audit-driven gap closure |
 | v1.1 | 44 | 4 | Smaller scope, audit-driven gap closure pattern repeated |
 | v1.2 | 67 | 6 | Gap closure phases (14.1, 18) as first-class workflow; deferred stretch goal |
+| v1.3 | 28 | 4 | Research-first docs; audit-driven gap closure phases fully mature |
 
 ### Cumulative Quality
 
@@ -150,10 +191,12 @@
 | v1.0 | 177 | 4,391 | 4,747 |
 | v1.1 | ~220 | ~8,900 | ~9,250 |
 | v1.2 | 303 | ~8,170 | — |
+| v1.3 | 330 | ~8,500 | — |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Milestone audits catch integration gaps that per-phase testing misses (v1.0: env var + forceReindex, v1.1: PathAllowlist gap, v1.2: tool name collision + graph enrichment gaps)
 2. E2E tests through real DI are the strongest proof of pipeline correctness
 3. Pure static services are the right default for algorithmic code — verified across SymbolGraphDiffer, ChangeReviewer, FileHasher
-4. Seam-based test isolation (PipelineOverride, BuildOverride) enables comprehensive testing of expensive-dependency services — verified across v1.1 and v1.2
+4. Seam-based test isolation (PipelineOverride, BuildOverride) enables comprehensive testing of expensive-dependency services — verified across v1.1, v1.2, and v1.3
+5. Research phases before documentation prevent hallucination — verified in v1.3 (ground truth data produced accurate docs)

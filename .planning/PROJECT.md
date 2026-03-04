@@ -37,18 +37,14 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 - ✓ `diff_solution_snapshots` MCP tool for solution-level diff — v1.2
 - ✓ PathAllowlist security on all SolutionTools methods — v1.2
 
+- ✓ Per-project incremental solution re-ingestion with dependency cascade and byte-identity guarantee — v1.3
+- ✓ BenchmarkDotNet performance baselines and regression guard for MSBuild workspace and solution ingestion — v1.3
+- ✓ Stale code cleanup (dead TODOs, audit artifact frontmatter, benchmark wiring, OTel meter registration) — v1.3
+- ✓ Documentation refresh (Architecture.md, Plan.md, Testing.md aligned to shipped reality) — v1.3
+
 ### Active
 
-## Current Milestone: v1.3 Housekeeping
-
-**Goal:** Clear accumulated backlog — deliver deferred INGEST-05, fix stale code/comments, benchmark MSBuild performance, and refresh documentation to reflect v1.0–v1.2 reality.
-
-**Target features:**
-- Per-project incremental solution re-ingestion (INGEST-05)
-- MSBuild memory/latency benchmarking and regression guards
-- Stale TODO/comment cleanup across codebase
-- Documentation refresh (Architecture.md, Plan.md aligned to current state)
-- Audit artifact cleanup from v1.2
+(No active milestone — all v1.0–v1.3 requirements shipped)
 
 ### Out of Scope
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
@@ -61,13 +57,13 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 
 ## Context
 
-Shipped v1.2 with ~8,170 LOC C#. 303 passing tests.
+Shipped v1.3 with ~8,500 LOC C#. 330 tests (309 passing, 21 environment-dependent).
 
-Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, SHA-256 file hashing.
+Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing.
 
-Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers).
+Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers + Benchmarks project).
 
-Full pipeline operational: 11 MCP tools (`search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`, `review_changes`, `find_breaking_changes`, `explain_change`, `ingest_project`, `ingest_solution`, `explain_solution`, `diff_solution_snapshots`) + `ingest_project` / `ingest_solution` triggers. Incremental ingestion re-parses only changed files. All tools secured with PathAllowlist enforcement. Solution-level graphs span entire .sln with cross-project edges and stub nodes.
+Full pipeline operational: 12 MCP tools (`search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`, `review_changes`, `find_breaking_changes`, `explain_change`, `ingest_project`, `ingest_solution`, `explain_solution`, `diff_solution_snapshots`). Incremental ingestion at both file and solution levels — unchanged projects skipped via SHA-256 manifest comparison with dependency cascade. All tools secured with PathAllowlist enforcement. Performance baselined with BenchmarkDotNet regression guards.
 
 ## Constraints
 
@@ -102,7 +98,13 @@ Full pipeline operational: 11 MCP tools (`search_symbols`, `get_symbol`, `get_re
 | Stub nodes capped to direct PackageReference assemblies | Prevents index bloat from transitive closure | ✓ Good — manageable stub count |
 | EdgeScope classified at construction time | No post-classification pass; locked design constraint | ✓ Good — clean single-pass pipeline |
 | explain_solution derives DAG from CrossProject edges at query time | No pre-computed adjacency stored | ✓ Good — always fresh, no stale cache |
-| diff_solution_snapshots wire name (not diff_snapshots) | Avoids tool name collision with DocTools | ✓ Good — 11 unique MCP tool names |
+| diff_solution_snapshots wire name (not diff_snapshots) | Avoids tool name collision with DocTools | ✓ Good — 12 unique MCP tool names |
+| DependencyCascade extracted from SolutionIngestionService | Reusable topological sort + dirty set computation | ✓ Good — clean separation |
+| Solution-relative path keys with __ separator for manifests | Prevents filename collision for same-name projects in different directories | ✓ Good — unique keys guaranteed |
+| IncrementalSolutionIngestionService as decorator | Wraps SolutionIngestionService; skip path returns cached snapshot | ✓ Good — single-responsibility |
+| Pointer file pattern (latest-{sln}.ptr) | Reference previous snapshot for incremental comparison | ✓ Good — simple file-based state |
+| BenchmarkDotNet in separate project with relaxed warnings | BDN transitive Roslyn deps conflict with pinned 4.12.0; measurement ≠ production | ✓ Good — isolation prevents version conflicts |
+| Dict-keyed BaselineModels for baselines.json | Matches actual BDN output schema | ✓ Good — no schema mismatch |
 
 ---
-*Last updated: 2026-03-02 after v1.3 milestone start*
+*Last updated: 2026-03-04 after v1.3 Housekeeping milestone*
