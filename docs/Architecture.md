@@ -1,100 +1,122 @@
 # Architecture
 
-## Layers
+DocAgentFramework ingests code documentation and Roslyn symbol data, normalizes it into a queryable symbol graph, and serves it via a securable MCP server. See `CLAUDE.md` for quick-start commands.
 
-- **Core (Domain):** pure types + interfaces; no IO
-- **Ingestion:** source discovery, parsing, normalization → snapshots
-- **Indexing:** build/query indexes from snapshots
-- **Serving:** MCP tools + security + authn/authz boundaries
-- **Orchestration:** Agent Framework workflows calling MCP tools
-- **Host:** Aspire app host + wiring (config, storage, telemetry)
+---
 
-This keeps “memory building” and “memory serving” separate, which helps security and testing.
+## Projects
 
-## Key abstractions
+| Project | Target Framework | Responsibility |
+|---------|-----------------|----------------|
+| `DocAgent.Core` | net10.0 | Pure domain types and interfaces — no IO |
+| `DocAgent.Ingestion` | net10.0 | Source discovery, XML parsing, Roslyn graph building, incremental engine |
+| `DocAgent.Indexing` | net10.0 | BM25 search index, snapshot store, project-aware querying |
+| `DocAgent.McpServer` | net10.0 | MCP tools, security (PathAllowlist, AuditLogger), IngestionService |
+| `DocAgent.AppHost` | net10.0 | Aspire app host, configuration, telemetry wiring |
+| `DocAgent.Analyzers` | netstandard2.0 | Roslyn analyzers: DocCoverage, DocParity, SuspiciousEdit |
 
-### Sources
+---
 
-```csharp
-public interface IProjectSource
-{
-    Task<ProjectInventory> DiscoverAsync(ProjectLocator locator, CancellationToken ct);
-}
+## Project Dependencies
 
-public interface IDocSource
-{
-    Task<DocInputSet> LoadAsync(ProjectInventory inv, CancellationToken ct);
-}
+| Project | Depends On |
+|---------|-----------|
+| `DocAgent.Core` | (none — leaf) |
+| `DocAgent.Ingestion` | `DocAgent.Core` |
+| `DocAgent.Indexing` | `DocAgent.Core`, `DocAgent.Ingestion` |
+| `DocAgent.McpServer` | `DocAgent.Core`, `DocAgent.Ingestion`, `DocAgent.Indexing` |
+| `DocAgent.AppHost` | `DocAgent.McpServer` |
+| `DocAgent.Analyzers` | (none — standalone, netstandard2.0) |
+
+```mermaid
+graph TD
+    Core["DocAgent.Core\n(net10.0)"]
+    Ingestion["DocAgent.Ingestion\n(net10.0)"]
+    Indexing["DocAgent.Indexing\n(net10.0)"]
+    McpServer["DocAgent.McpServer\n(net10.0)"]
+    AppHost["DocAgent.AppHost\n(net10.0)"]
+    Analyzers["DocAgent.Analyzers\n(netstandard2.0)"]
+
+    Core --> Ingestion
+    Core --> Indexing
+    Ingestion --> Indexing
+    Core --> McpServer
+    Ingestion --> McpServer
+    Indexing --> McpServer
+    McpServer --> AppHost
 ```
 
-Provide implementations for:
-- local filesystem
-- remote git repo (read-only cache)
-- (V3) NuGet metadata source
+---
 
-### Symbol graph builder
+## Pipeline
 
-```csharp
-public interface ISymbolGraphBuilder<TDoc>
-    where TDoc : class
-{
-    Task<SymbolGraphSnapshot> BuildAsync(ProjectInventory inv, TDoc docs, CancellationToken ct);
-}
+The standard ingestion and query pipeline:
+
+```
+IProjectSource → IDocSource → ISymbolGraphBuilder → ISearchIndex → IKnowledgeQueryService → MCP Tools
 ```
 
-The generic keeps the builder independent of *how* docs were obtained.
+Incremental path (v1.3): `IncrementalIngestionEngine` wraps `ISymbolGraphBuilder` with a SHA-256 file manifest to skip unchanged files. `IncrementalSolutionIngestionService` decorates `SolutionIngestionService` with pointer-file state.
 
-### Indexes
-
-```csharp
-public interface ISearchIndex
-{
-    Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct);
-    Task<IReadOnlyList<SearchHit>> SearchAsync(string query, SearchOptions options, CancellationToken ct);
-}
-
-public interface IVectorIndex
-{
-    Task UpsertAsync(IEnumerable<VectorRecord> records, CancellationToken ct);
-    Task<IReadOnlyList<VectorHit>> SimilarAsync(float[] embedding, int k, CancellationToken ct);
-}
+```mermaid
+flowchart LR
+    A["IProjectSource\nDiscoverAsync()"] --> B["IDocSource\nLoadAsync()"]
+    B --> C["ISymbolGraphBuilder\nBuildAsync()"]
+    C --> D["ISearchIndex\nIndexAsync()"]
+    D --> E["IKnowledgeQueryService\nSearchAsync / GetSymbol"]
+    E --> F["MCP Tools"]
+    C --> G["SymbolGraphDiffer\n(static)"]
+    G --> F
 ```
 
-### Query facade
+---
 
-```csharp
-public interface IKnowledgeQueryService
-{
-    Task<SymbolNode?> GetSymbolAsync(SymbolId id, CancellationToken ct);
-    Task<IReadOnlyList<SearchHit>> SearchAsync(string query, CancellationToken ct);
-    Task<GraphDiff> DiffAsync(SnapshotRef a, SnapshotRef b, CancellationToken ct);
-}
-```
+## MCP Tools
 
-### Tool surface (MCP)
+All 12 tools exposed by `DocAgent.McpServer`, grouped by class:
 
-Expose a narrow toolset that maps to `IKnowledgeQueryService`. Avoid “free-form filesystem” tools in V1.
+### DocTools (5)
 
-## Polymorphism patterns
+| Tool Name | Description |
+|-----------|-------------|
+| `search_symbols` | Search symbols and documentation by keyword |
+| `get_symbol` | Get full symbol detail by stable SymbolId |
+| `get_references` | Get symbols that reference the given symbol |
+| `diff_snapshots` | Diff two snapshot versions showing added/removed/modified symbols |
+| `explain_project` | Get a comprehensive project overview in one call |
 
-- `IProjectSource` and `IDocSource` are polymorphic; register multiple and select via a `SourceKind` discriminator.
-- Extensions for composition:
-  - `services.AddDocAgentCore()`
-  - `services.AddDocAgentIngestion()`
-  - `services.AddDocAgentMcpServer()`
-- Prefer records for immutable domain types; explicit versioning for snapshots and tool contracts.
+### ChangeTools (3)
+
+| Tool Name | Description |
+|-----------|-------------|
+| `review_changes` | Review all changes between two snapshot versions, grouped by severity with unusual pattern detection |
+| `find_breaking_changes` | Find public API breaking changes between two snapshots (CI-optimized) |
+| `explain_change` | Get a detailed human-readable explanation of changes to a specific symbol between two snapshots |
+
+### SolutionTools (2)
+
+| Tool Name | Description |
+|-----------|-------------|
+| `explain_solution` | Solution-level architecture overview |
+| `diff_solution_snapshots` | Solution-level diff across all projects |
+
+### IngestionTools (2)
+
+| Tool Name | Description |
+|-----------|-------------|
+| `ingest_project` | Runtime ingestion trigger for a single project |
+| `ingest_solution` | Ingest an entire .sln solution with language filtering and TFM dedup |
+
+---
+
+## Security
+
+MCP tool calls are gated by a default-deny `PathAllowlist` that restricts file system access to declared paths. Every tool call is recorded by `AuditLogger` with tool name, requester identity, duration, and status. Incoming prompt arguments are scanned by `PromptInjectionScanner` before execution.
+
+See `docs/Security.md` for the full security model, threat scope, and configuration details.
+
+---
 
 ## Storage
 
-- V1: write snapshots + indexes to `artifacts/`
-- Optional: SQLite for metadata + snapshot catalog
-- V2+: add content-addressed storage (hash keys)
-
-## Telemetry
-
-Use `Microsoft.Extensions.Logging` + OpenTelemetry hooks.
-Log every tool call with:
-- tool name
-- requester identity (if available)
-- duration
-- status
+Snapshots are written to the `artifacts/` directory using MessagePack serialization. Each snapshot is immutable and addressed by a version identifier. Incremental ingestion uses pointer files (`latest-{project}.ptr`, `latest-{sln}.ptr`) to track the previous snapshot reference across runs.
