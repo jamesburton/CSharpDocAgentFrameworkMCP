@@ -29,9 +29,9 @@ Requirements for v1.3 Housekeeping milestone. Each maps to roadmap phases.
 
 ### Documentation
 
-- [ ] **DOCS-01**: Architecture.md reflects current 6-project structure and 12 MCP tools
-- [ ] **DOCS-02**: Plan.md updated to reflect v1.0-v1.2 shipped reality
-- [ ] **DOCS-03**: Testing.md updated with current test count and strategy
+- [x] **DOCS-01**: Architecture.md reflects current 6-project structure and 12 MCP tools
+- [x] **DOCS-02**: Plan.md updated to reflect v1.0-v1.2 shipped reality
+- [x] **DOCS-03**: Testing.md updated with current test count and strategy
 
 ## Future Requirements
 
@@ -72,9 +72,9 @@ Deferred to future milestones. Tracked but not in v1.3 roadmap.
 | QUAL-01 | Phase 21 | Pending |
 | QUAL-02 | Phase 21 | Pending |
 | QUAL-03 | Phase 21 | Pending |
-| DOCS-01 | Phase 22 | Pending |
-| DOCS-02 | Phase 22 | Pending |
-| DOCS-03 | Phase 22 | Pending |
+| DOCS-01 | Phase 22 | Complete |
+| DOCS-02 | Phase 22 | Complete |
+| DOCS-03 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 14 total

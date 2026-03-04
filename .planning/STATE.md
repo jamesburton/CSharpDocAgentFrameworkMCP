@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Housekeeping
 status: unknown
-last_updated: "2026-03-03T17:10:44.048Z"
+last_updated: "2026-03-04T10:04:55.512Z"
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  completed_phases: 4
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 21 of 22 (Code and Audit Cleanup) — COMPLETE
-Plan: 1 of 1 in current phase (21-01 complete)
-Status: Phase 21 Complete — moving to Phase 22
-Last activity: 2026-03-03 — Completed 21-01 (stale comments, benchmark wiring, OTel meter)
+Phase: 22 of 22 (Documentation Refresh) — COMPLETE
+Plan: 1 of 1 in current phase (22-01 complete)
+Status: Phase 22 Complete — all phases done
+Last activity: 2026-03-04 — Completed 22-01 (Architecture.md, Plan.md, Testing.md refresh)
 
-Progress: [██████░░░░] 60% (v1.3: 3/4 phases, 7/? plans complete)
+Progress: [██████████] 100% (v1.3: 4/4 phases complete)
 
 ## Performance Metrics
 
@@ -66,6 +66,9 @@ Recent decisions affecting current work:
 - [v1.3-20-01]: IncrementalNoChange benchmark runs two passes per iteration — first populates store, second exercises skip path
 - [Phase 20]: Dict-keyed BaselineModels matches actual baselines.json schema from plan 20-01
 - [Phase 20]: VersionOverride=4.14.0 for Microsoft.CodeAnalysis.Common in DocAgent.Tests resolves NU1107 from BDN transitive deps
+- [Phase 22-01]: Architecture.md uses Mermaid graph TD for dependencies and flowchart LR for pipeline
+- [Phase 22-01]: Plan.md restructured as milestone history; phantom features removed (GitRepoSource, PackageRefGraph as V1 deliverable)
+- [Phase 22-01]: Testing.md documents 21 environment-dependent failures split as ~17 MSBuildWorkspace and ~4 RegressionGuard
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03
-Stopped at: Completed 21-01-PLAN.md (Code and Audit Cleanup). Phase 21 complete.
+Last session: 2026-03-04
+Stopped at: Completed 22-01-PLAN.md (Documentation Refresh). Phase 22 complete. All phases done.
 Resume file: None
