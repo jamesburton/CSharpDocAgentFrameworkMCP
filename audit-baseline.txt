@@ -1,0 +1,70 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+
+The following sources were used:
+   https://api.nuget.org/v3/index.json
+
+The given project `DocAgent.Core` has no vulnerable packages given the current sources.
+Project `DocAgent.Ingestion` has the following vulnerable packages
+   [net10.0]: 
+   Transitive Package                Resolved   Severity   Advisory URL                                     
+   > Microsoft.Build.Tasks.Core      17.7.2     High       https://github.com/advisories/GHSA-h4j7-5rxr-p4wc
+
+Project `DocAgent.Indexing` has the following vulnerable packages
+   [net10.0]: 
+   Transitive Package                Resolved   Severity   Advisory URL                                     
+   > Microsoft.Build.Tasks.Core      17.7.2     High       https://github.com/advisories/GHSA-h4j7-5rxr-p4wc
+
+Project `DocAgent.McpServer` has the following vulnerable packages
+   [net10.0]: 
+   Transitive Package                Resolved   Severity   Advisory URL                                     
+   > Microsoft.Build.Tasks.Core      17.7.2     High       https://github.com/advisories/GHSA-h4j7-5rxr-p4wc
+
+The given project `DocAgent.AppHost` has no vulnerable packages given the current sources.
+Project `DocAgent.Tests` has the following vulnerable packages
+   [net10.0]: 
+   Transitive Package                Resolved   Severity   Advisory URL                                     
+   > Microsoft.Build.Tasks.Core      17.7.2     High       https://github.com/advisories/GHSA-h4j7-5rxr-p4wc
+
+The given project `DocAgent.Analyzers` has no vulnerable packages given the current sources.
+Project `DocAgent.Benchmarks` has the following vulnerable packages
+   [net10.0]: 
+   Transitive Package                Resolved   Severity   Advisory URL                                     
+   > Microsoft.Build.Tasks.Core      17.7.2     High       https://github.com/advisories/GHSA-h4j7-5rxr-p4wc
+
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+
+The following sources were used:
+   https://api.nuget.org/v3/index.json
+
+The given project `DocAgent.Core` has no updates given the current sources.
+Project `DocAgent.Ingestion` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                                Requested   Resolved   Latest
+   > Microsoft.CodeAnalysis.CSharp.Workspaces       4.14.0      4.14.0     5.0.0 
+   > Microsoft.CodeAnalysis.Workspaces.MSBuild      4.14.0      4.14.0     5.0.0 
+   > System.IO.Hashing                              9.0.0       9.0.0      10.0.3
+
+Project `DocAgent.Indexing` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                 Requested         Resolved          Latest                  
+   > Lucene.Net.Analysis.Common      4.8.0-beta00017   4.8.0-beta00017   Not found at the sources
+
+The given project `DocAgent.McpServer` has no updates given the current sources.
+The given project `DocAgent.AppHost` has no updates given the current sources.
+Project `DocAgent.Tests` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                    Requested   Resolved   Latest
+   > FluentAssertions                   6.12.1      6.12.1     8.8.0 
+   > Microsoft.CodeAnalysis.Common      4.14.0      4.14.0     5.0.0 
+   > Microsoft.NET.Test.Sdk             18.0.1      18.0.1     18.3.0
+   > System.IO.Hashing                  9.0.0       9.0.0      10.0.3
+   > xunit.runner.visualstudio          2.8.2       2.8.2      3.1.5 
+
+Project `DocAgent.Analyzers` has the following updates to its packages
+   [netstandard2.0]: 
+   Top-level Package                    Requested   Resolved   Latest
+   > Microsoft.CodeAnalysis.CSharp      4.14.0      4.14.0     5.0.0 
+
+The given project `DocAgent.Benchmarks` has no updates given the current sources.

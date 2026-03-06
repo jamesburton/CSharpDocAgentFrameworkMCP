@@ -5,6 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
+    <!-- CS0436: Benchmarks' top-level Program conflicts with McpServer's imported Program type -->
+    <NoWarn>CS0436</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
