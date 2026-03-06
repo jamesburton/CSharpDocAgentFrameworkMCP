@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <!-- MSBuildWorkspace 4.12 transitively brings Microsoft.Build.Tasks.Core 17.7.2
-         which has a known vulnerability advisory. Suppress as the advisory only applies
-         to the MSBuild host process, not library consumers. -->
-    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DocAgent.Core\DocAgent.Core.csproj" />

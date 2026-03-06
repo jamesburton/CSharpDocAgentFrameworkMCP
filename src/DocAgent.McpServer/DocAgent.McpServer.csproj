@@ -2,8 +2,6 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
-    <!-- Suppress transitive vulnerability advisories from Roslyn/MSBuild deps -->
-    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DocAgent.Core\DocAgent.Core.csproj" />

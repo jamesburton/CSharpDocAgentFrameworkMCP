@@ -10,9 +10,9 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.2.25163.2" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.0-preview.2.25163.2" />
     <!-- Roslyn -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.12.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.12.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
     <!-- Binary serialization (default snapshot format) -->
     <PackageVersion Include="MessagePack" Version="3.1.4" />
     <!-- Hashing utilities -->
@@ -36,9 +36,7 @@
     <PackageVersion Include="Verify.Xunit" Version="31.12.5" />
     <!-- Performance benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <!-- Explicit version to resolve NU1107 in DocAgent.Tests: BDN 0.15.8 requires 4.14.0 but
-         Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit 1.1.2 requires 4.12.0.
-         DocAgent.Tests uses VersionOverride=4.14.0 to force a single resolved version. -->
+    <!-- All Roslyn packages aligned at 4.14.0. Retained for direct reference from DocAgent.Tests. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" />
   </ItemGroup>
 </Project>
