@@ -89,7 +89,10 @@ Full details: milestones/v1.3-ROADMAP.md
   2. The VersionOverride workaround in DocAgent.Tests.csproj is removed from the solution
   3. `NuGetAudit` is enabled in Directory.Build.props and `dotnet restore` reports no known vulnerabilities
   4. All five Microsoft.CodeAnalysis.* packages are at 4.14.0 and the package audit baseline is recorded
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 23-01-PLAN.md — Roslyn 4.14.0 upgrade, csproj cleanup, and NuGetAudit enablement
 
 ### Phase 24: Query Performance
 **Goal**: Symbol lookups and edge traversals operate in O(1) time using pre-built index dictionaries, eliminating linear scans from the hot query path
@@ -161,7 +164,7 @@ Full details: milestones/v1.3-ROADMAP.md
 | 20. MSBuild Performance Benchmarks | v1.3 | 2/2 | Complete | 2026-03-03 |
 | 21. Code and Audit Cleanup | v1.3 | 1/1 | Complete | 2026-03-03 |
 | 22. Documentation Refresh | v1.3 | 1/1 | Complete | 2026-03-04 |
-| 23. Dependency Foundation | v1.5 | 0/TBD | Not started | - |
+| 23. Dependency Foundation | v1.5 | 0/1 | Planning | - |
 | 24. Query Performance | v1.5 | 0/TBD | Not started | - |
 | 25. Server Infrastructure | v1.5 | 0/TBD | Not started | - |
 | 26. API Extensions | v1.5 | 0/TBD | Not started | - |
