@@ -13,6 +13,8 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
 {
     private readonly ISearchIndex _index;
     private readonly SnapshotStore _snapshotStore;
+    private SnapshotLookup? _cachedLookup;
+    private string? _cachedHash;
 
     public KnowledgeQueryService(ISearchIndex index, SnapshotStore snapshotStore)
     {
@@ -267,5 +269,64 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
             return (null, latestHash, QueryErrorKind.SnapshotMissing);
 
         return (snapshot, latestHash, null);
+    }
+
+    /// <summary>
+    /// Returns a cached <see cref="SnapshotLookup"/> for the given snapshot,
+    /// rebuilding only when the content hash changes.
+    /// </summary>
+    private SnapshotLookup GetOrBuildLookup(SymbolGraphSnapshot snapshot)
+    {
+        var hash = snapshot.ContentHash;
+        if (_cachedLookup is not null && _cachedHash == hash)
+            return _cachedLookup;
+
+        var lookup = new SnapshotLookup(snapshot);
+        _cachedLookup = lookup;
+        _cachedHash = hash;
+        return lookup;
+    }
+
+    // -------------------------------------------------------------------------
+    // SnapshotLookup (private nested class)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Pre-built dictionaries for O(1) node and edge lookups from a snapshot.
+    /// Replaces linear scans over <see cref="SymbolGraphSnapshot.Nodes"/> and
+    /// <see cref="SymbolGraphSnapshot.Edges"/> in query methods.
+    /// </summary>
+    private sealed class SnapshotLookup
+    {
+        public Dictionary<SymbolId, SymbolNode> NodeById { get; }
+        public Dictionary<SymbolId, List<SymbolEdge>> EdgesByFrom { get; }
+        public Dictionary<SymbolId, List<SymbolEdge>> EdgesByTo { get; }
+
+        public SnapshotLookup(SymbolGraphSnapshot snapshot)
+        {
+            NodeById = new Dictionary<SymbolId, SymbolNode>(snapshot.Nodes.Count);
+            foreach (var node in snapshot.Nodes)
+                NodeById[node.Id] = node;
+
+            EdgesByFrom = new Dictionary<SymbolId, List<SymbolEdge>>();
+            EdgesByTo = new Dictionary<SymbolId, List<SymbolEdge>>();
+
+            foreach (var edge in snapshot.Edges)
+            {
+                if (!EdgesByFrom.TryGetValue(edge.From, out var fromList))
+                {
+                    fromList = new List<SymbolEdge>();
+                    EdgesByFrom[edge.From] = fromList;
+                }
+                fromList.Add(edge);
+
+                if (!EdgesByTo.TryGetValue(edge.To, out var toList))
+                {
+                    toList = new List<SymbolEdge>();
+                    EdgesByTo[edge.To] = toList;
+                }
+                toList.Add(edge);
+            }
+        }
     }
 }
