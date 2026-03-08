@@ -6,6 +6,7 @@ using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Filters;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Telemetry;
+using DocAgent.McpServer.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -28,6 +29,9 @@ if (!string.IsNullOrWhiteSpace(artifactsDirFromEnv))
 // Strongly-typed configuration from appsettings.json section "DocAgent"
 builder.Services.Configure<DocAgentServerOptions>(
     builder.Configuration.GetSection("DocAgent"));
+
+// Startup validation — fails fast on invalid config before accepting tool calls
+builder.Services.AddHostedService<StartupValidator>();
 
 // Security services
 builder.Services.AddSingleton<PathAllowlist>();
