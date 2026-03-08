@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Robustness
-status: shipped
-stopped_at: Milestone v1.5 archived
-last_updated: "2026-03-08T12:31:00Z"
-last_activity: 2026-03-08 — v1.5 Robustness milestone shipped and archived
+milestone: v2.0
+milestone_name: TypeScript Language Support
+status: defining_requirements
+stopped_at: null
+last_updated: "2026-03-08T13:00:00Z"
+last_activity: 2026-03-08 — Milestone v2.0 started
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,15 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v2.0 TypeScript Language Support
 
 ## Current Position
 
-Milestone: v1.5 Robustness — SHIPPED 2026-03-08
-Status: Archived to .planning/milestones/
-Tag: v1.5
-
-Progress: [##########] 100% (5 milestones shipped, 27 phases, 59 plans)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-08 — Milestone v2.0 started
 
 ## Performance Metrics
 
@@ -49,10 +48,10 @@ None.
 
 ### Blockers/Concerns
 
-None — all v1.5 blockers resolved during execution.
+None.
 
 ## Session Continuity
 
-Last session: 2026-03-08T12:31:00Z
-Stopped at: Milestone v1.5 archived
-Next step: /gsd:new-milestone
+Last session: 2026-03-08T13:00:00Z
+Stopped at: Defining v2.0 requirements
+Next step: Complete requirements → roadmap

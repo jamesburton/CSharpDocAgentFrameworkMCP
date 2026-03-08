@@ -51,7 +51,18 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 
 ### Active
 
-(No active requirements — planning next milestone)
+## Current Milestone: v2.0 TypeScript Language Support
+
+**Goal:** Make TypeScript codebases queryable through the same 14 MCP tools via the existing symbol graph pipeline.
+
+**Target features:**
+- Node.js sidecar orchestrated by Aspire using TypeScript Compiler API
+- Symbol extraction (modules, interfaces, classes, functions, members, exports) into existing SymbolNode/SymbolEdge graph
+- `tsconfig.json` as project entry point with folder/monorepo selection
+- `ingest_typescript` MCP tool for TypeScript project ingestion
+- All 14 existing MCP tools work identically against TypeScript snapshots
+- Incremental ingestion, diffing, and change intelligence for TypeScript
+- Separate snapshots per language (no cross-language edges)
 
 ### Out of Scope
 - Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to v2.0
@@ -63,14 +74,17 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 - Streaming MCP responses — MCP spec doesn't support streaming tool responses
 - Per-client identity/auth — Stdio is single-client; auth not meaningful
 - Live Roslyn SymbolFinder queries — v1.5 uses snapshot edges; live queries deferred
+- Cross-language symbol graphs (C# ↔ TypeScript edges) — separate snapshots for v2.0
+- Vite/other framework config entry points — tsconfig.json only for v2.0; iterate later
+- TypeScript-specific model extensions (union types, mapped types, conditional types) — natural mappings first; gaps tracked
 
 ## Context
 
 Shipped v1.5 with ~20,400 LOC C#. 335+ tests. 5 milestones shipped over 12 days (2026-02-25 → 2026-03-08).
 
-Tech stack: .NET 10, Roslyn 4.14.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing, System.Threading.RateLimiting (TokenBucket).
+Tech stack: .NET 10, Roslyn 4.14.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing, System.Threading.RateLimiting (TokenBucket). V2.0 adds: Node.js sidecar, TypeScript Compiler API.
 
-Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers + Benchmarks project).
+Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers + Benchmarks project). V2.0 adds a Node.js sidecar project for TypeScript symbol extraction, orchestrated via Aspire.
 
 Full pipeline operational: 14 MCP tools across 4 tool classes (DocTools: 7, ChangeTools: 3, IngestionTools: 2, SolutionTools: 2). Incremental ingestion at both file and solution levels. All tools secured with PathAllowlist enforcement. Performance baselined with BenchmarkDotNet regression guards. O(1) query path via SnapshotLookup dictionaries. Startup validation and rate limiting for operational safety.
 
@@ -125,4 +139,4 @@ Full pipeline operational: 14 MCP tools across 4 tool classes (DocTools: 7, Chan
 | Tool docs organized by source file category in CLAUDE.md | Easy cross-reference between docs and source | ✓ Good — 4 categories match 4 tool classes |
 
 ---
-*Last updated: 2026-03-08 after v1.5 Robustness milestone*
+*Last updated: 2026-03-08 after v2.0 TypeScript Language Support milestone started*
