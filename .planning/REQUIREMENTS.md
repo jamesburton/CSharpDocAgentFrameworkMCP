@@ -10,8 +10,8 @@ Requirements for v1.5 Robustness milestone. Each maps to roadmap phases.
 ### Operational Polish
 
 - [ ] **OPS-01**: CLAUDE.md lists all MCP tools (currently 12, becoming 14) with parameters, format options, and projectFilter
-- [ ] **OPS-02**: Server validates configuration on startup (AllowedPaths non-empty, ArtifactsDir writable) and logs diagnostic summary
-- [ ] **OPS-03**: Rate limiter throttles tool invocations per configurable token-bucket policy, returning structured error on limit exceeded
+- [x] **OPS-02**: Server validates configuration on startup (AllowedPaths non-empty, ArtifactsDir writable) and logs diagnostic summary
+- [x] **OPS-03**: Rate limiter throttles tool invocations per configurable token-bucket policy, returning structured error on limit exceeded
 
 ### Package Maintenance
 
@@ -70,8 +70,8 @@ Deferred to future milestones. Tracked but not in v1.5 roadmap.
 | PERF-01 | Phase 24 | Complete |
 | PERF-02 | Phase 24 | Complete |
 | PERF-03 | Phase 24 | Complete |
-| OPS-02 | Phase 25 | Pending |
-| OPS-03 | Phase 25 | Pending |
+| OPS-02 | Phase 25 | Complete |
+| OPS-03 | Phase 25 | Complete |
 | API-01 | Phase 26 | Pending |
 | API-02 | Phase 26 | Pending |
 | API-03 | Phase 26 | Pending |

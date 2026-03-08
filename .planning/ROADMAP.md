@@ -74,7 +74,7 @@ Full details: milestones/v1.3-ROADMAP.md
 
 - [x] **Phase 23: Dependency Foundation** — Roslyn 4.14 upgrade and full NuGet audit (completed 2026-03-06)
 - [x] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching (completed 2026-03-08)
-- [ ] **Phase 25: Server Infrastructure** — Startup validation and rate limiting
+- [x] **Phase 25: Server Infrastructure** — Startup validation and rate limiting (completed 2026-03-08)
 - [ ] **Phase 26: API Extensions** — Pagination, find_implementations, get_doc_coverage tools
 - [ ] **Phase 27: Documentation Refresh** — CLAUDE.md updated to 14-tool surface
 
@@ -117,11 +117,11 @@ Plans:
   2. A client that exceeds the configured token-bucket limit receives a structured error response (not an unhandled exception) and the server continues operating normally for subsequent calls
   3. The rate limiter is a DI singleton — ingestion tool calls are not counted against the query rate limit
   4. The startup validator is unit-testable in isolation via ServiceCollection without requiring Aspire or a running process
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 25-01-PLAN.md — Startup configuration validation with fail-fast on invalid config
-- [ ] 25-02-PLAN.md — Token-bucket rate limiting with separate query/ingestion buckets
+- [x] 25-01-PLAN.md — Startup configuration validation with fail-fast on invalid config (completed 2026-03-08)
+- [x] 25-02-PLAN.md — Token-bucket rate limiting with separate query/ingestion buckets (completed 2026-03-08)
 
 ### Phase 26: API Extensions
 **Goal**: Agents can paginate large reference lists, navigate to implementations of interfaces/base classes, and query documentation coverage metrics — all via MCP tools
@@ -173,6 +173,6 @@ Plans:
 | 22. Documentation Refresh | v1.3 | 1/1 | Complete | 2026-03-04 |
 | 23. Dependency Foundation | v1.5 | 1/1 | Complete | 2026-03-06 |
 | 24. Query Performance | v1.5 | 1/1 | Complete | 2026-03-08 |
-| 25. Server Infrastructure | v1.5 | 0/2 | Not started | - |
+| 25. Server Infrastructure | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 26. API Extensions | v1.5 | 0/TBD | Not started | - |
 | 27. Documentation Refresh | v1.5 | 0/TBD | Not started | - |
