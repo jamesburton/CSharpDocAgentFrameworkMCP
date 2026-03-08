@@ -147,7 +147,10 @@ Plans:
   1. CLAUDE.md lists all 14 MCP tools (12 existing + find_implementations + get_doc_coverage) with their parameters, return shapes, and format options
   2. Each tool entry is verified against the actual `[McpServerTool]`-decorated method signatures in the codebase — no provisional or stale signatures
   3. The projectFilter parameter is documented for all tools that accept it
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 27-01-PLAN.md — Update CLAUDE.md with complete 14-tool MCP reference
 
 ## Progress
 
@@ -179,4 +182,4 @@ Plans:
 | 24. Query Performance | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 25. Server Infrastructure | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 26. API Extensions | v1.5 | 2/2 | Complete | 2026-03-08 |
-| 27. Documentation Refresh | v1.5 | 0/TBD | Not started | - |
+| 27. Documentation Refresh | v1.5 | 0/1 | Not started | - |
