@@ -25,6 +25,17 @@ public sealed class DocTools
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    private static readonly HashSet<SymbolKind> s_docKinds = new()
+    {
+        SymbolKind.Type, SymbolKind.Method, SymbolKind.Property,
+        SymbolKind.Constructor, SymbolKind.Delegate, SymbolKind.Event, SymbolKind.Field,
+    };
+
+    private static readonly HashSet<Accessibility> s_docAccessibilities = new()
+    {
+        Accessibility.Public, Accessibility.Protected, Accessibility.ProtectedInternal,
+    };
+
     private readonly IKnowledgeQueryService _query;
     private readonly PathAllowlist _allowlist;
     private readonly ILogger<DocTools> _logger;
@@ -471,6 +482,149 @@ public sealed class DocTools
             sb.AppendLine();
             foreach (var n in implementations)
                 sb.AppendLine($"- `{n.Id.Value}` — {n.DisplayName} ({n.Kind})");
+            return sb.ToString();
+        });
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tool: get_doc_coverage
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "get_doc_coverage"), Description("Get documentation coverage metrics grouped by project, namespace, and symbol kind.")]
+    public async Task<string> GetDocCoverage(
+        [Description("Optional project name filter (exact match). Omit for all projects.")] string? project = null,
+        [Description("Output format: json|markdown|tron")] string format = "json",
+        CancellationToken cancellationToken = default)
+    {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.get_doc_coverage", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "get_doc_coverage");
+
+        try
+        {
+        // Step 1: Get all symbols via wildcard search
+        var searchResult = await _query.SearchAsync("*", limit: 10000, ct: cancellationToken);
+        if (!searchResult.Success)
+            return ErrorResponse(searchResult.Error!.Value, searchResult.ErrorMessage);
+
+        var searchItems = searchResult.Value!.Payload;
+
+        // Step 2: Resolve full SymbolNode for each search result
+        var allNodes = new List<SymbolNode>();
+        foreach (var item in searchItems)
+        {
+            var nodeResult = await _query.GetSymbolAsync(item.Id, ct: cancellationToken);
+            if (nodeResult.Success)
+                allNodes.Add(nodeResult.Value!.Payload.Node);
+        }
+
+        // Step 3: Filter to Real nodes only
+        var realNodes = allNodes.Where(n => n.NodeKind == NodeKind.Real).ToList();
+
+        // Step 4: Apply project filter if specified
+        if (project is not null)
+            realNodes = realNodes.Where(n => n.ProjectOrigin == project).ToList();
+
+        // Step 5: Filter to doc candidates
+        var candidates = realNodes
+            .Where(n => s_docKinds.Contains(n.Kind) && s_docAccessibilities.Contains(n.Accessibility))
+            .ToList();
+
+        // Step 6: Group three ways
+        var byProject = candidates
+            .GroupBy(n => n.ProjectOrigin ?? "(unknown)")
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => new
+            {
+                project = g.Key,
+                total = g.Count(),
+                documented = g.Count(n => n.Docs?.Summary is not null),
+                coveragePercent = g.Count() == 0 ? 0.0 : Math.Round((double)g.Count(n => n.Docs?.Summary is not null) / g.Count() * 100.0, 1)
+            })
+            .ToList();
+
+        var byNamespace = candidates
+            .GroupBy(n =>
+            {
+                var fqn = n.FullyQualifiedName;
+                if (fqn is null) return "(global)";
+                var lastDot = fqn.LastIndexOf('.');
+                return lastDot >= 0 ? fqn[..lastDot] : "(global)";
+            })
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => new
+            {
+                @namespace = g.Key,
+                total = g.Count(),
+                documented = g.Count(n => n.Docs?.Summary is not null),
+                coveragePercent = g.Count() == 0 ? 0.0 : Math.Round((double)g.Count(n => n.Docs?.Summary is not null) / g.Count() * 100.0, 1)
+            })
+            .ToList();
+
+        var byKind = candidates
+            .GroupBy(n => n.Kind)
+            .OrderBy(g => g.Key.ToString(), StringComparer.Ordinal)
+            .Select(g => new
+            {
+                kind = g.Key.ToString(),
+                total = g.Count(),
+                documented = g.Count(n => n.Docs?.Summary is not null),
+                coveragePercent = g.Count() == 0 ? 0.0 : Math.Round((double)g.Count(n => n.Docs?.Summary is not null) / g.Count() * 100.0, 1)
+            })
+            .ToList();
+
+        // Step 7: Build response
+        var overallDocumented = candidates.Count(n => n.Docs?.Summary is not null);
+
+        activity?.SetTag("tool.result_count", candidates.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
+        return FormatResponse(format, () =>
+        {
+            var payload = new
+            {
+                totalCandidates = candidates.Count,
+                totalDocumented = overallDocumented,
+                overallCoveragePercent = candidates.Count == 0 ? 0.0 : Math.Round((double)overallDocumented / candidates.Count * 100.0, 1),
+                byProject,
+                byNamespace,
+                byKind,
+            };
+            return JsonSerializer.Serialize(payload, s_jsonOptions);
+        },
+        () =>
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("GET_DOC_COVERAGE");
+            sb.AppendLine($"  totalCandidates: {candidates.Count}");
+            sb.AppendLine($"  totalDocumented: {overallDocumented}");
+            foreach (var p in byProject)
+                sb.AppendLine($"  project:{p.project} total:{p.total} documented:{p.documented} coverage:{p.coveragePercent}%");
+            return sb.ToString();
+        },
+        () =>
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("# Documentation Coverage");
+            sb.AppendLine();
+            sb.AppendLine($"**Overall:** {overallDocumented}/{candidates.Count} ({(candidates.Count == 0 ? 0.0 : Math.Round((double)overallDocumented / candidates.Count * 100.0, 1))}%)");
+            sb.AppendLine();
+            sb.AppendLine("## By Project");
+            foreach (var p in byProject)
+                sb.AppendLine($"- **{p.project}**: {p.documented}/{p.total} ({p.coveragePercent}%)");
+            sb.AppendLine();
+            sb.AppendLine("## By Namespace");
+            foreach (var ns in byNamespace)
+                sb.AppendLine($"- **{ns.@namespace}**: {ns.documented}/{ns.total} ({ns.coveragePercent}%)");
+            sb.AppendLine();
+            sb.AppendLine("## By Kind");
+            foreach (var k in byKind)
+                sb.AppendLine($"- **{k.kind}**: {k.documented}/{k.total} ({k.coveragePercent}%)");
             return sb.ToString();
         });
         }
