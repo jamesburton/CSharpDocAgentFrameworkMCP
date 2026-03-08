@@ -133,7 +133,11 @@ Plans:
   3. `find_implementations` returns all types implementing a given interface or deriving from a base class, with stub nodes (NodeKind.Stub) excluded from results
   4. `get_doc_coverage` returns documentation coverage metrics grouped by project, namespace, and symbol kind, derived from snapshot post-processing
   5. All new tools are secured with PathAllowlist enforcement matching the pattern of existing tools
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 26-01-PLAN.md — Pagination for get_references and find_implementations tool (API-01, API-02)
+- [ ] 26-02-PLAN.md — Documentation coverage tool get_doc_coverage (API-03)
 
 ### Phase 27: Documentation Refresh
 **Goal**: CLAUDE.md accurately documents all 14 MCP tools with correct parameter signatures, format options, and projectFilter behavior, enabling agents to call tools correctly on first attempt
@@ -174,5 +178,5 @@ Plans:
 | 23. Dependency Foundation | v1.5 | 1/1 | Complete | 2026-03-06 |
 | 24. Query Performance | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 25. Server Infrastructure | v1.5 | 2/2 | Complete | 2026-03-08 |
-| 26. API Extensions | v1.5 | 0/TBD | Not started | - |
+| 26. API Extensions | v1.5 | 0/2 | Not started | - |
 | 27. Documentation Refresh | v1.5 | 0/TBD | Not started | - |
