@@ -15,8 +15,8 @@ Requirements for v1.5 Robustness milestone. Each maps to roadmap phases.
 
 ### Package Maintenance
 
-- [ ] **PKG-01**: All five Microsoft.CodeAnalysis packages upgraded to 4.14.0, VersionOverride workaround removed
-- [ ] **PKG-02**: All NuGet dependencies audited for vulnerabilities and outdated versions; NuGetAudit enabled in Directory.Build.props
+- [x] **PKG-01**: All five Microsoft.CodeAnalysis packages upgraded to 4.14.0, VersionOverride workaround removed
+- [x] **PKG-02**: All NuGet dependencies audited for vulnerabilities and outdated versions; NuGetAudit enabled in Directory.Build.props
 
 ### API Completeness
 
@@ -26,9 +26,9 @@ Requirements for v1.5 Robustness milestone. Each maps to roadmap phases.
 
 ### Query Performance
 
-- [ ] **PERF-01**: Symbol existence check in KnowledgeQueryService uses O(1) HashSet/Dictionary lookup instead of O(n) linear scan
-- [ ] **PERF-02**: Edge traversal in GetSymbolAsync/GetReferencesAsync uses pre-built edge-by-source/edge-by-target dictionaries instead of O(E) scan
-- [ ] **PERF-03**: SearchAsync metadata retrieval uses cached node data instead of per-hit async I/O
+- [x] **PERF-01**: Symbol existence check in KnowledgeQueryService uses O(1) HashSet/Dictionary lookup instead of O(n) linear scan
+- [x] **PERF-02**: Edge traversal in GetSymbolAsync/GetReferencesAsync uses pre-built edge-by-source/edge-by-target dictionaries instead of O(E) scan
+- [x] **PERF-03**: SearchAsync metadata retrieval uses cached node data instead of per-hit async I/O
 
 ## Future Requirements
 
@@ -65,11 +65,11 @@ Deferred to future milestones. Tracked but not in v1.5 roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 | Phase 23 | Pending |
-| PKG-02 | Phase 23 | Pending |
-| PERF-01 | Phase 24 | Pending |
-| PERF-02 | Phase 24 | Pending |
-| PERF-03 | Phase 24 | Pending |
+| PKG-01 | Phase 23 | Complete |
+| PKG-02 | Phase 23 | Complete |
+| PERF-01 | Phase 24 | Complete |
+| PERF-02 | Phase 24 | Complete |
+| PERF-03 | Phase 24 | Complete |
 | OPS-02 | Phase 25 | Pending |
 | OPS-03 | Phase 25 | Pending |
 | API-01 | Phase 26 | Pending |
@@ -84,4 +84,4 @@ Deferred to future milestones. Tracked but not in v1.5 roadmap.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-04 — traceability updated after roadmap creation (Phases 23-27)*
+*Last updated: 2026-03-08 — PERF-01/02/03 complete (Phase 24), PKG-01/02 complete (Phase 23)*

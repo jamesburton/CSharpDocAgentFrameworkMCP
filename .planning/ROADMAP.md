@@ -73,7 +73,7 @@ Full details: milestones/v1.3-ROADMAP.md
 **Build order:** Dependencies first (PKG), then performance (PERF), then server infrastructure (OPS-02/03) in parallel with performance, then API tools (API), then documentation last (OPS-01). This order reflects technical dependencies; user priority (operational polish first) governs scope decisions within each phase.
 
 - [x] **Phase 23: Dependency Foundation** — Roslyn 4.14 upgrade and full NuGet audit (completed 2026-03-06)
-- [ ] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching
+- [x] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching (completed 2026-03-08)
 - [ ] **Phase 25: Server Infrastructure** — Startup validation and rate limiting
 - [ ] **Phase 26: API Extensions** — Pagination, find_implementations, get_doc_coverage tools
 - [ ] **Phase 27: Documentation Refresh** — CLAUDE.md updated to 14-tool surface
@@ -92,7 +92,7 @@ Full details: milestones/v1.3-ROADMAP.md
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 23-01-PLAN.md — Roslyn 4.14.0 upgrade, csproj cleanup, and NuGetAudit enablement
+- [x] 23-01-PLAN.md — Roslyn 4.14.0 upgrade, csproj cleanup, and NuGetAudit enablement (completed 2026-03-06)
 
 ### Phase 24: Query Performance
 **Goal**: Symbol lookups and edge traversals operate in O(1) time using pre-built index dictionaries, eliminating linear scans from the hot query path
@@ -106,7 +106,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 24-01-PLAN.md — SnapshotLookup cache with O(1) symbol, edge, and metadata lookups
+- [x] 24-01-PLAN.md — SnapshotLookup cache with O(1) symbol, edge, and metadata lookups (completed 2026-03-08)
 
 ### Phase 25: Server Infrastructure
 **Goal**: The MCP server fails fast on invalid startup configuration and throttles tool invocations to prevent stuck-agent retry storms
@@ -171,8 +171,8 @@ Plans:
 | 20. MSBuild Performance Benchmarks | v1.3 | 2/2 | Complete | 2026-03-03 |
 | 21. Code and Audit Cleanup | v1.3 | 1/1 | Complete | 2026-03-03 |
 | 22. Documentation Refresh | v1.3 | 1/1 | Complete | 2026-03-04 |
-| 23. Dependency Foundation | 1/1 | Complete   | 2026-03-06 | - |
-| 24. Query Performance | v1.5 | 0/1 | Not started | - |
+| 23. Dependency Foundation | v1.5 | 1/1 | Complete | 2026-03-06 |
+| 24. Query Performance | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 25. Server Infrastructure | v1.5 | 0/2 | Not started | - |
 | 26. API Extensions | v1.5 | 0/TBD | Not started | - |
 | 27. Documentation Refresh | v1.5 | 0/TBD | Not started | - |

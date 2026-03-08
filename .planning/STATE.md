@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Robustness
-status: planning
-stopped_at: Phase 23 context gathered
-last_updated: "2026-03-04T21:45:27.210Z"
-last_activity: 2026-03-04 — Roadmap created for v1.5 Robustness (Phases 23-27)
+status: executing
+stopped_at: Completed 24-01-PLAN.md
+last_updated: "2026-03-08T03:05:00Z"
+last_activity: 2026-03-08 — Phase 24 Plan 01 complete (query performance O(1) lookups)
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** Phase 23 — Dependency Foundation
+**Current focus:** Phase 25 — Operational/Serving (Phase 23-24 complete)
 
 ## Current Position
 
-Phase: 23 of 27 (Dependency Foundation)
-Plan: — of — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-04 — Roadmap created for v1.5 Robustness (Phases 23-27)
+Phase: 25 of 27 (Operational Serving)
+Plan: 1 of 1 (Phase 24 complete)
+Status: Executing
+Last activity: 2026-03-08 — Phase 24 Plan 01 complete (query performance O(1) lookups)
 
-Progress: [░░░░░░░░░░] 0% (0/5 phases complete)
+Progress: [####░░░░░░] 40% (2/5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 52 (v1.0: 24, v1.1: 9, v1.2: 11, v1.3: 8)
+- Total plans completed: 54 (v1.0: 24, v1.1: 9, v1.2: 11, v1.3: 8, v1.5: 2)
 - Milestones shipped: 4 over 8 days (2026-02-25 → 2026-03-04)
 
 *Updated after each plan completion*
@@ -51,6 +51,8 @@ Recent decisions affecting v1.5:
 - Build order: PKG → PERF/OPS-infra (parallel) → API → docs (user priority governs scope, research order governs sequencing)
 - Rate limiter: DI singleton, not static; ingestion calls excluded from query rate limit
 - O(1) dicts are supplementary — existing List remains canonical for serialisation ordering
+- SnapshotLookup is private nested class -- no new public API surface (Phase 24)
+- Cache keyed on ContentHash string equality for immutable snapshot invalidation (Phase 24)
 
 ### Pending Todos
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-04T21:45:27.204Z
-Stopped at: Phase 23 context gathered
-Resume file: .planning/phases/23-dependency-foundation/23-CONTEXT.md
+Last session: 2026-03-08T03:05:00Z
+Stopped at: Completed 24-01-PLAN.md
+Resume file: .planning/phases/24-query-performance/24-01-SUMMARY.md
