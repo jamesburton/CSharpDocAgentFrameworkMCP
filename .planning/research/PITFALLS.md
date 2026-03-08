@@ -1,135 +1,344 @@
 # Pitfalls Research
 
-**Domain:** .NET MCP server — v1.5 Robustness: dependency upgrade, API extension, performance hardening
-**Researched:** 2026-03-04
-**Confidence:** HIGH
+**Domain:** Adding TypeScript language support to an existing C#-based symbol graph analysis framework
+**Researched:** 2026-03-08
+**Confidence:** HIGH (compiler API behavior verified via official docs and issue trackers; Aspire integration verified via Microsoft docs; symbol model mapping based on direct codebase analysis of `RoslynSymbolGraphBuilder.GetSymbolId()` and `SymbolKind` enum)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Roslyn 4.14 Version Conflict in Central Package Management
+### Pitfall 1: SymbolId Scheme Mismatch -- No TypeScript Equivalent to GetDocumentationCommentId()
 
 **What goes wrong:**
-`Microsoft.CodeAnalysis.CSharp` is pinned to 4.12.0 in `Directory.Packages.props`, but `BenchmarkDotNet` 0.15.8 pulls `Microsoft.CodeAnalysis.Common` 4.14.0 transitively. Tests already use `VersionOverride=4.14.0` on `Microsoft.CodeAnalysis.Common` to resolve NU1107. Upgrading the Roslyn CSharp/Workspaces packages to 4.14.0 WITHOUT updating every related `Microsoft.CodeAnalysis.*` entry (Common, CSharp, CSharp.Workspaces, Workspaces.MSBuild) to the same version will produce NU1107 errors again, or silently mix assemblies from different Roslyn versions.
+The existing C# pipeline constructs SymbolIds via Roslyn's `GetDocumentationCommentId()` (see `src/DocAgent.Ingestion/RoslynSymbolGraphBuilder.cs:543`), producing ECMA-334 standard IDs like `T:MyNamespace.MyClass` and `M:MyNamespace.MyClass.Method(System.String)`. TypeScript has no equivalent convention. The TS compiler's `ts.Symbol.id` is a transient per-program integer that changes on every `createProgram()` call. `checker.getFullyQualifiedName()` returns inconsistent results across compiler versions and does not include parameter signatures. If the sidecar uses an unstable ID source, every re-ingestion produces a full "all removed + all added" diff.
 
 **Why it happens:**
-The Roslyn packages form a versioned family — all must move together. CPM hides the full transitive picture; developers update one entry and assume the others follow. The existing `VersionOverride` in DocAgent.Tests masks the real conflict until the upgrade exposes it in other projects.
+C# has a 20-year-old standard for documentation comment IDs. TypeScript was never designed for this use case. Developers reach for `ts.Symbol.id` or `getFullyQualifiedName()` without realizing these are session-scoped.
 
 **How to avoid:**
-Update all five `Microsoft.CodeAnalysis.*` entries in `Directory.Packages.props` simultaneously to 4.14.0. Remove the `VersionOverride` from `DocAgent.Tests.csproj` once the root versions align. Verify with `dotnet restore --verbosity detailed` — watch for NU1107 on any CodeAnalysis package. Also check the analyzer-testing packages (`Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit`, `Microsoft.CodeAnalysis.Testing.Verifiers.XUnit`) which have their own Roslyn floor — if they require <= 4.12.0, the upgrade cannot proceed without also upgrading them.
+Design a deterministic SymbolId construction function for TypeScript derived entirely from source-stable properties:
+- File path relative to tsconfig root (forward-slash normalized)
+- Fully qualified name built by walking the AST declaration chain (not the checker's resolved name)
+- Parameter signature for functions/methods (parameter types as strings)
+- Format: `T:src/models/User.User` or `M:src/services/auth.AuthService.login(string, string)`
+
+Pin the TypeScript compiler version (`~5.7`, not `^5.7`) to prevent accidental changes in name resolution. Add a golden-file test that ingests a fixture project and asserts exact SymbolId values.
 
 **Warning signs:**
-- NU1107 "Two different compatible versions" warnings after partial update
-- `dotnet build` succeeds but analyzer tests fail with `MissingMethodException` at runtime
-- `DocAgent.Benchmarks` builds but crashes on first BDN iteration with `FileLoadException`
+- `diff_snapshots` on two identical ingestions shows changes (the killer signal)
+- `get_references` returns empty for symbols that obviously have references
+- Tests pass on first run but fail on re-ingestion
 
 **Phase to address:**
-Dependency upgrade phase — do this as the first task, before any feature work.
+Phase 1 (Symbol Extraction) -- this is the most critical design decision. Must be locked before any extraction code is written. Every downstream consumer (search, diff, change review) depends on ID stability.
 
 ---
 
-### Pitfall 2: Breaking Existing MCP Clients With Pagination
+### Pitfall 2: ts.createProgram() Cost -- 500MB-2GB Per Invocation
 
 **What goes wrong:**
-Adding `offset`/`limit` parameters to existing tools (`search_symbols`, `get_references`) changes the tool schema. MCP clients that hard-code tool calls with positional arguments, or that cache the tool manifest, will receive unexpected results or errors. If the unpaginated default behavior changes (e.g., result count caps at a new default limit), clients that relied on "return everything" semantics silently get truncated results.
+Each call to `ts.createProgram()` parses, binds, and (if checker is used) type-checks the entire project including all `.d.ts` files from `node_modules`. For a medium project (500 source files), this takes 5-15 seconds and consumes 500MB-2GB of memory. For monorepos or projects with heavy type dependencies, memory exceeds Node.js's default 1.5GB heap limit, producing `FATAL ERROR: Reached heap limit`.
 
 **Why it happens:**
-MCP tool schemas are typically consumed by agents that parse the tool description at startup. Adding optional parameters is nominally backward-compatible, but changing the default return count is a semantic breaking change even if the signature is still valid. The ModelContextProtocol SDK does not version tool schemas — there is no negotiation.
+The TypeScript compiler loads the full type graph to resolve every symbol. Even with `skipLibCheck: true`, declaration files for dependencies are still parsed and bound. Developers unfamiliar with the compiler API call `createProgram` per-file or create new programs without releasing the old one.
 
 **How to avoid:**
-Keep `limit` defaulting to a value at least as large as the current unbounded maximum result count (or `int.MaxValue` sentinel for "no limit"). Do not change the default behavior unless the current behavior is actively harmful. Add pagination metadata (`total_count`, `next_offset`) to the response envelope but only when `limit` is explicitly supplied — callers that omit `limit` get the same response shape as before.
+- Use **cold start** pattern for v2.0: spawn a new Node.js process per ingestion request. The OS reclaims all memory on exit. This is simpler and more reliable than managing long-lived programs.
+- Create ONE `ts.Program` per ingestion and walk ALL source files from that single Program. Never per-file programs.
+- Set `--max-old-space-size=4096` on the Node.js sidecar process.
+- For future incremental support (v2.1+), use `ts.createIncrementalProgram` with a `ts.BuilderProgram` and the `oldProgram` parameter.
+- Profile memory with a real-world large project (e.g., TypeScript compiler source: ~2,600 files) during development.
 
 **Warning signs:**
-- Existing integration tests that assert on result count start failing after the change
-- Test snapshots (Verify.Xunit) show response shape change for calls that did not supply `limit`
+- Sidecar crashes with exit code 134 (SIGABRT / OOM) on projects with >200 source files
+- C# side sees "process exited unexpectedly" with no diagnostic
+- Ingestion takes >30 seconds for a small project
+- Memory does not decrease between successive ingestion requests (warm process pattern)
 
 **Phase to address:**
-Pagination phase — enforce backward-compat contract in the design decision before writing code.
+Phase 1 (Symbol Extraction) -- the cold-start architecture must be the default from day one.
 
 ---
 
-### Pitfall 3: Rate Limiting a stdio MCP Server Has No Natural Enforcement Point
+### Pitfall 3: .d.ts Declaration Files Creating Phantom Symbols
 
 **What goes wrong:**
-HTTP-based servers can apply rate limiting in middleware (ASP.NET Core `RateLimiter`, YARP, etc.). A stdio-based MCP server processes tool calls synchronously on the same process, with no HTTP layer. A naive implementation — a global static counter with a `SemaphoreSlim` — works in isolation but does not compose correctly with the cancellation tokens that tool methods already accept, and introduces shared mutable state that is not visible to callers.
+`ts.Program.getSourceFiles()` returns EVERYTHING the compiler loaded: your `.ts` source files, `.d.ts` declaration files from `node_modules`, and `lib.d.ts` (DOM/Node built-ins). Walking all returned source files indiscriminately indexes thousands of external library symbols (`Buffer`, `Promise`, `Array`, `HTMLElement`, every Express type, etc.) as if they belong to the project. This bloats snapshots by 10-100x, pollutes search results, and creates false diffs when dependency versions change.
 
 **Why it happens:**
-Rate limiting is naturally a cross-cutting concern for request/response infrastructure. Without an HTTP layer, there is no standard hook point. Developers reach for a static throttle but forget that: (a) the MCP SDK may pipeline multiple tool calls; (b) the rate limiter needs to reset on a wall-clock window, not per-process-lifetime; (c) it must not dead-lock when the MCP process is also awaiting its own tool dispatch.
+`getSourceFiles()` returns everything the compiler needed to type-check, not just "your code." The API provides no built-in filter for "project vs external." Developers assume `getSourceFiles()` means "files the user wrote."
 
 **How to avoid:**
-Use `System.Threading.RateLimiting.TokenBucketRateLimiter` or `FixedWindowRateLimiter` (built into .NET 7+, available in .NET 10). Add a rate-limiting wrapper service registered in DI, injected into tool classes alongside the existing `PathAllowlist`. Make it instance-scoped (not static) so tests can inject a no-op limiter. Honour the incoming `CancellationToken` in the `WaitAsync` call so the MCP SDK can cancel stalled tool calls. Return a structured error response (not an exception) when the rate limit is exceeded — the MCP SDK converts unhandled exceptions to opaque errors.
+- Filter source files to ONLY those in `ts.Program.getRootFileNames()` (the files listed in `tsconfig.json`'s `include`/`files`).
+- Additionally check `sourceFile.isDeclarationFile` to skip any `.d.ts` file.
+- For referenced types from external packages, create stub nodes (`NodeKind.Stub`) exactly as the existing C# pipeline does for NuGet references -- capped to direct `dependencies` from `package.json`, not transitive.
+- Always filter out files whose path includes `node_modules/`, regardless of tsconfig settings.
 
 **Warning signs:**
-- Rate limiter tests that pass in isolation but deadlock when run under `dotnet test --parallel`
-- Tool calls during ingestion (which can run for minutes) triggering the rate limit mid-flight
-- Static state leaking between test runs, causing intermittent failures
+- Snapshot contains thousands of symbols named `Buffer`, `Promise`, `Array`
+- Search for a user-defined type returns hits from library types
+- Snapshot file size is megabytes instead of kilobytes
+- Ingestion takes minutes instead of seconds
 
 **Phase to address:**
-Rate limiting phase — design the DI integration before writing the limiter logic.
+Phase 1 (Symbol Extraction) -- file filtering must be baked into the initial walker.
 
 ---
 
-### Pitfall 4: O(1) Symbol Lookup Refactor Breaks Determinism
+### Pitfall 4: TypeScript Module System Does Not Map to Namespaces
 
 **What goes wrong:**
-Replacing linear `List<SymbolNode>` scans with `Dictionary<string, SymbolNode>` lookups is the right move, but `Dictionary` iteration order is not guaranteed in .NET. Any code path that builds a result by iterating the dictionary (e.g., `explain_project`, snapshot serialization) will produce non-deterministic output — violating the project's "same input → identical output" constraint and breaking `Verify.Xunit` golden-file tests.
+The existing symbol graph uses `SymbolKind.Namespace` nodes as the primary containment hierarchy, with `SymbolEdgeKind.Contains` edges connecting namespaces to types. TypeScript uses modules (files) as the containment unit. A TypeScript file can export multiple classes, functions, and type aliases with no namespace wrapper. If you either (a) create a fake namespace per file (confusing users) or (b) flatten everything to top-level (losing hierarchy), the MCP tools produce confusing results.
 
 **Why it happens:**
-The existing `List<SymbolNode>` in `SymbolGraphSnapshot` has a defined iteration order (insertion order). Switching to `Dictionary` preserves O(1) lookup but loses ordering. If serialization or response building traverses the collection without an explicit `OrderBy`, output order varies between runs.
+The containment model was designed for C#'s `namespace { class { method } }` hierarchy. TypeScript's `namespace` keyword exists but is rarely used in modern ESM code. The module IS the organizational unit.
 
 **How to avoid:**
-When adding a dictionary for lookup, keep the existing list as the canonical ordered collection (or sort by a stable key — e.g., `FQN` — before any output operation). Alternatively, use `SortedDictionary<string, SymbolNode>` where the lookup AND iteration order are both defined. Never replace the list with a dictionary directly; the list remains the source of truth for serialization and deterministic output.
+Map TypeScript modules to `SymbolKind.Namespace` nodes using the module's path relative to the tsconfig root (e.g., `src/services/auth`). This preserves `Contains` edges and navigable hierarchy while being semantically honest. Document in MCP tool descriptions that for TypeScript projects, "namespace" represents the module file path. Do NOT synthesize namespaces from directory structure or export groupings -- use the actual file as the boundary.
 
 **Warning signs:**
-- `Verify.Xunit` snapshot tests start failing with "received differs from verified" after the refactor
-- `dotnet test` passes on first run but fails on second run against the same input (hash mismatch)
-- `diff_snapshots` reports spurious changes when comparing two snapshots built from identical input
+- `explain_project` shows a flat list of hundreds of symbols with no hierarchy
+- `search_symbols` with `kindFilter=Namespace` returns nothing for TypeScript
+- Users cannot navigate the containment graph to browse a TypeScript codebase
 
 **Phase to address:**
-Performance optimization phase — add explicit `OrderBy` or use `SortedDictionary` as part of the implementation, not as a post-hoc fix.
+Phase 1 (Symbol Extraction) -- determines the entire graph structure. Must be decided before the walker is built.
 
 ---
 
-### Pitfall 5: `find_implementations` Crosses Project Boundaries and Hits Stub Nodes
+### Pitfall 5: Sidecar stdout Pollution Corrupts IPC Protocol
 
 **What goes wrong:**
-`find_implementations` must traverse `SymbolEdge` relationships to find concrete types that implement an interface or override a base method. In a solution snapshot, stub nodes (synthesized for NuGet/BCL types) also participate in the edge graph. A naive traversal returns stub nodes as "implementations," producing results that reference non-existent source locations and confusing agents.
+The Node.js sidecar communicates with the C# host via stdout (NDJSON or MessagePack). Any stray `console.log()`, library warning, or Node.js deprecation notice written to stdout corrupts the message stream. The C# deserializer throws `JsonException` or `MessagePackSerializationException`. The ingestion appears to hang or crash with no useful diagnostic.
 
 **Why it happens:**
-Stub node filtering was built for the BM25 search index (index-time filter) but not for graph traversal queries. New tools that walk edges do not automatically inherit that filter. The `NodeKind.Stub` flag exists in `SymbolNode` but callers must explicitly check it.
+JavaScript developers habitually use `console.log()` for debugging. Libraries (including TypeScript) may emit warnings to stdout. Node.js runtime deprecation warnings go to stderr by default but some configurations redirect them.
 
 **How to avoid:**
-Add a shared helper (e.g., `SymbolGraphQueries.FindImplementations`) that always filters `NodeKind.Stub` nodes from results. Do not inline the traversal logic per-tool. Add a unit test that explicitly places a stub node in the implementation chain and asserts it is excluded from tool output.
+- Route ALL logging/diagnostics to `process.stderr` -- never `process.stdout`
+- Set `--no-warnings` Node.js flag when spawning the sidecar
+- In the C# host, capture stderr separately and log as warnings via `ILogger`
+- Add a protocol integration test that sends a valid request and asserts the response is valid (catches any stdout pollution immediately)
+- Wrap the sidecar's entry point in a try/catch that writes errors to stderr, never stdout
 
 **Warning signs:**
-- `find_implementations` returns nodes with `SourceSpan.FilePath == null` or empty
-- Agent clients attempt to navigate to stub node file paths and get "file not found"
-- Tool returns more results than `get_references` for the same symbol
+- Ingestion fails with opaque JSON/MessagePack parse error
+- Adding a debugging `console.log` breaks ingestion
+- Upgrading a dependency introduces new stdout warnings
 
 **Phase to address:**
-`find_implementations` implementation phase — stub filtering must be in the initial design.
+Phase 1 (Symbol Extraction) -- the protocol discipline must be established from the first line of sidecar code.
 
 ---
 
-### Pitfall 6: Startup Config Validation Fails Silently in Aspire AppHost
+### Pitfall 6: SymbolKind Enum Mapping Gaps Between C# and TypeScript
 
 **What goes wrong:**
-Adding `IValidateOptions<DocAgentServerOptions>` or calling `services.AddOptions<T>().ValidateOnStart()` will throw at `IHost.StartAsync()` if configuration is invalid. Under Aspire's `AppHost`, the child process exits with a non-zero code and Aspire reports a generic "process exited" error — not the validation message. The actual `OptionsValidationException` is swallowed.
+The existing `SymbolKind` enum (14 values in `src/DocAgent.Core/Symbols.cs`) was designed for C#. TypeScript has concepts that do not map cleanly: type aliases, union/intersection types, interfaces (always public), module-level functions (no containing class), `const`/`let` exports, re-exports, barrel files (`index.ts` that re-exports everything). Mapping everything to `SymbolKind.Type` loses semantic information. Adding TypeScript-specific enum values breaks existing consumers that exhaustively switch on `SymbolKind`.
 
 **Why it happens:**
-`ValidateOnStart()` throws during `IHost.StartAsync()`. Aspire captures the exit code but not the stderr of the child process during normal dashboard startup. The developer sees "resource crashed" with no diagnostic detail.
+Language-specific assumptions baked into the enum. PROJECT.md says "natural mappings first; gaps tracked" but does not specify what "natural" means for each TypeScript construct.
 
 **How to avoid:**
-Wrap `ValidateOnStart()` with a try/catch in `Program.cs` that logs the exception message to `stderr` before rethrowing (or before `Environment.Exit(1)`). Alternatively, call the validator manually in a hosted startup service so the error appears in the OTel logs (which Aspire DOES surface). Add a test for the validator itself using `ServiceCollection` directly — do not rely on Aspire integration tests for validation logic.
+Define the complete mapping table BEFORE writing extraction code:
+
+| TypeScript Concept | Maps To | Notes |
+|---|---|---|
+| `interface` | `Type` | Accessibility = Public always |
+| `class` | `Type` | Direct match |
+| `type alias` | `Type` | Distinguish via FQN convention or future metadata |
+| `enum` | `Type` | Members as `EnumMember` |
+| `enum member` | `EnumMember` | Direct match |
+| `function` (module-level) | `Method` | Parent is module/namespace node |
+| `const`/`let`/`var` export | `Field` | Or `Property` for object-shaped values |
+| `constructor` | `Constructor` | Direct match |
+| `method` | `Method` | Direct match |
+| `property` | `Property` | Direct match |
+| `get`/`set` accessor | `Property` | Merge getter+setter into one node |
+| `index signature` | `Indexer` | Direct match |
+| `type parameter` | `TypeParameter` | Direct match |
+| `parameter` | `Parameter` | Direct match |
+| `re-export / barrel` | Skip | Follow to original source, do not create duplicate nodes |
+
+Do NOT add new `SymbolKind` values in v2.0 -- track gaps for v3.0. The mapping table is a design artifact, not code.
 
 **Warning signs:**
-- `dotnet run --project DocAgent.AppHost` crashes immediately with no diagnostic output
-- Aspire dashboard shows "Exited (1)" with no log output from the McpServer resource
-- Validation logic works in unit tests but the process still crashes at runtime
+- All TypeScript symbols show as `SymbolKind.Type` regardless of what they actually are
+- `search_symbols` with `kindFilter=Method` misses module-level functions
+- The mapping is decided ad-hoc during implementation instead of up front
 
 **Phase to address:**
-Startup validation phase — test the validator in isolation before wiring into the host lifecycle.
+Phase 1 (Symbol Extraction) -- design decision that must be documented and reviewed before coding starts.
+
+---
+
+### Pitfall 7: IPC Serialization Overhead for Large Codebases
+
+**What goes wrong:**
+The sidecar must send extracted symbols to the C# host. For a large codebase (2,000+ source files), the graph can contain 50,000+ symbols with edges. JSON serialization produces multi-megabyte payloads (10-50MB) that are slow to serialize in Node.js, slow to transmit over stdio, and slow to deserialize in C#. Without length-prefixed framing, partial reads cause deserialization failures.
+
+**Why it happens:**
+JSON is the path of least resistance for Node.js-to-C# communication. Developers prototype with small projects (10-50 files) and never encounter the scaling cliff until integration testing.
+
+**How to avoid:**
+- Use NDJSON (newline-delimited JSON) with streaming deserialization from Phase 1. Each line is one complete JSON object.
+- Design the protocol to support chunked responses: send symbols in batches (e.g., 500 per message) rather than one giant blob.
+- For Phase 2+, consider MessagePack (`@msgpack/msgpack` on Node side) to match the existing C# MessagePack serialization. Test round-trip compatibility between implementations -- they handle timestamps and extension types differently.
+- Profile with a real large project early (not just 10-file test fixtures).
+
+**Warning signs:**
+- Ingestion works for test fixtures but times out on real projects
+- IPC messages are truncated (partial JSON parse errors on C# side)
+- Ingestion latency is dominated by serialization time, not compilation time
+
+**Phase to address:**
+Phase 2 (IPC Protocol) -- the serialization format must be chosen before building the IPC layer.
+
+---
+
+### Pitfall 8: Path Resolution (baseUrl, paths, rootDirs) Creating Duplicate or Missing Symbols
+
+**What goes wrong:**
+TypeScript projects commonly use `baseUrl`, `paths`, and `rootDirs` in `tsconfig.json` to create import aliases (`import { User } from '@/models/user'` maps to `src/models/user.ts`). If the sidecar uses import specifiers instead of resolved file paths when constructing SymbolIds, the same file gets indexed under both its real path and its aliased path, producing duplicate symbols. Or aliased imports produce unresolved references.
+
+**Why it happens:**
+The TypeScript compiler resolves `paths` internally during program creation. When walking the AST, import declarations contain the alias string (`@/models/user`), not the resolved path. The compiler does not expose a trivial "canonical path" API -- you must use `sourceFile.fileName` (which IS the resolved absolute path) or call `ts.resolveModuleName` manually.
+
+**How to avoid:**
+- Always use `sourceFile.fileName` (the resolved absolute path) as the canonical file identifier for SymbolId construction. Never use import specifiers.
+- Normalize all paths to forward slashes and relative-to-tsconfig-root before constructing SymbolIds.
+- Use `ts.sys.realpath` to resolve symlinks (common in monorepo `node_modules` with npm/yarn/pnpm workspaces).
+- Test with a project that uses `paths` aliases extensively.
+
+**Warning signs:**
+- Duplicate symbols in the snapshot with different IDs pointing to the same source
+- `get_references` misses references that use path aliases
+- Some files appear twice in `explain_project` output
+
+**Phase to address:**
+Phase 1 (Symbol Extraction) -- path normalization affects SymbolId construction and must be built into the walker from the start.
+
+---
+
+### Pitfall 9: TSDoc vs JSDoc Parsing -- Two Formats, One DocComment Target
+
+**What goes wrong:**
+TypeScript codebases mix JSDoc (`/** @param {string} name */`) and TSDoc (`/** @param name - description */`) freely. JSDoc puts types in `{braces}` (redundant in TS), TSDoc uses `@inheritDoc` (capital D) vs JSDoc's `@inheritdoc`, JSDoc's `@example` implies a code block while TSDoc requires explicit fencing. The TypeScript compiler itself does NOT parse doc comments into structured data -- it only returns raw comment text via `symbol.getDocumentationComment()`. A custom parser built for one format silently misparses the other.
+
+**Why it happens:**
+TSDoc was designed to replace JSDoc for TypeScript but adoption is incomplete. Most real codebases mix both styles, sometimes in the same file. Developers build a parser for whichever style they encounter first and miss the other.
+
+**How to avoid:**
+- Use the `@microsoft/tsdoc` package for parsing. It handles both TSDoc and JSDoc-style comments with graceful degradation.
+- Map parsed output to the existing `DocComment` record (`Summary`, `Remarks`, `Params`, `Returns`, `Examples`, `Exceptions`, `SeeAlso`).
+- Strip `{type}` annotations from JSDoc `@param` and `@returns` tags (redundant with TypeScript's type system).
+- Test against real-world projects using both styles: Express.js (JSDoc), Angular (TSDoc-like).
+
+**Warning signs:**
+- `get_doc_coverage` reports 0% on a well-documented TypeScript project
+- `get_symbol` shows raw comment text instead of structured documentation
+- Parameter descriptions contain `{string}` type annotations as prose text
+
+**Phase to address:**
+Phase 1-2 (Doc Parsing) -- can follow symbol extraction but must be done before the milestone ships.
+
+---
+
+### Pitfall 10: Node.js Sidecar Lifecycle Not Managed by Aspire
+
+**What goes wrong:**
+Aspire's `AddNpmApp` / `AddNodeApp` starts the sidecar but provides no automatic restart, health checking, or graceful shutdown. If the sidecar exits (OOM, unhandled rejection, signal), the C# host has no notification beyond `Process.HasExited`. The MCP server accepts `ingest_typescript` calls that hang indefinitely because the sidecar is dead. Aspire dashboard may still show the resource as "running."
+
+**Why it happens:**
+Aspire is designed for HTTP services with health endpoints (`/health`, `/ready`). A stdio/IPC-based compiler worker is an unusual pattern. Most Aspire Node.js examples are Express or Vite servers.
+
+**How to avoid:**
+- For v2.0 cold-start pattern: spawn a new process per ingestion request. Check `Process.ExitCode` after completion. Timeout with `CancellationToken` (separate `TypeScriptIngestionTimeoutSeconds` config, default 600s).
+- For future warm-process pattern: send periodic ping messages over IPC; restart on timeout.
+- Handle `SIGTERM`/`SIGINT` in the sidecar to flush in-progress work.
+- Set `--max-old-space-size` in the Aspire resource configuration.
+- Add OpenTelemetry spans to the sidecar for Aspire dashboard visibility.
+
+**Warning signs:**
+- `ingest_typescript` hangs indefinitely
+- Sidecar is not running but no error is logged
+- Memory climbs continuously during repeated ingestions
+- Exit code is non-zero but error details are lost
+
+**Phase to address:**
+Phase 2-3 (Integration) -- basic process management is needed for Phase 1 development, but robust lifecycle management can follow.
+
+---
+
+### Pitfall 11: Node.js Not Found on PATH at Runtime
+
+**What goes wrong:**
+`Process.Start("node", ...)` fails with `Win32Exception: The system cannot find the file specified` when Node.js is not on the system PATH. This happens in CI containers, Docker images, nvm-managed installations (user-specific paths), and Aspire-managed environments that do not propagate PATH.
+
+**Why it happens:**
+Node.js installation varies by platform. The C# host assumes `node` is globally available, which is not guaranteed.
+
+**How to avoid:**
+- Add `TypeScriptExtractorNodePath` to `DocAgentServerOptions` (default: `"node"` for PATH lookup).
+- In `StartupValidator`, check the configured path is executable and meets minimum version (Node.js 22+).
+- Return a structured error: `"Node.js not found. Install Node.js 22+ or set DOCAGENT_NODE_PATH."` -- not a raw `Win32Exception`.
+- In Aspire AppHost, use `WithEnvironment("PATH", ...)` to ensure discoverability.
+
+**Warning signs:**
+- `ingest_typescript` fails immediately with a system-level exception
+- Works on developer machines but fails in CI
+
+**Phase to address:**
+Phase 1 (Sidecar Scaffold) -- startup validation must check Node.js availability.
+
+---
+
+### Pitfall 12: Monorepo Project References -- Cycles and Redundant Ingestion
+
+**What goes wrong:**
+TypeScript monorepos use `references` in `tsconfig.json` to declare inter-project dependencies. Naively following references during ingestion causes: (a) the same package ingested multiple times, (b) circular references causing infinite loops (TS project references CAN form cycles, unlike MSBuild which is always a DAG), and (c) symbols from referenced projects appearing as both `Real` and `Stub` nodes.
+
+**Why it happens:**
+The C# solution ingestion assumes MSBuild's acyclic dependency graph. TypeScript project references can form cycles in practice. The ingestion pipeline does not have cycle detection.
+
+**How to avoid:**
+- Treat each `tsconfig.json` as an independent project (like each `.csproj`).
+- Do NOT follow `references` during single-project ingestion.
+- For monorepo ingestion (future phase), build a dependency graph from `references`, detect and error on cycles, topologically sort.
+- Use the existing cross-project edge pattern (`EdgeScope.CrossProject`, stub nodes) for referenced project types.
+
+**Warning signs:**
+- Monorepo ingestion takes 10x longer than expected
+- Same symbol appears multiple times with different IDs
+- Ingestion hangs on circular references
+
+**Phase to address:**
+Phase 3+ (Monorepo) -- single-project ingestion should ignore references entirely.
+
+---
+
+### Pitfall 13: TypeScript 7 Go Rewrite Will Break the Compiler API
+
+**What goes wrong:**
+Microsoft is rewriting the TypeScript compiler in Go ("Project Corsa"). TypeScript 7.0 ships the Go compiler; TypeScript 6.x continues the JavaScript compiler. The JavaScript Compiler API (`ts.createProgram`, `ts.TypeChecker`) may become async in 7.0 or be replaced entirely. A sidecar built against the current synchronous API will need rework when 7.0 ships (expected mid-to-late 2026).
+
+**Why it happens:**
+The Go rewrite fundamentally changes the compiler architecture. The JavaScript API is maintained for backward compatibility in 6.x, but the long-term direction is the native compiler with a new API surface.
+
+**How to avoid:**
+- Build against TypeScript 5.x (current stable). Pin in `package.json` with `~5.7`.
+- Abstract the compiler interaction behind an interface within the sidecar: `ISymbolExtractor` with methods like `extractSymbols(configPath)` that hide the TS API surface.
+- When TypeScript 7 ships, the abstraction layer limits the blast radius to one module.
+- Do NOT use TypeScript compiler internals (non-public APIs) -- they will definitely break.
+
+**Warning signs:**
+- TypeScript 7 preview breaks the sidecar without code changes
+- Build CI fails when TypeScript auto-updates
+- Using internal compiler APIs that are documented as unstable
+
+**Phase to address:**
+Phase 1 (Symbol Extraction) -- pin version and add abstraction layer from the start. Defensive architecture decision.
 
 ---
 
@@ -137,97 +346,127 @@ Startup validation phase — test the validator in isolation before wiring into 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Upgrade Roslyn CSharp only, leave Common at old version | Faster PR | NU1107 in next CI run, mixed assemblies | Never |
-| Inline rate limiter as static field in tool class | No DI changes needed | Shared mutable state, untestable, leaks between tests | Never |
-| Add pagination but keep `total_count` always populated | Simpler response shape | Forces full result materialization even when caller wants only first page | Never for large graphs |
-| Use `Dictionary` in `SymbolGraphSnapshot` for lookup, remove `List` | O(1) lookup | Breaks determinism, breaks serialization order | Never without explicit sort |
-| Validate startup config only in integration tests | Easy to write | Silent failure in production Aspire deployments | Never for required config |
-
----
+| JSON over stdio instead of MessagePack for IPC | Faster to prototype, easy to debug with `jq` | 3-5x slower for large projects, memory pressure | Phase 1 prototype only; migrate before milestone completion |
+| Cold-start (new process per ingestion) instead of warm sidecar | No memory management, no lifecycle complexity | Extra 2-3s startup per ingestion request | Acceptable for v2.0; optimize in v2.1 if needed |
+| Skipping incremental compilation | Simpler sidecar code, no state management | Full re-ingestion every time, even for single-file changes | Phase 1 acceptable; incremental needed before v2.0 ships |
+| Hardcoding SymbolKind mapping without distinguishing metadata | Fewer fields to serialize | Cannot distinguish interface from class from type alias | Never -- the mapping table must be explicit from Phase 1 |
+| Not handling `export default` specially | Fewer edge cases | Default exports produce cryptic SymbolIds like `M:module.default` | Phase 1 acceptable if documented; improve in Phase 2 |
+| Ignoring `paths`/`baseUrl` aliases | Works for projects without aliases | Silent symbol loss or duplication | Never -- always use resolved paths |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| BenchmarkDotNet + Roslyn upgrade | Assuming BDN's Roslyn dependency auto-resolves with CPM | Explicitly set `VersionOverride` on `Microsoft.CodeAnalysis.Common` in Benchmarks project until root version is updated |
-| `System.Threading.RateLimiting` in tool DI | Registering `RateLimiter` as singleton then disposing in a using block inside the tool | Register as `IDisposable` singleton; lifetime managed by DI container, not per-call |
-| `ModelContextProtocol` SDK + new tool parameters | Adding non-optional parameters to existing tools expecting backward compat | All new parameters on existing tools must have defaults; test with the old call signature |
-| `Verify.Xunit` golden files + new response fields | Adding `total_count` field to existing tool responses invalidates all existing snapshots | Run `VERIFY_APPROVE_ALL=true dotnet test` once after intentional schema change, commit the updated snapshots |
-| Aspire `ValidateOnStart()` | Relying on Aspire log capture for validation errors | Log to stderr explicitly before the host throws |
-
----
+| Node.js sidecar via Aspire | Using `AddNpmApp` for a worker process that does not serve HTTP | Use `AddNodeApp` or custom executable resource; health checks via IPC, not HTTP |
+| MessagePack C# to Node.js | Assuming `MessagePack-CSharp` and `@msgpack/msgpack` are wire-compatible | Test round-trip serialization of actual records; timestamp and extension type formats differ |
+| TypeScript Compiler API | Calling `ts.createProgram` per source file | Create ONE Program for the entire project; walk all source files from that single instance |
+| SymbolGraphSnapshot | Merging TS symbols into the same snapshot as C# symbols | Separate snapshots per language (per PROJECT.md scope); no cross-language edges in v2.0 |
+| BM25 Search Index | Reusing the CamelCase tokenizer unmodified | TypeScript uses camelCase (not PascalCase). Verify `camelCaseFunction` tokenizes to `["camel", "case", "function"]` |
+| PathAllowlist | Sidecar reads any path | Sidecar must respect the same PathAllowlist; pass allowed paths as startup configuration |
+| C# JSON deserialization | Default case-sensitive `System.Text.Json` | Use `PropertyNameCaseInsensitive = true` or `JsonPropertyName` attributes to match camelCase from Node.js |
+| tsconfig.json parsing | Reading the file directly with `JSON.parse()` | Use `ts.readConfigFile()` + `ts.parseJsonConfigFileContent()` to resolve `extends`, `references`, and compiler defaults |
+| esbuild bundling | Bundling the `typescript` package into the output | Mark `typescript` as `--external:typescript`; the 5MB TS compiler should be a runtime `node_modules` dependency |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Materializing full result set to compute `total_count` before applying `limit` | Memory spike; slow first-page response | Count via the index; do not load all nodes into memory | Snapshots with >10,000 symbols |
-| Caching search metadata in a mutable `Dictionary` without locking | Intermittent `KeyNotFoundException` under concurrent tool calls | Use `ConcurrentDictionary` or ensure cache is populated once at startup | Any concurrent MCP client |
-| Batching project resolution with `Task.WhenAll` but sharing a single `MSBuildWorkspace` | `MSBuildWorkspace` is not thread-safe; exceptions from one project cancel others | Use per-batch sequential resolution, or create a workspace per task in the batch | First multi-project batch |
-| Rate limiter window reset using `Stopwatch` (process uptime) instead of wall clock | Rate limit resets on process restart; long-running processes accumulate drift | Use `DateTimeOffset.UtcNow` for window boundaries, not elapsed ticks | Long-running server instances |
-
----
+| New `ts.Program` without releasing old one | Memory climbs 500MB+ per ingestion | Cold-start pattern (new process per request) or null out references | After 3-5 ingestions |
+| Walking all source files including `.d.ts` | 60+ second ingestion, 100K+ symbol snapshots | Filter to `getRootFileNames()`, check `isDeclarationFile` | Any project with >5 dependencies |
+| JSON serialization of large symbol graphs | 30+ second parse time for 50K symbols, OOM | NDJSON streaming or MessagePack batching | Projects with >1,000 source files |
+| Synchronous file I/O in Node.js sidecar | Event loop blocks, health pings time out | Use `fs/promises` and async iteration | Projects with >500 files |
+| Not caching parsed tsconfig.json | Re-parsing every ingestion request | Cache keyed on file mtime | Monorepos with 10+ tsconfig files |
+| Full type-checking when only symbol extraction is needed | 2-3x slower than needed | Evaluate whether `noCheck: true` is viable (checker still needed for type resolution) | All projects; but may not be viable |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Rate limit keyed on MCP tool name only, not caller identity | A single caller can exhaust quota for all callers | For stdio transport, key on process lifetime (single-caller assumption is valid); document this assumption explicitly |
-| Returning `total_count` of all symbols before allowlist filtering | Leaks graph size / symbol count to unauthenticated callers | Apply allowlist filter before counting; return count of accessible results only |
-| `find_implementations` returning full FQNs of private types | Leaks internal API surface to agents operating outside their scope | Filter by `PathAllowlist` before returning; same pattern as existing tools |
+| Sidecar reads files outside PathAllowlist | Directory traversal; leaks unrelated source code | Pass AllowedPaths to sidecar at startup; validate every file read |
+| Sidecar executes tsconfig.json compiler plugins | Arbitrary code execution via malicious tsconfig | Disable TS compiler plugins; do not use `ts.createSolutionBuilder` which runs transforms |
+| IPC channel on TCP socket or named pipe | Symbol data accessible to other processes | Use stdin/stdout inherited from Aspire, not network sockets |
+| Absolute file paths in SymbolNode.Span | Leaks server filesystem structure to MCP clients | Normalize to paths relative to project root before storage |
 
----
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| TS SymbolIds use different format than C# SymbolIds | Users must learn two conventions for `get_symbol` | Use a consistent prefix scheme or document the format per-language in tool descriptions |
+| Mixed C# and TS results with no language indicator | Users cannot tell which language a search result comes from | Searches are scoped to per-language snapshots; make this clear in tool descriptions |
+| `ingest_typescript` accepts tsconfig.json path but user passes a directory | Cryptic error about missing file | Accept both directory (auto-find tsconfig.json) and explicit file; suggest the right path in error |
+| Module-level functions without a "class" parent | C#-oriented users confused by functions outside classes | Document in `explain_project` that TS modules are shown as namespace-like containers |
+| `get_doc_coverage` counts TS coverage differently | All interfaces are "public" in TS; Accessibility filter meaningless | Adjust coverage rules for TypeScript: all exported symbols count as public |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Roslyn upgrade:** Verify `dotnet restore` produces zero NU1107 warnings across ALL projects including Benchmarks and Analyzers
-- [ ] **Roslyn upgrade:** Verify the `VersionOverride` in `DocAgent.Tests.csproj` has been removed (it was a workaround that should be cleaned up post-upgrade)
-- [ ] **Pagination:** Verify a call without `limit` parameter returns the same result count and shape as before pagination was added (regression test)
-- [ ] **Pagination:** Verify `offset` past the end of results returns empty list, not an error
-- [ ] **Rate limiting:** Verify the limiter rejects the (N+1)th call and returns a structured error (not an exception trace)
-- [ ] **Rate limiting:** Verify the limiter does not fire during long-running ingestion tool calls (ingestion should not count against the query rate limit)
-- [ ] **`find_implementations`:** Verify stub nodes are excluded from results
-- [ ] **`find_implementations`:** Verify cross-project implementations are included when the snapshot is a solution snapshot
-- [ ] **O(1) lookup:** Verify `Verify.Xunit` golden files still pass after the `Dictionary` introduction — no ordering changes
-- [ ] **Startup validation:** Verify that an invalid `AllowedPaths` config causes a clear error message on stderr before process exit
-- [ ] **CLAUDE.md refresh:** Verify the tool count (12) and all tool names match the actual registered `[McpServerTool]` methods
-
----
+- [ ] **Re-exports:** Verify `export { Foo } from './bar'` creates the correct SymbolId pointing to the original declaration, not a duplicate node
+- [ ] **Default exports:** Verify `export default class MyClass` gets a meaningful SymbolId (not `M:module.default`)
+- [ ] **Documentation parsing:** Verify multi-line `@example` blocks are captured in `DocComment.Examples`
+- [ ] **Incremental ingestion:** Verify renaming a file and re-ingesting shows old symbols removed and new ones added (not duplicates)
+- [ ] **Diff determinism:** Verify `diff_snapshots` on two identical ingestions produces ZERO changes (the critical stability test)
+- [ ] **Search tokenization:** Verify `searchSymbols("auth")` finds a function named `authenticateUser` (camelCase tokenization)
+- [ ] **Cross-project edges:** Verify a type imported from a monorepo sibling package shows a `CrossProject` edge
+- [ ] **Path security:** Verify sidecar rejects file reads outside PathAllowlist
+- [ ] **Sidecar crash recovery:** Verify killing the sidecar mid-ingestion produces a clear error within 10 seconds, not a hang
+- [ ] **Determinism:** Verify two ingestions of the same project at the same commit produce byte-identical snapshots (MessagePack content hash match)
+- [ ] **Path aliases:** Verify a project using `paths` aliases has zero duplicate symbols
+- [ ] **SchemaVersion:** Verify v2.0 snapshots have `SchemaVersion = "2.0"` and v1.5 server warns on load
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Roslyn mixed-version assembly load exception | MEDIUM | Roll back all CodeAnalysis versions together; do not partial-revert |
-| Pagination broke existing client behavior | MEDIUM | Revert `limit` default; introduce separate `search_symbols_paged` tool if needed |
-| Rate limiter deadlock under parallel tests | LOW | Replace `SemaphoreSlim` with `FixedWindowRateLimiter`; add test isolation via DI |
-| Determinism broken by Dictionary ordering | MEDIUM | Add explicit `OrderBy(n => n.FQN)` at all output-producing call sites |
-| Startup validation swallowed by Aspire | LOW | Add explicit `try/catch` + `Console.Error.WriteLine` in `Program.cs` before host.RunAsync |
-
----
+| Unstable SymbolIds | HIGH | Redesign ID scheme; re-ingest all TS projects; invalidate cached snapshots/diffs |
+| Memory leaks in sidecar | LOW | Switch to cold-start, add `--max-old-space-size`, restart on OOM |
+| .d.ts bloat in snapshots | MEDIUM | Add source file filter; re-ingest; old snapshots valid but oversized |
+| Wrong namespace mapping | HIGH | Restructure graph hierarchy; breaks all TS snapshots and diffs |
+| TSDoc/JSDoc parse failures | LOW | Swap parser library; re-ingest; symbol structure unaffected |
+| Sidecar lifecycle crashes | LOW | Add restart logic and health checks; ingestion is idempotent |
+| IPC serialization bottleneck | MEDIUM | Switch from JSON to MessagePack/NDJSON; changes on both sides |
+| Path resolution bugs | MEDIUM | Fix normalization; re-ingest; may invalidate snapshots with bad IDs |
+| SymbolKind mapping confusion | HIGH | Changing the mapping after users depend on it breaks filters and clients |
+| Circular monorepo references | LOW | Add cycle detection; does not affect single-project ingestion |
+| TypeScript 7 API breakage | MEDIUM | Abstraction layer limits blast radius to one module; still requires rework |
+| Node.js not found | LOW | Add startup validation; actionable error message |
+| stdout pollution | LOW | Route all logging to stderr; add protocol test |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Roslyn 4.14 version conflict | Dependency upgrade (Phase 1) | `dotnet restore --verbosity detailed` — zero NU1107 |
-| Pagination breaking clients | Pagination phase | Run existing tool integration tests with no `limit` arg |
-| Rate limiter shared-state issues | Rate limiting phase | `dotnet test --parallel` — no deadlocks or counter leakage |
-| Dictionary ordering breaks determinism | Performance optimization phase | All `Verify.Xunit` snapshots pass unchanged |
-| `find_implementations` returning stubs | New tools phase | Unit test with explicit stub node in graph |
-| Startup validation silent failure | Startup validation phase | Integration test with bad config — assert stderr message |
+| SymbolId scheme mismatch | Phase 1 (Symbol Extraction) | `diff_snapshots` on two identical ingestions produces zero changes |
+| ts.createProgram cost | Phase 1 (Symbol Extraction) | 500-file project ingests in <30s with <2GB memory |
+| .d.ts phantom symbols | Phase 1 (Symbol Extraction) | Snapshot contains only project source + capped stub nodes |
+| Module-to-namespace mapping | Phase 1 (Symbol Extraction) | `explain_project` shows hierarchical structure |
+| stdout pollution | Phase 1 (Sidecar Scaffold) | Protocol integration test passes |
+| SymbolKind mapping | Phase 1 (Symbol Extraction) | Mapping table documented and reviewed before coding |
+| Path resolution | Phase 1 (Symbol Extraction) | Project with `paths` aliases has zero duplicates |
+| TypeScript 7 risk | Phase 1 (Symbol Extraction) | TS version pinned; compiler interaction behind abstraction |
+| Node.js not found | Phase 1 (Sidecar Scaffold) | Startup validator checks Node.js availability |
+| TSDoc/JSDoc parsing | Phase 1-2 (Doc Parsing) | `get_doc_coverage` >0% for projects with either format |
+| IPC serialization | Phase 2 (IPC Protocol) | 2,000-file project ingests without timeout or OOM |
+| Sidecar lifecycle | Phase 2-3 (Integration) | Sidecar crash produces error within 10s, restarts |
+| Monorepo references | Phase 3+ (Monorepo) | Circular config errors; no duplicate symbols |
 
 ---
 
 ## Sources
 
-- Microsoft.CodeAnalysis release notes and NuGet package dependencies (family versioning requirement): HIGH confidence — verified against current `Directory.Packages.props` and existing `VersionOverride` workaround in codebase
-- `System.Threading.RateLimiting` API (built into .NET 7+, `FixedWindowRateLimiter`, `TokenBucketRateLimiter`): HIGH confidence — .NET 10 standard library
-- MCP SDK tool schema backward compatibility: MEDIUM confidence — ModelContextProtocol 1.0.0 stable; optional parameter behavior verified against SDK source patterns
-- Aspire `ValidateOnStart()` stderr capture behavior: MEDIUM confidence — based on Aspire process model; stderr logging workaround is defensive best practice regardless
-- `MSBuildWorkspace` thread-safety: HIGH confidence — documented as not thread-safe in Roslyn workspace docs; matches existing patterns in codebase (single workspace per ingestion call)
-- Determinism requirement and `Verify.Xunit` golden files: HIGH confidence — explicit project constraint in CLAUDE.md and PROJECT.md; `Dictionary` ordering is documented .NET behavior
+- [TypeScript Wiki: Using the Compiler API](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- official compiler API documentation (HIGH confidence)
+- [TypeScript Wiki: Performance](https://github.com/microsoft/Typescript/wiki/Performance) -- memory and compilation guidance (HIGH confidence)
+- [TypeScript Issue #10759: Very high memory usage](https://github.com/microsoft/TypeScript/issues/10759) -- memory consumption patterns (HIGH confidence)
+- [TypeScript Issue #62543: Performance Enhancement Opportunities](https://github.com/microsoft/typescript/issues/62543) -- caching and optimization (MEDIUM confidence)
+- [TypeScript Issue #25338: .d.ts duplicate identifier errors in build mode](https://github.com/microsoft/TypeScript/issues/25338) -- declaration file duplication (HIGH confidence)
+- [TSDoc Specification](https://tsdoc.org/) -- TSDoc vs JSDoc differences (HIGH confidence)
+- [TypeScript TSConfig Reference: paths](https://www.typescriptlang.org/tsconfig/paths.html) -- path alias resolution (HIGH confidence)
+- [TypeScript: Project References](https://www.typescriptlang.org/docs/handbook/project-references.html) -- monorepo project references (HIGH confidence)
+- [Aspire: Orchestrate Node.js apps](https://learn.microsoft.com/en-us/dotnet/aspire/get-started/build-aspire-apps-with-nodejs) -- Node.js lifecycle in Aspire (HIGH confidence)
+- [TypeScript Native Port announcement](https://devblogs.microsoft.com/typescript/typescript-native-port/) -- TypeScript 7 Go rewrite impact (HIGH confidence)
+- [TypeScript 5.x to 6.0 Migration Guide](https://gist.github.com/privatenumber/3d2e80da28f84ee30b77d53e1693378f) -- API stability risks (MEDIUM confidence)
+- Direct codebase: `RoslynSymbolGraphBuilder.GetSymbolId()` at `src/DocAgent.Ingestion/RoslynSymbolGraphBuilder.cs:541-544` -- C# SymbolId uses `GetDocumentationCommentId()` (HIGH confidence)
+- Direct codebase: `SymbolKind` enum at `src/DocAgent.Core/Symbols.cs:3-19` -- 14 values designed for C# (HIGH confidence)
+- Direct codebase: `NodeKind`, `EdgeScope` enums at `src/DocAgent.Core/Symbols.cs:61-78` -- stub node and cross-project edge patterns (HIGH confidence)
 
 ---
-*Pitfalls research for: DocAgentFramework v1.5 Robustness*
-*Researched: 2026-03-04*
+*Pitfalls research for: DocAgentFramework v2.0 TypeScript Language Support*
+*Researched: 2026-03-08*

@@ -1,187 +1,169 @@
 # Project Research Summary
 
-**Project:** DocAgentFramework v1.5 Robustness
-**Domain:** .NET 10 MCP server — compiler-grade symbol graph with Roslyn ingestion pipeline
-**Researched:** 2026-03-04
+**Project:** DocAgentFramework v2.0 -- TypeScript Language Support
+**Domain:** Polyglot symbol extraction and documentation analysis via MCP server
+**Researched:** 2026-03-08
 **Confidence:** HIGH
 
 ## Executive Summary
 
-DocAgentFramework v1.5 is a targeted robustness milestone on an already-shipped MCP server. The 12-tool surface exists; this milestone adds two new tools (`find_implementations`, `get_doc_coverage`), extends pagination consistency to `get_references`, hardens the server with rate limiting and startup config validation, optimises the hot query path from O(E) edge scans to O(1) dictionary lookups, and brings Roslyn from 4.12.0 to 4.14.0. All research was conducted against the live codebase — findings are high-confidence because they are grounded in direct source reading, not speculation about a greenfield design.
+DocAgentFramework v2.0 adds TypeScript symbol extraction to an existing, production-stable C# symbol graph and MCP server. The recommended approach is a Node.js sidecar process that uses the TypeScript Compiler API (`ts.createProgram`, `TypeChecker`) to extract symbols, communicating with the C# host via NDJSON over stdin/stdout. This is the same IPC pattern the MCP server already uses with its clients. The existing `SymbolNode`/`SymbolEdge`/`SymbolGraphSnapshot` model maps naturally to TypeScript constructs -- 10 of 14 `SymbolKind` values have direct TypeScript equivalents, and all 7 `SymbolEdgeKind` values apply without modification. No existing MCP tools, indexes, or storage require changes; TypeScript snapshots flow through the same `SnapshotStore` and `BM25SearchIndex` as C# snapshots.
 
-The recommended execution order is dependency-driven: Roslyn 4.14 upgrade first (eliminates the existing VersionOverride hack and resolves the latent NU1107 conflict introduced by BenchmarkDotNet's transitive Roslyn 4.14 pull), then Core contract extensions (three new methods on `IKnowledgeQueryService`), then parallel tracks for Indexing implementation and McpServer infrastructure, then tool surface additions, finishing with the CLAUDE.md documentation refresh. This ordering avoids building features on a misaligned dependency graph and ensures the O(1) edge index is in place before `find_implementations` relies on it.
+The integration surface is deliberately narrow: one new NuGet package (`Aspire.Hosting.JavaScript` 13.1.2), one new Node.js project with a single runtime dependency (`typescript ~5.9`), one new C# service class (`TypeScriptIngestionService`), and one new MCP tool (`ingest_typescript`). The sidecar uses cold-start process isolation (spawn per request, OS reclaims memory on exit), avoiding the memory management complexity of a long-lived TypeScript compiler process. This mirrors proven patterns already in the codebase.
 
-The dominant risks are version alignment (the Roslyn package family must all move together or NU1107 returns), determinism (introducing `Dictionary` for O(1) lookup must not remove the `List` used for serialisation ordering), and pagination backward-compatibility (default behavior must not silently truncate existing callers). All six critical pitfalls have clear, actionable prevention strategies and are mapped to specific phases.
-
----
+The primary risks are: (1) SymbolId instability -- TypeScript has no standard equivalent to C#'s `GetDocumentationCommentId()`, so a deterministic ID scheme must be designed and locked before any extraction code is written; (2) `.d.ts` phantom symbol pollution -- `ts.Program.getSourceFiles()` returns everything the compiler loaded, including all `node_modules` declarations, which must be filtered to project source files only; and (3) TypeScript 7's Go rewrite, which will eventually replace the JavaScript Compiler API. Pinning to TS 5.9.x and abstracting compiler interaction behind an interface limits the blast radius. All three risks are well-understood and have concrete mitigation strategies.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new runtime packages are required for v1.5. `System.Threading.RateLimiting` ships in the .NET 10 BCL — no NuGet reference needed. `IOptions<T>` with `ValidateOnStart()` ships in `Microsoft.Extensions.Hosting` (already referenced). Cursor-based pagination uses Lucene's `SearchAfter` API already in the dependency graph. The only meaningful change to `Directory.Packages.props` is bumping three Roslyn packages from 4.12.0 to 4.14.0 and removing the `VersionOverride` workaround.
+The existing C# stack (Roslyn, Lucene.Net, MessagePack, MCP SDK, Aspire, OpenTelemetry) is unchanged. New additions are minimal and well-verified.
 
 **Core technologies:**
-- `Microsoft.CodeAnalysis.CSharp` 4.14.0 — Roslyn symbol graph builder — aligns with BenchmarkDotNet's transitive requirement, eliminates VersionOverride conflict in one move
-- `System.Threading.RateLimiting` (BCL, .NET 10) — `TokenBucketRateLimiter` for per-session tool call rate limiting — no new package; correct abstraction for stdio transport (not ASP.NET middleware)
-- `Microsoft.Extensions.Options` `ValidateOnStart()` (already referenced) — startup config validation — zero-dependency addition
-- Lucene.Net `SearchAfter` (already referenced) — idiomatic pagination over BM25 index — no new library
+- **Node.js 24.x LTS** (Krypton): Runtime for TypeScript sidecar -- Active LTS through Oct 2026, first-class Aspire orchestration via `AddNodeApp()`
+- **TypeScript ~5.9.x**: Compiler API for symbol extraction -- stable API surface since TS 2.x, pinned to avoid TS 6.0 breaking changes
+- **Aspire.Hosting.JavaScript 13.1.2**: Aspire integration for Node.js lifecycle management -- replaces deprecated `Aspire.Hosting.NodeJs`
+- **NDJSON over stdin/stdout**: IPC protocol -- zero dependencies, matches existing MCP stdio pattern, proven in codebase
+- **esbuild ^0.25**: Bundle sidecar to single `dist/index.js` -- sub-second builds, zero config
+- **vitest ^3**: Test runner for sidecar -- fast, native ESM+TS, standard for Node.js in 2026
 
-**What NOT to add:** `Microsoft.CodeAnalysis` 5.0.0 (MSBuildWorkspace compat unverified, no v1.5 feature requires it), `Microsoft.AspNetCore.RateLimiting` (requires ASP.NET pipeline — wrong abstraction for stdio), any external pagination library.
+**Critical version constraint:** Do NOT use `Aspire.Hosting.NodeJs` (deprecated). Do NOT use `ts-morph` (unnecessary abstraction). Do NOT add HTTP/gRPC frameworks (stdin/stdout is sufficient).
 
 ### Expected Features
 
 **Must have (table stakes):**
-- Roslyn 4.14 upgrade + full package audit — foundational; do first; current 4.12.0 conflicts with BDN transitive dep and will resurface as NU1107 on next SDK update
-- Startup config validation — `ValidateOnStart()` + filesystem accessibility check; operators expect container-fail-fast at startup, not opaque runtime errors
-- O(1) symbol lookup — fix known O(E) linear edge scan in `KnowledgeQueryService.GetSymbolAsync`; prerequisite for `find_implementations` at scale
-- Pagination on `get_references` — consistency with `search_symbols`; offset/limit pattern already established in codebase
-- `find_implementations` tool — first-class code navigation primitive; agents currently must parse `get_references` and filter manually — unreliable
-- `doc_coverage` tool — exposes existing Roslyn analyzer metrics as a queryable MCP tool; pure snapshot post-processing, no new ingestion required
-- Rate limiting — `TokenBucketRateLimiter` on tool dispatch; prevents stuck-agent retry storms from exhausting server resources
-- CLAUDE.md refresh — stale docs cause agents to call nonexistent or wrong-signature tools; do last, after all tools land
+- Symbol extraction for all declaration types (classes, interfaces, functions, enums, type aliases, constructors, methods, properties, fields)
+- JSDoc/TSDoc extraction (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
+- Inheritance and implementation edges (`extends`, `implements`)
+- Module export structure (export = public, non-export = internal)
+- Source spans (file path + line range for every symbol)
+- Stable, deterministic SymbolId generation
+- tsconfig.json as project entry point
+- Incremental ingestion via SHA-256 file hashing (reuse existing infrastructure)
+- `ingest_typescript` MCP tool
+- Deterministic snapshot output (same input = identical output)
 
-**Should have (competitive):**
-- Search metadata caching — TTL cache on manifest reads in `KnowledgeQueryService.ResolveSnapshotAsync`; reduces unnecessary disk I/O under concurrent queries
-- Batched project resolution — fix N+1 sequential `GetSymbolAsync` calls in `DocTools.GetReferences` via new `GetSymbolsBatchAsync` interface method
+**Should have (differentiators):**
+- Full JSDoc/TSDoc tag extraction (beyond just summary)
+- Ambient `.d.ts` declaration support (stub nodes)
+- Re-export tracking (`export { X } from './y'`)
+- Overload signature capture
+- Monorepo multi-tsconfig discovery
 
-**Defer (v2+):**
-- Embeddings/vector search — `IVectorIndex` interface already reserved; defer pending embedding provider decision
-- HTTP/SSE transport — out of scope until remote multi-client use case is validated
-- Real-time file watcher auto-ingestion — breaks reproducibility guarantees; offer `--watch` CLI flag in v2
-- Query DSL over symbol graph — speculative long-term
+**Defer (v2.1+):**
+- Declaration merging (multi-span symbols)
+- Function overload signatures
+- Modifier flags (`abstract`, `static`, `readonly`)
+- Decorator extraction
+- Cross-language edges (C# <-> TS)
+- Union/intersection/mapped/conditional type decomposition
 
 ### Architecture Approach
 
-The system has a clean six-layer pipeline (Core → Ingestion → Indexing → McpServer → AppHost → Tests) with strict boundary enforcement. v1.5 changes are contained: Core contract additions (three new interface methods, one new response type, one field addition), Indexing implementation changes (`BM25SearchIndex` + `KnowledgeQueryService`), and McpServer infrastructure additions (`RateLimitFilter`, `DocAgentServerOptionsValidator`, `StartupValidationService`) alongside tool surface extensions. No new projects are required.
+The architecture follows a sidecar pattern: C# spawns a Node.js child process per ingestion request, sends an NDJSON request on stdin with the tsconfig.json path, and receives a SymbolGraphSnapshot-shaped JSON response on stdout. The C# side deserializes into existing domain types, applies `SymbolSorter` for deterministic ordering, and feeds the snapshot into `SnapshotStore` and `BM25SearchIndex`. All 14 existing MCP tools work against TypeScript snapshots without modification. The only existing files that change are `AppHost/Program.cs` (3-5 lines), `ServiceCollectionExtensions.cs` (2-3 lines), `DocAgentServerOptions.cs` (1-2 lines), and `Directory.Packages.props` (1 line).
 
-**Major components and v1.5 responsibilities:**
-1. `DocAgent.Core/Abstractions.cs` — add `FindImplementationsAsync`, `GetDocCoverageAsync`, `GetSymbolsBatchAsync` to `IKnowledgeQueryService`; all downstream layers compile against this first
-2. `DocAgent.Core/QueryTypes.cs` — add `DocCoverageReport` record; add `TotalCount` to `ResponseEnvelope<T>` (default 0 for backward compat)
-3. `DocAgent.Indexing/BM25SearchIndex` — add `_edgesByFrom` + `_edgesByTo` dictionaries built in `PopulateNodes`; follow existing `_nodes` dict pattern
-4. `DocAgent.Indexing/KnowledgeQueryService` — implement new interface methods; add TTL manifest cache (SemaphoreSlim-guarded); use edge index for O(1) lookups
-5. `DocAgent.McpServer/Filters/RateLimitFilter` — new MCP SDK filter, parallel to existing `AuditFilter`; single cross-cutting enforcement point for all 12+ tools
-6. `DocAgent.McpServer/Config` — `DocAgentServerOptionsValidator` (`IValidateOptions<T>`) + `StartupValidationService` (`IHostedService` with stderr logging for Aspire compatibility)
-7. `DocAgent.McpServer/Tools/DocTools` — add `find_implementations`, `get_doc_coverage` tools; wire batch lookup; expose `totalCount` in search responses
+**Major components:**
+1. **ts-symbol-extractor** (NEW Node.js project) -- reads tsconfig.json, walks TS Compiler API, emits SymbolGraphSnapshot JSON on stdout
+2. **TypeScriptIngestionService** (NEW C# class) -- spawns sidecar, sends request, deserializes response, feeds into SnapshotStore + SearchIndex
+3. **ingest_typescript MCP tool** (NEW C# tool handler) -- validates path via PathAllowlist, delegates to TypeScriptIngestionService
+4. **AppHost wiring** (MODIFIED) -- registers Node.js sidecar as Aspire resource via `AddNodeApp()`
 
-**Key patterns to follow:**
-- MCP SDK filter decorator for cross-cutting policy (rate limiting follows `AuditFilter` pattern exactly — do not inject limiter into individual tool classes)
-- Snapshot-keyed dictionaries built at `IndexAsync` time (edge dicts follow `_nodes` dict pattern — supplementary lookup only, list remains canonical)
-- `IOptions<T>` + `IValidateOptions<T>` + `ValidateOnStart()` for configuration invariants
+**Key patterns to follow (already established in codebase):**
+- `PipelineOverride` seam for testing without Node.js
+- `PathAllowlist` validation before any pipeline work
+- Deterministic output via `SymbolSorter`
+- Content hash computed by `SnapshotStore`, not the extractor
+- Per-path semaphore serialization for concurrent ingestion
 
 ### Critical Pitfalls
 
-1. **Roslyn package family partial upgrade** — All `Microsoft.CodeAnalysis.*` packages (CSharp, CSharp.Workspaces, Workspaces.MSBuild, Common) must move to 4.14.0 together in one PR. Verify with `dotnet restore --verbosity detailed` — zero NU1107 across ALL projects including Benchmarks and Analyzers. Also verify `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit 1.1.2` is compatible before proceeding.
-
-2. **O(1) Dictionary introduction breaks determinism** — `Dictionary` iteration order is not guaranteed in .NET. The existing `List<SymbolNode>` provides stable insertion-order iteration used by serialisation and `Verify.Xunit` golden files. Add `_edgesByFrom`/`_edgesByTo` as supplementary lookup structures; keep the list as the canonical ordered collection for all output paths. Use `SortedDictionary` if iteration order is needed from the dict itself.
-
-3. **Pagination backward-compatibility** — Adding `offset`/`limit` to existing tools is nominally backward-compatible, but changing the default return count is a semantic breaking change. Default `limit` must be at least as large as the current unbounded maximum, or existing callers silently get truncated results. Return pagination metadata only when `limit` is explicitly supplied — calls without `limit` must return the same response shape as before.
-
-4. **`find_implementations` returning stub nodes** — `NodeKind.Stub` nodes (synthesized for NuGet/BCL types) participate in the edge graph but have null `SourceSpan.FilePath`. Without explicit filtering, agents receive navigation results that point to non-existent files. Add stub filtering to the traversal helper from the start; add a unit test with an explicit stub node in the implementation chain asserting exclusion.
-
-5. **Startup validation silent failure under Aspire** — `ValidateOnStart()` throws during `IHost.StartAsync()`; Aspire captures exit code but not stderr of the child process. Wrap in try/catch in `Program.cs` that writes `OptionsValidationException.Message` to `Console.Error` before rethrowing. Test the validator in isolation with `ServiceCollection` directly — do not rely on Aspire integration tests for validation logic coverage.
-
-6. **Rate limiter shared mutable state** — Rate limiter must be a DI singleton (not a static field, not a per-call using block). Honor incoming `CancellationToken` in `WaitAsync`. Return structured error response on rejection — unhandled exceptions become opaque MCP errors. Ingestion tool calls should not count against the query rate limit; rate limiting scopes to tool dispatch only.
-
----
+1. **SymbolId instability** -- TypeScript has no `GetDocumentationCommentId()` equivalent. Design a deterministic scheme from source-stable properties (file path + AST declaration chain + parameter types). Golden-file test required. Recovery cost is HIGH if wrong.
+2. **`.d.ts` phantom symbol pollution** -- `getSourceFiles()` includes all `node_modules` declarations. Filter to `getRootFileNames()` + check `isDeclarationFile`. Without this, snapshots bloat 10-100x.
+3. **stdout corruption** -- Any `console.log()` or library warning on stdout breaks NDJSON deserialization. Route ALL logging to stderr, use `--no-warnings` flag.
+4. **Module-to-namespace mapping** -- TypeScript modules (files) must map to `SymbolKind.Namespace` using relative file paths. Wrong choice here restructures the entire graph; recovery cost is HIGH.
+5. **Path alias resolution** -- `baseUrl`/`paths` in tsconfig.json create import aliases. Always use `sourceFile.fileName` (resolved absolute path), never import specifiers. Otherwise: duplicate or missing symbols.
 
 ## Implications for Roadmap
 
-Based on research, the dependency graph dictates a six-phase ordering. Phases 2 and 3 can be parallelised across worktrees.
+Based on research, suggested phase structure:
 
-### Phase 1: Dependency Foundation
-**Rationale:** The Roslyn version conflict is a latent build hazard. BenchmarkDotNet already pulls `Microsoft.CodeAnalysis.Common` 4.14.0 transitively, creating the existing VersionOverride workaround in `DocAgent.Tests.csproj`. Building any feature on 4.12.0 while this conflict exists risks mixed-assembly issues. Resolving this first gives a clean foundation — removing the VersionOverride hack is a correctness fix, not optional cleanup.
-**Delivers:** Clean `dotnet restore` with zero NU1107 across all projects; VersionOverride removed from `DocAgent.Tests.csproj`; `NuGetAudit` MSBuild property enabled in `Directory.Build.props`; full package audit completed
-**Addresses:** Roslyn 4.14 upgrade + package audit (FEATURES.md P1)
-**Avoids:** Pitfall 1 (Roslyn partial upgrade — all five CodeAnalysis packages move together)
+### Phase 1: Sidecar Scaffold and IPC Protocol
+**Rationale:** The Node.js project structure, NDJSON protocol, and C# process spawning are prerequisites for everything else. This phase establishes the communication contract and validates Node.js availability.
+**Delivers:** Working Node.js project that accepts an NDJSON request on stdin and returns a stub response on stdout; C# `TypeScriptIngestionService` that spawns the process and deserializes the response; startup validation for Node.js; PROTOCOL.md contract document.
+**Addresses:** tsconfig.json as entry point, NDJSON protocol, sidecar lifecycle
+**Avoids:** stdout pollution (establish stderr-only logging from first line of code), Node.js not found (startup validation)
 
-### Phase 2: Core Contracts + Indexing Performance
-**Rationale:** Core interface additions (`IKnowledgeQueryService` methods) must precede all downstream implementation — all test doubles and tool classes compile against these contracts. O(1) edge indexing must precede `find_implementations` (Phase 5) which depends on fast edge traversal at scale. These are tightly coupled and should ship in the same phase.
-**Delivers:** Updated `Abstractions.cs` (three new methods) and `QueryTypes.cs` (new record, new field); `_edgesByFrom`/`_edgesByTo` in `BM25SearchIndex.PopulateNodes`; O(1) edge lookups in `KnowledgeQueryService.GetSymbolAsync` and `GetReferencesAsync`; TTL manifest cache; `GetSymbolsBatchAsync` batch lookup; `InMemorySearchIndex` test double updated
-**Uses:** Existing `_nodes` dict pattern; `SemaphoreSlim` for cache thread safety
-**Avoids:** Pitfall 2 (Dictionary ordering — list retained as canonical ordered collection)
+### Phase 2: Core Symbol Extraction
+**Rationale:** This is the critical path and highest-risk phase. SymbolId design, SymbolKind mapping, source file filtering, and path normalization must all be correct here. Every downstream consumer depends on these decisions.
+**Delivers:** Complete symbol extraction for all declaration types; stable SymbolId generation; module-to-namespace mapping; JSDoc/TSDoc extraction; source spans; deterministic output.
+**Addresses:** All table-stakes features except incremental ingestion and MCP tool
+**Avoids:** SymbolId instability (golden-file tests), `.d.ts` phantom symbols (source file filtering), path alias bugs (resolved path normalization), SymbolKind mapping gaps (mapping table locked before coding)
 
-### Phase 3: McpServer Infrastructure (parallelisable with Phase 2)
-**Rationale:** Rate limiting and startup validation are cross-cutting server policies with no dependency on indexing changes. Both can be built in a separate worktree in parallel with Phase 2. Infrastructure registration must precede tool additions (Phase 5).
-**Delivers:** `RateLimitFilter` registered alongside `AuditFilter`; `DocAgentServerOptionsValidator` + `StartupValidationService`; `RateLimitOptions` nested config class; `ValidateOnStart()` with explicit stderr logging; unit tests for validator in isolation
-**Uses:** `System.Threading.RateLimiting` BCL (no new package); `IOptions<T>` + `IValidateOptions<T>` pattern
-**Avoids:** Pitfall 5 (Aspire silent failure — explicit stderr before rethrow), Pitfall 6 (rate limiter shared state — DI singleton)
+### Phase 3: MCP Integration and Incremental Ingestion
+**Rationale:** With extraction working, wire it into the MCP tool surface and add incremental ingestion for real-world usability.
+**Delivers:** `ingest_typescript` MCP tool; incremental ingestion via SHA-256 file hashing; Aspire AppHost wiring; full end-to-end pipeline from `ingest_typescript` call through all 14 query tools.
+**Addresses:** `ingest_typescript` tool, incremental ingestion, Aspire integration
+**Avoids:** Sidecar lifecycle issues (cold-start with timeout + CancellationToken), PathAllowlist bypass (validate tsconfig.json path before spawning)
 
-### Phase 4: Pagination Extension
-**Rationale:** Pagination changes touch `QueryTypes.cs`, `KnowledgeQueryService`, and `DocTools` — the same files as tool additions in Phase 5. Isolating into its own phase makes backward-compat regression testing explicit before new tools land on the same files. The design decision (default behavior unchanged) must be enforced before writing code.
-**Delivers:** `get_references` with `offset`/`limit` parameters consistent with `search_symbols`; `TotalCount` in `ResponseEnvelope<T>` (default 0, non-breaking); all existing integration tests pass with no `limit` argument; `Verify.Xunit` snapshots updated once for the new `totalCount` field
-**Avoids:** Pitfall 3 (pagination breaking existing clients — backward-compat contract enforced in design)
-
-### Phase 5: New MCP Tools
-**Rationale:** `find_implementations` and `get_doc_coverage` depend on the O(1) edge index (Phase 2), the updated Core contracts (Phase 2), and the infrastructure registered in Phase 3. This is the final code phase and depends on all prior phases completing.
-**Delivers:** `find_implementations` MCP tool (stub-filtered O(1) edge traversal with offset/limit); `get_doc_coverage` MCP tool (snapshot post-processing, grouped by project/namespace/type); batch lookup wired in `DocTools.GetReferences`; all tools covered by PathAllowlist and PromptInjectionScanner; unit test asserting stub node exclusion
-**Avoids:** Pitfall 4 (stub nodes in `find_implementations` — filtered from traversal helper in initial design)
-
-### Phase 6: Documentation Refresh
-**Rationale:** CLAUDE.md is consumed by agents as the primary API reference. Updating it before all 14 tools have stable signatures risks documenting provisional behavior. Documentation refresh is the correct last step — it describes what shipped, not what is planned.
-**Delivers:** CLAUDE.md updated from 12-tool to 14-tool surface with correct parameter signatures for all tools; verified against actual `[McpServerTool]` registered methods in codebase
+### Phase 4: Verification and Hardening
+**Rationale:** Determinism, search tokenization, cross-tool validation, and performance profiling require the full pipeline to be functional. This phase catches "looks done but isn't" issues.
+**Delivers:** Golden-file determinism tests; BM25 camelCase tokenization validation; diff/change review tool verification with TS snapshots; performance profiling with large (500+ file) projects; security validation (PathAllowlist, no absolute paths in SymbolNode.Span).
+**Addresses:** Deterministic snapshots, search quality, security hardening
+**Avoids:** IPC serialization bottlenecks on large projects, false diff results, search tokenization mismatches
 
 ### Phase Ordering Rationale
 
-- Roslyn upgrade must be first — all subsequent code compiles against it; a NU1107 mid-feature is expensive to diagnose
-- Core contracts must precede Indexing implementation — but Phases 2 and 3 can be parallelised across worktrees since they touch different files
-- Pagination (Phase 4) isolated from new tools (Phase 5) to contain backward-compat regression risk
-- Documentation always last — reflects what shipped
+- **Phases 1-2 form the critical path.** Phase 2 (symbol extraction) is the largest and riskiest work. Phase 1 gives it a working scaffold to develop against. These cannot be reordered.
+- **Phase 3 depends on Phase 2** because the MCP tool needs working extraction. Aspire wiring (Phase 3) is independent of extraction logic but makes sense to group with the integration work.
+- **Phase 4 must come last** because verification requires the full pipeline. However, golden-file tests for SymbolId stability should be written IN Phase 2, not deferred.
+- **Architecture supports parallelism:** Phase 1's C# side (TypeScriptIngestionService) and Node.js side (project scaffold) can be built concurrently. Phase 2's JSON contract types (C#) can be built alongside the TS walker.
 
 ### Research Flags
 
-Phases with well-documented patterns (standard — skip `/gsd:research-phase`):
-- **Phase 1 (Dependency Foundation):** Mechanical package version bump; process fully documented in STACK.md and PITFALLS.md
-- **Phase 3 (Infrastructure):** `IOptions<T>` + MCP SDK filter patterns are established; code locations identified precisely in ARCHITECTURE.md
-- **Phase 4 (Pagination):** Pattern already established in `search_symbols`; extend to `get_references` following identical approach
-- **Phase 6 (Documentation):** Non-code; no research needed
+Phases likely needing deeper research during planning:
+- **Phase 2:** SymbolId design is a critical, irreversible decision. Needs a design document and review before implementation begins. TSDoc vs JSDoc parsing strategy needs testing against real-world projects.
 
-Phases that may benefit from targeted design decisions during planning:
-- **Phase 2 (Core + Indexing):** The `ISnapshotChanged` event pattern for cache invalidation (IngestionService → KnowledgeQueryService) has a potential DI cycle risk. Design the invalidation mechanism before implementation — options are an `IObserver`/event pattern or a dedicated `ISnapshotChangeNotifier` abstraction.
-- **Phase 5 (New Tools):** Confirm that `SymbolEdgeKind.Implements` and `SymbolEdgeKind.Overrides` edges are populated at ingestion time for the common use cases (interface implementations, abstract overrides) before committing to the edge-graph traversal approach over live `SymbolFinder`. If edge population is incomplete, the live `Solution` approach may be needed.
-
----
+Phases with standard patterns (skip research-phase):
+- **Phase 1:** NDJSON stdin/stdout IPC and Process.Start are well-documented, established patterns already used in this codebase.
+- **Phase 3:** MCP tool registration, Aspire wiring, and incremental ingestion all follow existing patterns in the codebase (copy from `IngestionTools.cs`, `AppHost/Program.cs`, `IncrementalIngestionEngine`).
+- **Phase 4:** Standard testing and verification work. No novel patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All package versions verified against NuGet; BCL API verified against official .NET docs; no new packages required |
-| Features | HIGH | MCP spec confirmed for pagination scope; Roslyn API confirmed for `SymbolFinder`; existing codebase read directly for all integration points |
-| Architecture | HIGH | Derived entirely from direct source reading of shipped code; integration points are file-and-line specific with code excerpts |
-| Pitfalls | HIGH | Version conflict verified against existing `VersionOverride` in codebase; determinism requirement explicit in PROJECT.md and CLAUDE.md; rate limiter and Aspire patterns are .NET-documented behavior |
+| Stack | HIGH | All packages verified on npm/NuGet with published dates. Version compatibility matrix confirmed. Aspire.Hosting.JavaScript 13.1.2 published 2026-02-26. |
+| Features | HIGH | Existing SymbolNode/SymbolEdge model inspected directly. 10 of 14 SymbolKind values map naturally. Feature dependencies are clear. |
+| Architecture | HIGH | Sidecar + stdin/stdout NDJSON matches existing MCP pattern. Component boundaries defined. Build order dependencies mapped. Minimal changes to existing code. |
+| Pitfalls | HIGH | Pitfalls verified via TypeScript compiler issue trackers, official docs, and direct codebase analysis. SymbolId and .d.ts filtering risks are well-documented in the TS community. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Cache invalidation cycle risk:** `IngestionService` → `KnowledgeQueryService` cache invalidation signal after snapshot save may create a DI circular dependency. Resolve during Phase 2 planning — options are an `IObserver`/event pattern or a dedicated `ISnapshotChangeNotifier` abstraction injected into both services.
-- **Analyzer testing package Roslyn floor:** `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit 1.1.2` and `Microsoft.CodeAnalysis.Testing.Verifiers.XUnit 1.1.2` have their own Roslyn transitive dependency. Compatibility with 4.14.0 must be verified at the start of Phase 1 — if they cap at 4.12.0, the VersionOverride pattern must remain on those test packages only.
-- **Edge population completeness for `find_implementations`:** ARCHITECTURE.md recommends edge-graph traversal (avoiding live `MSBuildWorkspace` warm-up cost), but this only works if `SymbolEdgeKind.Implements`/`Overrides` edges are comprehensively populated during ingestion. Validate during Phase 5 planning before committing to the approach.
-
----
+- **TypeAlias SymbolKind:** FEATURES.md recommends adding `SymbolKind.TypeAlias = 14`; ARCHITECTURE.md and PITFALLS.md recommend reusing `SymbolKind.Type` and deferring new enum values. Decision needed during Phase 2 planning -- leaning toward adding the enum value since it is a one-line, backward-compatible change.
+- **`@microsoft/tsdoc` package:** PITFALLS.md recommends it for JSDoc/TSDoc parsing; STACK.md does not list it as a dependency. Evaluate during Phase 2 whether TypeScript's built-in `symbol.getDocumentationComment()` + `ts.getJSDocTags()` are sufficient, or if `@microsoft/tsdoc` is needed.
+- **Aspire package name discrepancy:** ARCHITECTURE.md references the deprecated `Aspire.Hosting.NodeJs` in code examples while STACK.md correctly identifies `Aspire.Hosting.JavaScript` as the replacement. Use `Aspire.Hosting.JavaScript` exclusively.
+- **BM25 camelCase tokenization:** PITFALLS.md flags that the tokenizer must handle camelCase (TS convention) not just PascalCase (C# convention). Verify during Phase 4 that existing `CamelCaseTokenizer` handles both -- if it already splits on case transitions, this is a non-issue.
+- **TS Compiler `noCheck` viability:** PITFALLS.md mentions `noCheck: true` could skip type-checking for 2-3x speed gain, but the TypeChecker is needed for type resolution. Needs empirical testing during Phase 2.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `src/DocAgent.Core/Abstractions.cs` — interface contracts (direct read)
-- `src/DocAgent.Core/QueryTypes.cs` — response types (direct read)
-- `src/DocAgent.Indexing/KnowledgeQueryService.cs` — facade implementation with O(E) scan identified at lines ~101-117 (direct read)
-- `src/DocAgent.Indexing/BM25SearchIndex.cs` — existing `_nodes` dict pattern (direct read)
-- `src/DocAgent.McpServer/Tools/DocTools.cs` — all 5 existing tool implementations (direct read)
-- `src/DocAgent.McpServer/Config/DocAgentServerOptions.cs` — current config shape (direct read)
-- `src/Directory.Packages.props` — current package versions including VersionOverride (direct read)
-- [NuGet: Microsoft.CodeAnalysis.CSharp 4.14.0](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/4.14.0) — release date May 15, 2025 confirmed
-- [Microsoft Learn: Rate limiting for .NET](https://devblogs.microsoft.com/dotnet/announcing-rate-limiting-for-dotnet/) — BCL `TokenBucketRateLimiter` design rationale
-- [Microsoft Learn: Auditing NuGet package dependencies](https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages) — `NuGetAudit` MSBuild property
-- [MCP Pagination Specification (2025-03-26)](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/pagination) — list-operation cursor scope confirmed
-- [SymbolFinder.FindImplementationsAsync — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.findsymbols.symbolfinder.findimplementationsasync) — API signature confirmed
+- TypeScript Compiler API Wiki -- symbol extraction API surface, `ts.createProgram`, `TypeChecker`
+- TypeScript 5.9 release notes -- latest stable compiler version
+- Node.js 24 LTS release schedule -- runtime version and support timeline
+- Aspire.Hosting.JavaScript 13.1.2 on NuGet -- published 2026-02-26, verified package
+- NDJSON specification -- protocol format
+- TypeScript native port announcement (Project Corsa) -- TS 7.0 Go rewrite impact
+- Direct codebase reads: `Symbols.cs`, `RoslynSymbolGraphBuilder.cs`, `IngestionService.cs`, `SnapshotStore.cs`, `AppHost/Program.cs`, `Directory.Packages.props`
 
 ### Secondary (MEDIUM confidence)
-- [fast.io: MCP Server Rate Limiting](https://fast.io/resources/mcp-server-rate-limiting/) — stdio token bucket pattern guidance
-- [MCP in .NET Pagination Docs](https://mcpindotnet.github.io/docs/concepts/architecture-overview/layers/data-layer/utility-features/pagination/) — community docs on pagination scope
-- Aspire `ValidateOnStart()` stderr capture behavior — based on Aspire process model; defensive stderr logging is best practice regardless of direct confirmation
+- Aspire JavaScript integration docs -- `AddNodeApp()` API patterns
+- TypeDoc GitHub -- reference for TS doc extraction approaches
+- TSDoc specification -- tag format differences from JSDoc
+- Community IPC patterns (C# to Node.js stdin/stdout) -- process lifecycle management
 
 ---
-*Research completed: 2026-03-04*
+*Research completed: 2026-03-08*
 *Ready for roadmap: yes*

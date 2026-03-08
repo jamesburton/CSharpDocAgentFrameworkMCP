@@ -1,189 +1,315 @@
-# Stack Research
+# Technology Stack: TypeScript Language Support (v2.0)
 
-**Domain:** .NET 10 MCP server — v1.5 Robustness additions only
-**Researched:** 2026-03-04
-**Confidence:** HIGH (NuGet package versions verified directly; .NET BCL APIs verified via official docs)
-
----
-
-## New Stack Additions for v1.5
-
-This is a **delta document** — only what is NEW or CHANGED versus the existing validated stack.
-Existing stack (Roslyn 4.12, Lucene.Net 4.8-beta, MessagePack 3.1.4, ModelContextProtocol 1.0.0, Aspire, OTel, BenchmarkDotNet) is unchanged unless explicitly listed below.
+**Project:** DocAgentFramework - TypeScript Symbol Extraction via Node.js Sidecar
+**Researched:** 2026-03-08
+**Scope:** NEW additions only. Existing stack (Roslyn 4.14.0, Lucene.Net 4.8-beta, MessagePack 3.1.4, MCP SDK 1.0.0, Aspire SDK 13.1.2, OpenTelemetry 1.15.0, BenchmarkDotNet 0.15.8, etc.) is validated and unchanged.
 
 ---
 
-## Rate Limiting
+## Recommended Stack Additions
 
-### Recommended: `System.Threading.RateLimiting` (in-box, no new package)
+### Node.js Sidecar Runtime
 
-DocAgentFramework uses **stdio MCP transport** — there is no ASP.NET Core pipeline, so `Microsoft.AspNetCore.RateLimiting` middleware is the wrong abstraction. Use the lower-level `System.Threading.RateLimiting` namespace directly, which ships in the .NET 10 runtime with no additional NuGet package required.
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Node.js | 24.x LTS (Krypton) | Runtime for TypeScript symbol extractor sidecar | Current Active LTS through Oct 2026, Maintenance through Apr 2028. Aspire 13.x has first-class Node.js orchestration via `AddNodeApp()`. |
+| TypeScript | ~5.9.x | TypeScript Compiler API for symbol extraction | Latest stable (March 2026). Compiler API (`ts.createProgram`, `TypeChecker`, `Symbol`) provides compiler-grade symbol information -- identical fidelity to what Roslyn provides for C#. Pin to ~5.9.x to avoid TS 6.0 breaking changes (6.0 beta announced, will rewrite compiler internals). |
 
-| API | Version | Purpose | Why |
-|-----|---------|---------|-----|
-| `System.Threading.RateLimiting.TokenBucketRateLimiter` | .NET 10 BCL (built-in) | Per-session tool call rate limiting | Handles bursty LLM tool calls; allows short burst then enforces average rate |
-| `System.Threading.RateLimiting.ConcurrencyLimiter` | .NET 10 BCL (built-in) | Bound concurrent ingestion operations | Prevents overload from simultaneous `ingest_solution` calls |
+**Confidence:** HIGH -- Node.js 24 LTS and TypeScript 5.9 verified via official release channels and npm registry.
 
-**Integration point:** Wrap MCP tool dispatch in a `RateLimiter.AcquireAsync()` guard inside `DocAgentServerOptions`-configured middleware. For stdio (single-agent connection), a single global `TokenBucketRateLimiter` is sufficient — no per-tenant partitioning needed.
+### Aspire Integration (C# Side)
 
-**Algorithm choice — token bucket over fixed window:** Fixed window causes request clustering at window boundaries. Token bucket smooths traffic and is idiomatic for tool-call scenarios where an LLM bursts calls then pauses.
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Aspire.Hosting.JavaScript | 13.1.2 | Orchestrate Node.js sidecar from AppHost | Renamed from `Aspire.Hosting.NodeJs` in Aspire 13.0. Old package is deprecated. Version 13.1.2 matches existing Aspire SDK already in the project. Provides `AddNodeApp(name, projectDir, scriptPath)` to register the sidecar as a managed Aspire resource with lifecycle management, health monitoring, environment variable injection, and dashboard visibility. |
 
-**No new package needed.** `System.Threading.RateLimiting` is part of .NET 8+ runtime. For .NET 10 the standalone NuGet `System.Threading.RateLimiting` exists at `10.0.3` but is only needed when targeting older frameworks. Since the project targets `net10.0`, the BCL version is used automatically.
+**IMPORTANT:** Do NOT use `Aspire.Hosting.NodeJs` -- it is deprecated and no longer maintained. The replacement is `Aspire.Hosting.JavaScript` (same APIs, new package name).
 
----
+**Confidence:** HIGH -- `Aspire.Hosting.JavaScript` 13.1.2 verified on NuGet, published 2026-02-26.
 
-## Roslyn Upgrade: 4.12.0 → 4.14.0
+### IPC Protocol (C# <-> Node.js)
 
-### Recommendation: Upgrade to 4.14.0, NOT 5.0.0
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| NDJSON over stdin/stdout | N/A (protocol, no dependency) | Bidirectional communication between C# host and Node.js sidecar | Proven pattern: the MCP server itself uses stdio transport. NDJSON (newline-delimited JSON) is trivial on both sides -- `System.Text.Json` in C#, `JSON.parse` per line in Node.js. Zero external dependencies. ~30ms latency per message via child process IPC. Request/response correlation via `id` field. |
 
-| Package | Current | Target | Rationale |
-|---------|---------|--------|-----------|
-| `Microsoft.CodeAnalysis.CSharp` | 4.12.0 | **4.14.0** | Released May 15, 2025; already required by BenchmarkDotNet 0.15.8 (see `Microsoft.CodeAnalysis.Common` VersionOverride in `Directory.Packages.props`) |
-| `Microsoft.CodeAnalysis.CSharp.Workspaces` | 4.12.0 | **4.14.0** | Matches CSharp package; MSBuildWorkspace stays aligned |
-| `Microsoft.CodeAnalysis.Workspaces.MSBuild` | 4.12.0 | **4.14.0** | Must move in lockstep with Workspaces |
-| `Microsoft.CodeAnalysis.Common` | 4.14.0 (VersionOverride) | **4.14.0** (promote to primary) | Already pinned at this version to resolve NU1107; promote to official version, remove VersionOverride |
+**Why NOT alternatives:**
 
-**Why 4.14.0 and not 5.0.0:**
-- `Microsoft.CodeAnalysis.CSharp 5.0.0` is available on NuGet but targets VS 2022 17.14+ / .NET SDK that ships with C# 14 preview features. MSBuildWorkspace compatibility with 5.0.0 has no confirmed test record in this project.
-- 4.14.0 is already partially in the dependency graph (BenchmarkDotNet forces `Microsoft.CodeAnalysis.Common` 4.14.0 via VersionOverride). Promoting all Roslyn packages to 4.14.0 **resolves the existing NU1107 conflict cleanly** — no more VersionOverride needed.
-- Risk-adjusted: 4.14 is a stable minor bump with known changelog; 4.14 → 5.0 is a major version crossing with unknown MSBuildWorkspace surface changes.
+| Alternative | Why Rejected |
+|-------------|-------------|
+| HTTP/TCP | Port allocation, firewall issues, connection lifecycle management. Over-engineered for local parent-child process IPC. |
+| gRPC | Proto file generation, build tool complexity. Symbol payloads are JSON-native. |
+| Named pipes | Platform-specific behavior (Windows vs Linux). stdin/stdout is universal and already proven in this codebase. |
+| StreamJsonRpc (Microsoft) | Good library but adds a NuGet dependency for a simple request/response pattern implementable in ~50 lines. Valid upgrade path if protocol complexity grows. |
 
-**Migration effort:** Low. Bump three package versions in `Directory.Packages.props`, remove the `Microsoft.CodeAnalysis.Common` VersionOverride in `DocAgent.Tests.csproj`. No API changes expected at 4.12→4.14 for the symbol/workspace APIs in use.
-
-**Analyzer testing packages** (`Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit 1.1.2`, `Microsoft.CodeAnalysis.Testing.Verifiers.XUnit 1.1.2`) require verification — these pin their own Roslyn transitive dep. If they conflict at 4.14, the VersionOverride pattern stays on those packages only.
-
----
-
-## Package Auditing
-
-### Recommended: Built-in `dotnet list package` + `dotnet-outdated-tool`
-
-**No new runtime package.** Auditing is a developer workflow, not a runtime dependency.
-
-| Tool | Version | Purpose | How to Use |
-|------|---------|---------|-----------|
-| `dotnet list package --vulnerable` | .NET SDK built-in (SDK 5.0.200+) | Scan direct + transitive deps against GitHub Advisory Database | `dotnet list package --vulnerable --include-transitive` at solution level |
-| `dotnet list package --deprecated` | .NET SDK built-in | Flag deprecated packages | `dotnet list package --deprecated` |
-| `dotnet-outdated-tool` | 4.7.0 (global tool) | Report all outdated NuGet packages with latest stable/preview | `dotnet tool install -g dotnet-outdated-tool && dotnet outdated` |
-
-**NuGetAudit MSBuild property** (NuGet 6.8+, available in .NET 9/10 SDK): Add `<NuGetAudit>true</NuGetAudit>` to `Directory.Build.props` to surface vulnerability warnings at `dotnet restore` time. This is a zero-cost, zero-package-dependency addition that runs in CI automatically.
+**Confidence:** HIGH -- stdin/stdout NDJSON is the same pattern used by the existing MCP stdio transport.
 
 ---
 
-## Pagination
+## TypeScript Compiler API Surface (Node.js Side)
 
-### Recommendation: Custom cursor-based pagination, no new package
+These are the specific APIs from the `typescript` npm package used for symbol extraction:
 
-MCP tool results are plain C# objects serialized to JSON. Pagination for `search_symbols` and coverage results does not require a library — implement as a lightweight cursor pattern on the domain layer.
+| API | Purpose | Maps To |
+|-----|---------|---------|
+| `ts.parseJsonConfigFileContent()` | Parse tsconfig.json including `extends` chains, `paths`, `include`/`exclude` globs | Project discovery (like MSBuildWorkspace for C#) |
+| `ts.createProgram(rootNames, options, host)` | Create type-checked program from resolved file list | Equivalent to Roslyn `Compilation` |
+| `program.getTypeChecker()` | Resolve types, symbols, and relationships | Equivalent to Roslyn `SemanticModel` |
+| `program.getSourceFiles()` | Get all parsed source files | File enumeration for walking |
+| `ts.forEachChild(node, visitor)` | Walk AST nodes to discover declarations | AST visitor pattern |
+| `checker.getSymbolAtLocation(node.name)` | Get Symbol for a declaration node | Maps to `SymbolNode` in existing graph |
+| `checker.getSignatureFromDeclaration(node)` | Extract function/method signatures (params, return type, generics) | Maps to `SymbolNode.Signature` |
+| `checker.typeToString(type)` | Serialize resolved type to string | Display type for documentation |
+| `ts.SyntaxKind` enum | Identify node types: `ClassDeclaration`, `InterfaceDeclaration`, `FunctionDeclaration`, `MethodDeclaration`, `PropertyDeclaration`, `EnumDeclaration`, `TypeAliasDeclaration`, `ModuleDeclaration`, `ExportDeclaration` | Maps to `SymbolKind` enum |
+| `symbol.getJsDocTags()` / `symbol.getDocumentationComment()` | Extract JSDoc comments | Maps to `DocComment` in existing graph |
 
-**Pattern:**
+**Confidence:** HIGH -- TypeScript Compiler API is stable across major versions. Same core surface since TS 2.x with additive-only changes.
 
-```csharp
-// Request: add to existing tool input
-public record SearchRequest(string Query, int PageSize = 50, string? Cursor = null);
+---
 
-// Response: extend existing tool output
-public record PagedResult<T>(IReadOnlyList<T> Items, string? NextCursor, int TotalCount);
+## npm Dependencies (Node.js Sidecar)
+
+### Runtime Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `typescript` | ~5.9.x | TypeScript Compiler API -- the extraction engine |
+
+**That is the ONLY runtime dependency.** stdin/stdout uses built-in `process.stdin`/`process.stdout`. JSON uses built-in `JSON.parse`/`JSON.stringify`. File system uses built-in `fs` and `path`. Zero npm dependencies beyond TypeScript itself.
+
+### Dev Dependencies
+
+| Package | Version | Purpose | Why This One |
+|---------|---------|---------|-------------|
+| `@types/node` | ^24 | Node.js type definitions for TypeScript | Match Node.js 24 LTS major version |
+| `vitest` | ^3 | Test runner | Fast, zero-config, native ESM+TS support. Standard for new Node.js projects in 2026. |
+| `tsx` | ^4 | TypeScript execution for development | Run .ts files directly without pre-compilation during dev |
+| `esbuild` | ^0.25 | Bundler for production build | Produces single `dist/index.js`. Sub-second builds. Zero config. |
+
+### What NOT to Add
+
+| Package | Why Avoid |
+|---------|-----------|
+| `ts-morph` | Unnecessary abstraction for read-only extraction. +4MB dependency. Its value is code modification (refactoring), not read-only symbol walking. Direct Compiler API is cleaner. |
+| `express` / `fastify` / any HTTP framework | Sidecar communicates via stdin/stdout, not HTTP. No web server needed. |
+| `@grpc/grpc-js` / `@grpc/proto-loader` | gRPC is over-engineering for parent-child IPC. |
+| `jest` | Heavier config, slower startup than vitest. Legacy choice. |
+| `webpack` | Over-engineered bundler for a CLI tool. esbuild is faster and simpler. |
+| `tree-sitter` / `tree-sitter-typescript` | Syntax-only parsing. No type resolution. Cannot extract resolved types, inferred return types, or generic instantiations. |
+| `node-ipc` / `zeromq` / IPC libraries | stdin/stdout NDJSON requires zero dependencies and matches the existing MCP pattern. |
+
+---
+
+## NuGet Package Addition (C# Side)
+
+| Package | Version | Target Project | Purpose |
+|---------|---------|---------------|---------|
+| `Aspire.Hosting.JavaScript` | 13.1.2 | `DocAgent.AppHost` only | `AddNodeApp()` extension method for Aspire resource registration |
+
+**No other C# package additions needed.** The IPC layer uses:
+- `System.Text.Json` -- built into .NET 10, already in dependency graph
+- `System.Diagnostics.Process` -- BCL, already available
+- `System.IO.Pipelines` -- built into .NET 10, for efficient stdin/stdout stream reading (optional optimization)
+
+Existing `DocAgent.Core` types (`SymbolNode`, `SymbolEdge`, `SymbolGraphSnapshot`) are language-agnostic and accommodate TypeScript symbols without modification.
+
+---
+
+## Integration Architecture
+
+### Data Flow
+
+```
+tsconfig.json
+    |
+    v
+[Node.js Sidecar: DocAgent.TypeScriptExtractor]     <-- NEW project
+    | (NDJSON over stdin/stdout)
+    v
+[DocAgent.Ingestion: TypeScriptIngestionService]     <-- NEW C# class
+    | (deserialize JSON DTOs -> SymbolNode/SymbolEdge)
+    v
+[DocAgent.Core: SymbolGraphSnapshot]                 <-- EXISTING, unchanged
+    |
+    v
+[DocAgent.Indexing: BM25SearchIndex]                 <-- EXISTING, unchanged
+    |
+    v
+[DocAgent.McpServer: 15 MCP tools]                  <-- EXISTING 14 + new ingest_typescript
 ```
 
-Cursor = opaque base64-encoded offset (e.g., `Convert.ToBase64String(BitConverter.GetBytes(offset))`). This keeps cursors stable across re-queries without server state.
+### Why Sidecar, Not Embedded JS
 
-**Why not keyset/offset pagination libraries:** The search index is Lucene.Net, which already supports `ScoreDoc` as a search-after token. Use `IndexSearcher.SearchAfter(ScoreDoc after, Query, int n)` — this is the idiomatic Lucene pagination API already in the dependency graph. No new package.
+| Approach | Verdict | Rationale |
+|----------|---------|-----------|
+| Node.js sidecar process | **CHOSEN** | TypeScript Compiler API is designed for Node.js. Full `fs` access, V8 JIT optimization for type-checking workloads, trivial TS version upgrades (`npm update`), Aspire-native orchestration. |
+| Jint (.NET JS interpreter) | Rejected | Cannot run the TypeScript compiler -- lacks full ES2020+ support, no `fs` module, inadequate performance for type-checking. |
+| ClearScript / V8 embedding | Rejected | +50MB native dependency, custom `fs` shims needed, harder to debug than process isolation. |
 
-**PageSize defaults:** 50 items default, 200 max. Enforce max server-side to bound memory.
+### AppHost Integration
 
----
-
-## find_implementations Tool
-
-### Recommendation: Graph-based edge query over existing `SymbolGraphSnapshot`
-
-`Microsoft.CodeAnalysis.Workspaces` (already referenced) provides `SymbolFinder.FindImplementationsAsync` for interface/abstract member implementation lookup, but it requires a live Roslyn `Solution` object and keeping `MSBuildWorkspace` warm in memory.
-
-For v1.5, the better approach is querying `EdgeKind.Implements` edges already present in `SymbolEdge` within the snapshot. This is an O(n) scan over edges with no new dependency.
-
-Live Roslyn `SymbolFinder` approach is deferred — higher memory cost, not needed for v1.5 scope.
-
----
-
-## doc_coverage_metrics Tool
-
-### Recommendation: No new packages — derive from existing `SymbolGraphSnapshot`
-
-Doc coverage is computed over `SymbolNode.DocComment` presence on public symbols. The existing `DocCoverageAnalyzer` Roslyn analyzer already tracks this at build time. For the MCP tool, aggregate at query time from the snapshot — no new library needed.
-
----
-
-## Startup Validation
-
-### Recommendation: `Microsoft.Extensions.Options` validation (already in hosting stack)
-
-Use `IOptions<T>` with `ValidateOnStart()` and `ValidateDataAnnotations()` — both ship in `Microsoft.Extensions.Hosting` (already at `10.0.0-preview.2`). No new package.
+Current `Program.cs` (unchanged lines shown for context):
 
 ```csharp
-services.AddOptions<DocAgentServerOptions>()
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+// Add to DocAgent.AppHost/Program.cs:
+
+// NEW: TypeScript symbol extractor sidecar
+var tsExtractor = builder.AddNodeApp(
+    "ts-extractor",
+    "../DocAgent.TypeScriptExtractor",
+    "dist/index.js")
+    .WithEnvironment("NODE_ENV", "production");
+
+// Existing MCP server gets reference to sidecar
+mcpServer.WithReference(tsExtractor);
 ```
 
-Add `[Required]`, `[Range]`, and custom `IValidateOptions<T>` implementations to `DocAgentServerOptions` for path allowlist, rate limit config, and pagination defaults.
+### IPC Message Protocol
+
+Request (C# -> Node.js, one JSON object per line):
+```json
+{"id":"req-1","method":"extract","params":{"tsconfigPath":"/path/to/tsconfig.json"}}
+```
+
+Response (Node.js -> C#, one JSON object per line):
+```json
+{"id":"req-1","result":{"symbols":[...],"edges":[...],"fileHashes":{"src/index.ts":"sha256:abc..."}}}
+```
+
+Error:
+```json
+{"id":"req-1","error":{"code":-1,"message":"tsconfig.json not found at /path/to/tsconfig.json"}}
+```
+
+Correlation via `id` field. Simplified JSON-RPC 2.0 pattern (no full spec compliance needed).
 
 ---
 
-## Version Compatibility
+## Node.js Sidecar Project Structure
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `Microsoft.CodeAnalysis.CSharp` 4.14.0 | `Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.14.0 | Must be same version — all three Roslyn packages move together |
-| `Microsoft.CodeAnalysis.CSharp` 4.14.0 | `BenchmarkDotNet` 0.15.8 | BDN forces `Common` 4.14.0 — aligning main packages eliminates the VersionOverride hack |
-| `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit` 1.1.2 | `Microsoft.CodeAnalysis.CSharp` 4.14.0 | Verify after bump — these testing packages pin Roslyn transitively; VersionOverride may still be needed on test project only |
-| `System.Threading.RateLimiting` | `net10.0` | BCL-native on .NET 10; no NuGet package reference needed |
+```
+src/DocAgent.TypeScriptExtractor/
+  package.json
+  tsconfig.json          # Sidecar's own build config (NOT target project config)
+  src/
+    index.ts             # NDJSON stdin/stdout entry point + message loop
+    extractor.ts         # Core symbol extraction via TS Compiler API
+    protocol.ts          # Request/response type definitions (mirrors C# DTOs)
+    jsdoc.ts             # JSDoc comment extraction helpers
+    symbol-mapper.ts     # Map TS Symbol -> SymbolNode JSON DTO
+  test/
+    extractor.test.ts    # Unit tests with fixture .ts projects
+    protocol.test.ts     # NDJSON serialization round-trip tests
+  fixtures/
+    simple-project/      # Minimal tsconfig.json + .ts files for testing
+  dist/
+    index.js             # esbuild output (single bundled file)
+```
+
+### Sidecar tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "declaration": false,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}
+```
+
+### package.json
+
+```json
+{
+  "name": "docagent-typescript-extractor",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --format=esm --external:typescript",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "typescript": "~5.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "vitest": "^3",
+    "tsx": "^4",
+    "esbuild": "^0.25"
+  }
+}
+```
+
+Note: `--external:typescript` in esbuild because the `typescript` package is large (~80MB) and should remain as a node_modules dependency, not bundled.
 
 ---
 
-## What NOT to Add
+## Installation Commands
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `Microsoft.CodeAnalysis.CSharp` 5.0.0 | Major version; MSBuildWorkspace compatibility unverified; no feature in v1.5 requires it | Stay at 4.14.0 |
-| `Microsoft.AspNetCore.RateLimiting` | Requires ASP.NET Core pipeline; this is a stdio MCP server | `System.Threading.RateLimiting` BCL types directly |
-| `AspNetCoreRateLimit` (stefanprodan) | Web-only; adds ASP.NET dep chain | BCL `TokenBucketRateLimiter` |
-| External pagination library | No value for simple cursor-over-offset pattern | Lucene `SearchAfter` + custom cursor |
-| Third-party package audit services | SDK built-in `dotnet list package --vulnerable` covers the need | `dotnet list package --vulnerable --include-transitive` + `NuGetAudit` MSBuild property |
+### C# Side
 
----
-
-## Directory.Packages.props Changes Summary
-
-Three lines change, one line is removed:
-
+Add to root `Directory.Packages.props`:
 ```xml
-<!-- CHANGE: Roslyn bump — replace all three 4.12.0 entries -->
-<PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
-<PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
-<PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
-
-<!-- REMOVE: VersionOverride workaround no longer needed after aligning to 4.14.0 -->
-<!-- <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" /> -->
+<PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.1.2" />
 ```
 
-Also remove the `VersionOverride="4.14.0"` attribute on `Microsoft.CodeAnalysis.Common` in `DocAgent.Tests.csproj`.
+Add to `DocAgent.AppHost/DocAgent.AppHost.csproj`:
+```xml
+<PackageReference Include="Aspire.Hosting.JavaScript" />
+```
 
-**No new `<PackageVersion>` entries required for any other v1.5 feature.**
+### Node.js Side
+
+```bash
+mkdir -p src/DocAgent.TypeScriptExtractor
+cd src/DocAgent.TypeScriptExtractor
+npm init -y
+npm install typescript@"~5.9"
+npm install -D @types/node@24 vitest@^3 tsx@^4 esbuild@^0.25
+```
+
+---
+
+## Version Compatibility Matrix
+
+| Component | Version | Constraint | Status |
+|-----------|---------|------------|--------|
+| Aspire SDK | 13.1.2 | Must match existing project | Already in use |
+| Aspire.Hosting.JavaScript | 13.1.2 | Must match Aspire SDK | NEW -- verified on NuGet |
+| Node.js | 24.x LTS | Aspire manages lifecycle | Active LTS through Oct 2026 |
+| TypeScript | ~5.9.x | Pin minor; avoid TS 6.0 beta | Latest stable March 2026 |
+| @types/node | ^24 | Match Node.js major | Dev dependency only |
+| .NET | 10.0 | Existing constraint | Unchanged |
+| System.Text.Json | Built-in | .NET 10 BCL | Already available |
 
 ---
 
 ## Sources
 
-- [NuGet: Microsoft.CodeAnalysis.CSharp 4.14.0](https://www.nuget.org/packages/Microsoft.CodeAnalysis.CSharp/4.14.0) — release date May 15, 2025 confirmed (HIGH confidence)
-- [NuGet: Microsoft.CodeAnalysis.CSharp 5.0.0](https://www.nuget.org/packages/microsoft.codeanalysis.csharp/) — major version exists; not recommended for v1.5 (HIGH confidence)
-- [Microsoft Learn: Rate limiting middleware in ASP.NET Core 10](https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit?view=aspnetcore-10.0) — verified ASP.NET approach; identified inapplicability to stdio transport (HIGH confidence)
-- [.NET Blog: Announcing Rate Limiting for .NET](https://devblogs.microsoft.com/dotnet/announcing-rate-limiting-for-dotnet/) — BCL `System.Threading.RateLimiting` design rationale (HIGH confidence)
-- [Microsoft Learn: Auditing NuGet package dependencies](https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages) — `dotnet list package --vulnerable` and `NuGetAudit` property (HIGH confidence)
-- [NuGet: dotnet-outdated-tool 4.7.0](https://www.nuget.org/packages/dotnet-outdated-tool) — global tool version confirmed (HIGH confidence)
-- [fast.io: MCP Server Rate Limiting](https://fast.io/resources/mcp-server-rate-limiting/) — stdio token bucket pattern guidance (MEDIUM confidence — blog source)
+- [Aspire.Hosting.JavaScript 13.1.2 on NuGet](https://www.nuget.org/packages/Aspire.Hosting.JavaScript) -- published 2026-02-26 (HIGH confidence)
+- [Aspire.Hosting.NodeJs deprecated on NuGet](https://www.nuget.org/packages/Aspire.Hosting.NodeJS) -- renamed to Aspire.Hosting.JavaScript in Aspire 13.0 (HIGH confidence)
+- [Aspire JavaScript integration docs](https://aspire.dev/integrations/frameworks/javascript/) -- official docs, `AddNodeApp()` API (HIGH confidence)
+- [Aspire Node.js extensions docs](https://aspire.dev/integrations/frameworks/nodejs-extensions/) -- community toolkit extensions (MEDIUM confidence)
+- [TypeScript Compiler API wiki](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- official Microsoft documentation (HIGH confidence)
+- [TypeScript 5.9 release notes](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-9.html) -- latest stable (HIGH confidence)
+- [TypeScript 6.0 beta announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0-beta/) -- upcoming major, compiler rewrite (HIGH confidence)
+- [Node.js release schedule](https://nodejs.org/en/about/previous-releases) -- Node 24 LTS "Krypton" (HIGH confidence)
+- [NDJSON specification](https://github.com/ndjson/ndjson-spec) -- protocol spec (HIGH confidence)
+- [Aspire 13 announcement](https://www.infoq.com/news/2025/11/dotnet-aspire-13-release/) -- polyglot platform rebranding (MEDIUM confidence)
+- Existing codebase: `Directory.Packages.props`, `DocAgent.AppHost.csproj`, `AppHost/Program.cs` -- direct file reads (HIGH confidence)
 
 ---
-
-*Stack research for: DocAgentFramework v1.5 Robustness*
-*Researched: 2026-03-04*
+*Stack research for: DocAgentFramework v2.0 TypeScript Language Support*
+*Researched: 2026-03-08*

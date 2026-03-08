@@ -1,515 +1,389 @@
-# Architecture Research
+# Architecture Patterns
 
-**Domain:** MCP server for compiler-grade .NET symbol graph — v1.5 Robustness integration
-**Researched:** 2026-03-04
-**Confidence:** HIGH (derived from direct source reading; all findings are from shipped code, not speculation)
+**Domain:** TypeScript language support integration into existing C# DocAgentFramework MCP server
+**Researched:** 2026-03-08
 
----
+## Recommended Architecture
 
-## System Overview
+### High-Level Integration Model: Node.js Sidecar with stdin/stdout NDJSON
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          MCP Tool Layer (McpServer)                       │
-│  ┌──────────┐  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ DocTools │  │ ChangeTools │  │ SolutionTools│  │ IngestionTools   │  │
-│  └────┬─────┘  └──────┬──────┘  └──────┬───────┘  └────────┬─────────┘  │
-│       │               │                │                    │            │
-│  ┌────▼───────────────▼────────────────▼────────────────────▼──────────┐ │
-│  │  IKnowledgeQueryService (KnowledgeQueryService in DocAgent.Indexing) │ │
-│  └───────────────────────┬──────────────────────────────────────────────┘ │
-│                          │ ISearchIndex + SnapshotStore                   │
-│  ┌───────────────────────▼──────────────────────────────────────────────┐ │
-│  │  BM25SearchIndex (Lucene.Net)  |  SnapshotStore (MessagePack files)  │ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
-│  ┌──────────────────────────────────────────────────────────────────────┐ │
-│  │  Security: PathAllowlist, AuditLogger, PromptInjectionScanner        │ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────┘
-           ^ Ingestion pipeline (separate path)
-┌──────────┴──────────────────────────────────────────────────────────────┐
-│  IProjectSource -> IDocSource -> ISymbolGraphBuilder -> ISearchIndex.Index │
-│  (DocAgent.Ingestion)          IncrementalIngestionEngine                │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Component Responsibilities
-
-| Component | Project | Responsibility |
-|-----------|---------|----------------|
-| `DocTools` | McpServer | 5 read-path MCP tools: search_symbols, get_symbol, get_references, diff_snapshots, explain_project |
-| `ChangeTools` | McpServer | 3 review MCP tools: review_changes, find_breaking_changes, explain_change |
-| `SolutionTools` | McpServer | 2 solution tools: explain_solution, diff_solution_snapshots |
-| `IngestionTools` | McpServer | 2 write-path tools: ingest_project, ingest_solution |
-| `KnowledgeQueryService` | Indexing | Facade: wires ISearchIndex + SnapshotStore; handles snapshot resolution, pagination, filtering, staleness detection |
-| `BM25SearchIndex` | Indexing | Lucene.Net BM25 search; in-memory `_nodes` dict for O(1) GetAsync; CamelCase tokenizer |
-| `SnapshotStore` | Ingestion | MessagePack file store; ListAsync (manifest), LoadAsync (by hash) |
-| `PathAllowlist` | McpServer/Security | Default-deny filesystem access control |
-| `AuditLogger` | McpServer/Security | Per-call audit trail |
-| `AuditFilter` | McpServer/Filters | MCP SDK filter that invokes AuditLogger |
-| `DocAgentServerOptions` | McpServer/Config | All server config including AllowedPaths, ArtifactsDir, IngestionTimeoutSeconds |
-| `ServiceCollectionExtensions` | McpServer | DI wiring; closure-based singleton dir resolution |
-
----
-
-## Project Structure (existing)
+The TypeScript sidecar runs as a child process spawned by the C# McpServer. Communication uses newline-delimited JSON (NDJSON) over stdin/stdout -- the same protocol pattern the MCP server itself uses with its clients. The sidecar is a **stateless request-response extractor**: C# sends a request ("extract symbols from this tsconfig.json"), the sidecar responds with a `SymbolGraphSnapshot`-shaped JSON payload, and the C# side deserializes it into the existing domain types.
 
 ```
-src/
-+-- DocAgent.Core/              # Domain types, interfaces — no IO
-|   +-- Abstractions.cs         # IProjectSource, IDocSource, ISymbolGraphBuilder, ISearchIndex, IKnowledgeQueryService
-|   +-- Symbols.cs              # SymbolNode, SymbolEdge, SymbolGraphSnapshot, SymbolId, enums
-|   +-- QueryTypes.cs           # QueryResult<T>, ResponseEnvelope<T>, SearchResultItem, SymbolDetail, GraphDiff
-|   +-- SolutionTypes.cs        # SolutionSnapshot, ProjectEntry, ProjectEdge
-|   +-- DiffTypes.cs            # Semantic diff result types
-|
-+-- DocAgent.Ingestion/         # Source discovery, parsing, graph building
-|   +-- SnapshotStore.cs        # MessagePack file store (ListAsync, LoadAsync, SaveAsync)
-|   +-- IncrementalIngestionEngine.cs   # SHA-256 file manifest, skip-unchanged
-|   +-- RoslynSymbolGraphBuilder.cs     # Roslyn MSBuildWorkspace graph builder
-|   +-- FileHashManifest.cs     # Per-file SHA-256 tracking
-|
-+-- DocAgent.Indexing/          # BM25 index + query facade
-|   +-- BM25SearchIndex.cs      # Lucene.Net, _nodes dict (O(1) GetAsync), CamelCase tokenizer
-|   +-- KnowledgeQueryService.cs # IKnowledgeQueryService impl; pagination via Skip/Take
-|   +-- InMemorySearchIndex.cs  # Test double
-|   +-- CamelCaseAnalyzer.cs    # Tokenizer for symbol names
-|
-+-- DocAgent.McpServer/         # MCP tools, security, DI wiring
-|   +-- Tools/DocTools.cs       # 5 tools; calls IKnowledgeQueryService
-|   +-- Tools/ChangeTools.cs    # 3 tools; calls ChangeReviewer + SnapshotStore
-|   +-- Tools/SolutionTools.cs  # 2 tools
-|   +-- Tools/IngestionTools.cs # 2 tools; calls IIngestionService, ISolutionIngestionService
-|   +-- Security/               # PathAllowlist, AuditLogger, PromptInjectionScanner
-|   +-- Filters/AuditFilter.cs  # MCP SDK filter; parallel mount point for rate limiting
-|   +-- Config/DocAgentServerOptions.cs
-|   +-- ServiceCollectionExtensions.cs
-|   +-- Ingestion/              # IngestionService, SolutionIngestionService, IncrementalSolutionIngestionService
-|
-+-- DocAgent.AppHost/           # Aspire host, telemetry
-+-- DocAgent.Analyzers/         # netstandard2.0; DocCoverage, DocParity, SuspiciousEdit
-+-- DocAgent.Benchmarks/        # BenchmarkDotNet; separate project for Roslyn dep isolation
+                         ┌──────────────────────────────────────────────┐
+                         │           DocAgent.McpServer (C#)            │
+                         │                                              │
+  MCP Client ──stdio──>  │  IngestionTools ──> TypeScriptIngestionSvc   │
+                         │                         │                    │
+                         │                    Process.Start()           │
+                         │                    stdin/stdout NDJSON       │
+                         │                         │                    │
+                         │              ┌──────────v──────────┐        │
+                         │              │  ts-symbol-extractor │        │
+                         │              │   (Node.js sidecar)  │        │
+                         │              │                      │        │
+                         │              │  TypeScript Compiler │        │
+                         │              │  API (ts.createProgram)│       │
+                         │              └──────────────────────┘        │
+                         │                         │                    │
+                         │                    JSON response             │
+                         │                         v                    │
+                         │  SnapshotStore.SaveAsync(snapshot)           │
+                         │  BM25SearchIndex.IndexAsync(snapshot)        │
+                         │                                              │
+                         │  -- All 14 existing MCP tools work --       │
+                         └──────────────────────────────────────────────┘
+```
+
+### IPC Protocol Decision: Why stdin/stdout NDJSON
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **stdin/stdout NDJSON** | **CHOSEN** | Zero network ports, zero dependencies beyond Node.js, matches the MCP stdio pattern already used by the server, simplest process lifecycle (kill child = cleanup done), works cross-platform, trivially testable with fixture JSON files |
+| gRPC | Rejected | Requires protobuf tooling in both C# and Node.js, port management, health checks, proto file sync -- massive overhead for a same-machine request-response call |
+| HTTP | Rejected | Requires port allocation, HTTP server in Node.js, HttpClient in C#, retry logic -- over-engineering for a subprocess |
+| Named pipes | Rejected | Platform-specific names (Windows vs Unix), no advantage over stdin/stdout for a parent-child process pair, harder to test |
+
+**Confidence: HIGH** -- stdin/stdout JSON is the established pattern for MCP tool communication and Language Server Protocol. The existing codebase already handles this pattern.
+
+### Component Boundaries
+
+| Component | Responsibility | Communicates With | New/Modified |
+|-----------|---------------|-------------------|--------------|
+| `ts-symbol-extractor/` | Node.js CLI: reads tsconfig.json, walks TS Compiler API, emits SymbolGraphSnapshot JSON | stdin/stdout with TypeScriptIngestionService | **NEW** (Node.js project) |
+| `TypeScriptIngestionService` | C# service: spawns sidecar, sends request, deserializes response, feeds into SnapshotStore + SearchIndex | ts-symbol-extractor (child process), SnapshotStore, ISearchIndex | **NEW** (C# class in McpServer) |
+| `TypeScriptTools` (or extend `IngestionTools`) | MCP tool handler for `ingest_typescript` | TypeScriptIngestionService, PathAllowlist | **NEW** (C# class in McpServer) |
+| `SnapshotStore` | Persists SymbolGraphSnapshot artifacts (MessagePack) | TypeScriptIngestionService (caller) | **UNCHANGED** |
+| `BM25SearchIndex` | Indexes snapshot for search | TypeScriptIngestionService (caller) | **UNCHANGED** |
+| `DocTools`, `ChangeTools`, `SolutionTools` | Query/diff/review snapshots | KnowledgeQueryService, SymbolGraphDiffer | **UNCHANGED** |
+| `SymbolGraphDiffer` | Static diff engine | Called by ChangeTools, SolutionTools | **UNCHANGED** |
+| `DocAgent.AppHost/Program.cs` | Aspire orchestration | AddNodeApp for sidecar lifecycle | **MODIFIED** (add Node.js resource) |
+
+### Data Flow: TypeScript Compiler API to SymbolGraphSnapshot
+
+```
+1. User calls `ingest_typescript` MCP tool with path to tsconfig.json
+2. TypeScriptIngestionService validates path via PathAllowlist
+3. TypeScriptIngestionService spawns `node ts-symbol-extractor/dist/index.js`
+4. Sends NDJSON request on stdin:
+   { "command": "extract", "tsconfigPath": "/abs/path/tsconfig.json" }
+5. Sidecar:
+   a. ts.createProgram() from tsconfig.json
+   b. Walk all source files in the program
+   c. For each file, walk the AST:
+      - Modules/namespaces -> SymbolKind.Namespace
+      - Interfaces -> SymbolKind.Type
+      - Classes -> SymbolKind.Type
+      - Functions -> SymbolKind.Method
+      - Properties -> SymbolKind.Property
+      - Enums -> SymbolKind.Type, members -> SymbolKind.EnumMember
+      - Type aliases -> SymbolKind.Type
+      - Constructors -> SymbolKind.Constructor
+      - Accessors -> SymbolKind.Property
+   d. Build edges: Contains, Inherits, Implements, References, Returns
+   e. Extract JSDoc comments -> DocComment shape
+   f. Compute source spans -> SourceSpan shape
+   g. Emit JSON response matching SymbolGraphSnapshot schema on stdout
+6. TypeScriptIngestionService deserializes JSON -> SymbolGraphSnapshot
+7. Applies SymbolSorter for deterministic ordering (reuse existing C# logic)
+8. SnapshotStore.SaveAsync() -> content-addressed .msgpack file
+9. BM25SearchIndex.IndexAsync() -> search index updated
+10. Return IngestionResult to MCP client
 ```
 
 ---
 
-## v1.5 Feature Integration Points
+## IPC Protocol Specification
 
-### 1. O(1) Symbol Lookup
+### Request (C# to Node.js, one NDJSON line on stdin)
 
-**Current state:** `BM25SearchIndex.GetAsync` is already O(1) via the `_nodes` dictionary. The actual bottleneck is `KnowledgeQueryService.GetSymbolAsync` which iterates `snapshot.Edges` linearly (O(E)) to build parent/child/related navigation hints for `SymbolDetail`.
-
-**Root cause code (KnowledgeQueryService.cs lines ~101-117):**
-```csharp
-foreach (var edge in snapshot.Edges)   // O(E) scan per call
+```json
 {
-    if (edge.Kind == SymbolEdgeKind.Contains)
-    {
-        if (edge.To == id) parentId = edge.From;
-        else if (edge.From == id) childIds.Add(edge.To);
-    }
-    ...
-}
-```
-
-**Integration point:** `DocAgent.Indexing` — modify `BM25SearchIndex` and `KnowledgeQueryService`.
-
-**Recommended approach:**
-- Add two edge-lookup dictionaries to `BM25SearchIndex` populated during `PopulateNodes`:
-  - `_edgesByFrom: Dictionary<SymbolId, List<SymbolEdge>>`
-  - `_edgesByTo: Dictionary<SymbolId, List<SymbolEdge>>`
-- Expose via an internal method or new `IEdgeLookup` interface so `KnowledgeQueryService` can use them.
-- `KnowledgeQueryService.GetSymbolAsync` replaces the foreach scan with O(1) lookups.
-- Also fixes `GetReferencesAsync` (currently also scans `snapshot.Edges`).
-- Classification: **MODIFY** `BM25SearchIndex.cs`, **MODIFY** `KnowledgeQueryService.cs`. No new projects.
-
----
-
-### 2. Pagination for Large Result Sets
-
-**Current state:** Pagination parameters (`offset`, `limit`) exist at all three layers — `IKnowledgeQueryService.SearchAsync` interface, `KnowledgeQueryService.SearchAsync` implementation (uses `Skip/Take`), and `DocTools.SearchSymbols` tool. **Structural pagination is already implemented.**
-
-**Gap:** `KnowledgeQueryService.SearchAsync` collects ALL filtered items into a `List<SearchResultItem>` before slicing, but the JSON response only exposes the count of the page (`total = sanitizedItems.Count`), not the full pre-page count. Agents cannot determine if more pages exist.
-
-**Integration point:** `DocAgent.Core/QueryTypes.cs` (add total count field) + `DocAgent.Indexing/KnowledgeQueryService.cs` + `DocAgent.McpServer/Tools/DocTools.cs`.
-
-**Recommended approach:**
-- Add `int TotalCount` to `ResponseEnvelope<T>` in `QueryTypes.cs` (default 0 for non-search responses, avoiding breaking change). Alternatively add a new `PagedResponseEnvelope<T>` that extends `ResponseEnvelope<T>`.
-- `KnowledgeQueryService.SearchAsync` already has `filtered.Count` available before `Skip/Take` — pass it through.
-- `DocTools.SearchSymbols` surfaces `totalCount` in JSON response.
-- Classification: **MODIFY** `QueryTypes.cs` (Core), **MODIFY** `KnowledgeQueryService.cs` (Indexing), **MODIFY** `DocTools.cs` (McpServer).
-
----
-
-### 3. `find_implementations` Tool
-
-**Current state:** `SymbolEdgeKind.Implements` and `SymbolEdgeKind.Overrides` edge kinds exist. `GetReferencesAsync` returns all edges for a symbol but has no kind filter. No dedicated "implementations" query or MCP tool exists.
-
-**Integration point:** `DocAgent.Core/Abstractions.cs` (extend interface) + `DocAgent.Indexing/KnowledgeQueryService.cs` + `DocAgent.McpServer/Tools/DocTools.cs`.
-
-**Recommended approach:**
-- Add to `IKnowledgeQueryService` in `Abstractions.cs`:
-  ```csharp
-  IAsyncEnumerable<SymbolNode> FindImplementationsAsync(
-      SymbolId interfaceOrAbstractId,
-      CancellationToken ct = default);
-  ```
-- Implement in `KnowledgeQueryService`: using the O(1) edge index from item 1, filter edges where `Kind == Implements || Kind == Overrides` AND `To == interfaceOrAbstractId`, then resolve each `From` via `_nodes[From]`.
-- Add `find_implementations` MCP tool to `DocTools.cs`. If `DocTools` already has 5+ methods consider a new `QueryTools.cs` class decorated with `[McpServerToolType]` — MCP SDK supports multiple tool type classes registered in DI.
-- Apply `PromptInjectionScanner.Scan` on node docs in results.
-- Classification: **MODIFY** `Abstractions.cs` (Core), **MODIFY** `KnowledgeQueryService.cs` (Indexing), **MODIFY** `DocTools.cs` or **NEW** `QueryTools.cs` (McpServer).
-
----
-
-### 4. Doc Coverage Metrics Tool
-
-**Current state:** `DocAgent.Analyzers/Coverage/DocCoverageAnalyzer.cs` enforces doc coverage at build time via Roslyn analyzer. No runtime query exists over the ingested snapshot. `SymbolNode.Docs` is nullable — `null` means undocumented. `Accessibility` and `NodeKind` fields allow filtering to public real symbols.
-
-**Integration point:** `DocAgent.Core` (new response type + interface method) + `DocAgent.Indexing/KnowledgeQueryService.cs` + `DocAgent.McpServer/Tools/DocTools.cs`.
-
-**Recommended approach:**
-- Add to `QueryTypes.cs`:
-  ```csharp
-  public sealed record DocCoverageReport(
-      int TotalPublicSymbols,
-      int DocumentedCount,
-      int UndocumentedCount,
-      double CoveragePercent,
-      IReadOnlyList<SymbolId> UndocumentedIds,
-      string? ProjectFilter);
-  ```
-- Add to `IKnowledgeQueryService`:
-  ```csharp
-  Task<QueryResult<ResponseEnvelope<DocCoverageReport>>> GetDocCoverageAsync(
-      string? projectFilter = null,
-      CancellationToken ct = default);
-  ```
-- `KnowledgeQueryService` implementation: resolve snapshot, filter `_nodes.Values` to `Real` kind + `Public` accessibility (optionally filtered by `ProjectOrigin`), partition by `Docs?.Summary != null`.
-- Compute `UndocumentedIds` as a list of `SymbolId` for actionable output.
-- Add `get_doc_coverage` MCP tool to `DocTools.cs` or a new `MetricsTools.cs`.
-- The Roslyn analyzer (`DocCoverageAnalyzer`) is independent and does not change — it operates at build time, this operates at runtime over the snapshot graph.
-- Classification: **NEW** `DocCoverageReport` in `QueryTypes.cs`, **MODIFY** `Abstractions.cs` (Core), **MODIFY** `KnowledgeQueryService.cs` (Indexing), **MODIFY** `DocTools.cs` or **NEW** `MetricsTools.cs` (McpServer).
-
----
-
-### 5. Rate Limiting
-
-**Current state:** No rate limiting exists. The existing `AuditFilter` in `McpServer/Filters/AuditFilter.cs` is the only MCP SDK filter registered. `DocAgentServerOptions` has `IngestionTimeoutSeconds` but no rate limit configuration.
-
-**Integration point:** `DocAgent.McpServer` only — server policy, not a query or indexing concern.
-
-**Recommended approach:**
-- Add a `RateLimitOptions` nested class to `DocAgentServerOptions`:
-  ```csharp
-  public RateLimitOptions RateLimit { get; set; } = new();
-
-  public sealed class RateLimitOptions
-  {
-      public int MaxRequestsPerMinute { get; set; } = 0;    // 0 = disabled
-      public int MaxConcurrentRequests { get; set; } = 0;  // 0 = disabled
+  "id": "req-1",
+  "command": "extract",
+  "tsconfigPath": "/absolute/path/to/tsconfig.json",
+  "options": {
+    "includePrivate": false,
+    "includeNodeModules": false
   }
-  ```
-- Create `McpServer/Filters/RateLimitFilter.cs` implementing the MCP SDK filter contract (parallel pattern to `AuditFilter`).
-- Register `System.Threading.RateLimiting.FixedWindowRateLimiter` and/or `ConcurrencyLimiter` in `ServiceCollectionExtensions.AddDocAgent` when options are non-zero.
-- Return `{ "error": "rate_limit_exceeded", "retryAfterSeconds": N }` consistent with existing `ErrorResponse` format in `DocTools`.
-- Do NOT inject `RateLimiter` into individual tool classes — centralise in the filter.
-- Classification: **NEW** `RateLimitFilter.cs` in `McpServer/Filters/`, **MODIFY** `DocAgentServerOptions.cs`, **MODIFY** `ServiceCollectionExtensions.cs`.
-
----
-
-### 6. Startup Validation
-
-**Current state:** `ServiceCollectionExtensions.AddDocAgent` creates `resolvedDir` eagerly via `Directory.CreateDirectory` (will throw on permission errors), but no structured validation or startup summary exists. `DocAgentServerOptions` has no `[Required]` or validation attributes.
-
-**Integration point:** `DocAgent.McpServer/Config/` only.
-
-**Recommended approach:**
-- Add `DocAgentServerOptionsValidator : IValidateOptions<DocAgentServerOptions>` in `McpServer/Config/`:
-  - Check `IngestionTimeoutSeconds > 0`
-  - Check `ArtifactsDir` is writable if non-null
-  - Check rate limit values are non-negative
-  - Return `ValidateOptionsResult.Fail(...)` with actionable message
-- Register in `ServiceCollectionExtensions` and call `.ValidateOnStart()`:
-  ```csharp
-  services.AddOptions<DocAgentServerOptions>().ValidateOnStart();
-  services.AddSingleton<IValidateOptions<DocAgentServerOptions>, DocAgentServerOptionsValidator>();
-  ```
-- Add `StartupValidationService : IHostedService` that logs effective configuration at `Information` level on startup (useful for diagnostics). Runs after options validation passes.
-- Classification: **NEW** `DocAgentServerOptionsValidator.cs`, **NEW** `StartupValidationService.cs`, **MODIFY** `ServiceCollectionExtensions.cs`.
-
----
-
-### 7. Search Metadata Caching
-
-**Current state:** `KnowledgeQueryService.ResolveSnapshotAsync` calls `_snapshotStore.ListAsync(ct)` on every query — a disk read of the snapshot manifest JSON. For high-frequency queries (e.g. rapid `search_symbols` calls), this is unnecessary I/O.
-
-**Integration point:** `DocAgent.Indexing/KnowledgeQueryService.cs`.
-
-**Recommended approach:**
-- Add a private `SemaphoreSlim`-guarded manifest cache in `KnowledgeQueryService`:
-  ```csharp
-  private IReadOnlyList<SnapshotManifestEntry>? _manifestCache;
-  private DateTimeOffset _manifestCacheExpiry;
-  private readonly SemaphoreSlim _cacheLock = new(1, 1);
-  private const int ManifestCacheTtlSeconds = 5;
-  ```
-- `ResolveSnapshotAsync` uses cache if within TTL; otherwise re-reads from disk.
-- Add `InvalidateManifestCache()` internal method; call it from `IngestionService` after `SaveAsync` (requires IngestionService to hold a reference to `KnowledgeQueryService` — check if this creates a cycle via DI, and if so, use an `IObserver` pattern or `ISnapshotChanged` event instead).
-- Classification: **MODIFY** `KnowledgeQueryService.cs` (Indexing). Optional: **MODIFY** `IngestionService.cs` or **NEW** event/notification type.
-
----
-
-### 8. Batched Project Resolution (fix for GetReferences N+1)
-
-**Current state:** `DocTools.GetReferences` resolves `ProjectOrigin` for every edge endpoint via sequential `_query.GetSymbolAsync` calls:
-```csharp
-foreach (var nodeId in uniqueIds)
-{
-    var nodeResult = await _query.GetSymbolAsync(nodeId, ct: cancellationToken);  // N calls
-    if (nodeResult.Success)
-        nodeProjectCache[nodeId] = nodeResult.Value!.Payload.Node.ProjectOrigin;
 }
 ```
-For a symbol with many cross-project edges this is N sequential calls when one batch lookup of `_nodes` would suffice.
 
-**Integration point:** `DocAgent.Core/Abstractions.cs` + `DocAgent.Indexing/KnowledgeQueryService.cs` + `DocAgent.McpServer/Tools/DocTools.cs`.
+### Response (Node.js to C#, one NDJSON line on stdout)
 
-**Recommended approach:**
-- Add to `IKnowledgeQueryService`:
-  ```csharp
-  Task<IReadOnlyDictionary<SymbolId, SymbolNode>> GetSymbolsBatchAsync(
-      IReadOnlyList<SymbolId> ids,
-      CancellationToken ct = default);
-  ```
-- Implement in `KnowledgeQueryService`: resolve snapshot once, return `_nodes[id]` for each requested id — O(K) where K is the batch size.
-- `DocTools.GetReferences` replaces the sequential loop with a single `GetSymbolsBatchAsync` call.
-- Classification: **MODIFY** `Abstractions.cs` (Core), **MODIFY** `KnowledgeQueryService.cs` (Indexing), **MODIFY** `DocTools.cs` (McpServer).
+```json
+{
+  "id": "req-1",
+  "success": true,
+  "snapshot": {
+    "schemaVersion": "1.0",
+    "projectName": "my-ts-project",
+    "sourceFingerprint": "abc123...",
+    "contentHash": null,
+    "createdAt": "2026-03-08T12:00:00Z",
+    "nodes": [ ... ],
+    "edges": [ ... ]
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "id": "req-1",
+  "success": false,
+  "error": "Could not find tsconfig.json at /path/to/tsconfig.json"
+}
+```
+
+### Protocol Design Decisions
+
+- `id` field enables future request pipelining (not needed for v2.0 single-request pattern, but free to include)
+- `contentHash` is null in the sidecar response -- C# computes it via SnapshotStore (matches existing Roslyn pattern where `RoslynSymbolGraphBuilder` returns `ContentHash: null`)
+- Node SymbolIds use the same format: `{projectName}:{fullyQualifiedName}`
+- Sidecar logs to **stderr only** (never stdout) to avoid corrupting the NDJSON stream
+- Single newline terminates each JSON message (standard NDJSON)
 
 ---
 
-### 9. Roslyn 4.14 Upgrade + Package Audit
+## TypeScript Symbol Mapping
 
-**Current state:** `Microsoft.CodeAnalysis.CSharp` pinned at `4.12.0` in `src/Directory.Packages.props`. `DocAgent.Benchmarks` has relaxed Roslyn version constraints to avoid conflicts with BenchmarkDotNet transitive dependencies.
+### SymbolKind Mapping
 
-**Integration point:** `src/Directory.Packages.props`. No architectural changes expected. Roslyn 4.x has stable public API; verify Roslyn.Workspaces changes if any.
+| TypeScript Concept | SymbolKind | SymbolId Format | Notes |
+|-------------------|------------|-----------------|-------|
+| Module (file-level) | `Namespace` | `proj:path/to/file` | TS modules are file-scoped |
+| Namespace (explicit `namespace {}`) | `Namespace` | `proj:Ns.SubNs` | Rare in modern TS |
+| Interface | `Type` | `proj:IFoo` or `proj:Ns.IFoo` | |
+| Class | `Type` | `proj:MyClass` | |
+| Type alias | `Type` | `proj:MyType` | Includes union, intersection, mapped, conditional |
+| Enum | `Type` | `proj:MyEnum` | |
+| Enum member | `EnumMember` | `proj:MyEnum.Value` | |
+| Function (top-level) | `Method` | `proj:myFunction` | No `Function` kind in existing enum; Method is correct |
+| Method (class/interface member) | `Method` | `proj:MyClass.myMethod` | |
+| Property | `Property` | `proj:MyClass.myProp` | |
+| Constructor | `Constructor` | `proj:MyClass.constructor` | |
+| Getter/Setter | `Property` | `proj:MyClass.myProp` | Treated as property, not separate accessor |
+| Type parameter | `TypeParameter` | `proj:MyClass.T` | |
+| Parameter | `Parameter` | `proj:myFunction.paramName` | |
 
-**Risk:** Benchmark project isolation pattern must be re-verified after upgrade. If BenchmarkDotNet still pulls a conflicting Roslyn, the `DocAgent.Benchmarks` project may need a separate `<PackageReference>` override.
+**Key decision:** The existing `SymbolKind` enum has 14 values. TypeScript symbols map naturally to 10 of them. No new enum values needed for v2.0.
 
----
+### Edge Mapping
 
-### 10. CLAUDE.md Refresh
+| TypeScript Relationship | SymbolEdgeKind | Example |
+|------------------------|----------------|---------|
+| Class extends Class | `Inherits` | `class B extends A` |
+| Class implements Interface | `Implements` | `class C implements I` |
+| Interface extends Interface | `Inherits` | `interface I2 extends I1` |
+| Namespace contains Type | `Contains` | Module file contains class |
+| Type contains Member | `Contains` | Class contains method |
+| Method return type | `Returns` | Method returns a type |
+| Method overrides base | `Overrides` | Override in derived class |
+| Type reference in signature | `References` | Parameter type, property type |
 
-**Current state:** CLAUDE.md documents the 12-tool surface. After v1.5 adds `find_implementations` and `get_doc_coverage`, it will be 14 tools.
+### JSDoc to DocComment Mapping
 
-**Integration point:** Documentation only.
-
----
-
-## New vs Modified Components Summary
-
-| Component | Status | Layer | Notes |
-|-----------|--------|-------|-------|
-| Edge index dicts in `BM25SearchIndex` | NEW fields | Indexing | `_edgesByFrom` + `_edgesByTo`; built during `PopulateNodes` |
-| `FindImplementationsAsync` on `IKnowledgeQueryService` | MODIFY interface | Core | New method; test doubles must be updated |
-| `GetDocCoverageAsync` on `IKnowledgeQueryService` | MODIFY interface | Core | New method; test doubles must be updated |
-| `GetSymbolsBatchAsync` on `IKnowledgeQueryService` | MODIFY interface | Core | New method; eliminates N+1 in GetReferences |
-| `DocCoverageReport` record | NEW type | Core/QueryTypes.cs | New response record |
-| `TotalCount` on `ResponseEnvelope<T>` | MODIFY type | Core/QueryTypes.cs | Pagination metadata (default 0 = backward compat) |
-| `KnowledgeQueryService` | MODIFY | Indexing | Edge index, batch lookup, cache, impl/coverage queries |
-| `BM25SearchIndex` | MODIFY | Indexing | Add `_edgesByFrom`, `_edgesByTo` to `PopulateNodes` |
-| `DocAgentServerOptionsValidator` | NEW | McpServer/Config | `IValidateOptions<DocAgentServerOptions>` |
-| `StartupValidationService` | NEW | McpServer/Config | `IHostedService`; logs effective config on startup |
-| `RateLimitFilter` | NEW | McpServer/Filters | Parallel to `AuditFilter`; single cross-cutting enforcement point |
-| `DocAgentServerOptions` | MODIFY | McpServer/Config | Add `RateLimitOptions` nested class |
-| `ServiceCollectionExtensions` | MODIFY | McpServer | Register validator, startup service, rate limiter |
-| `DocTools` | MODIFY | McpServer/Tools | Add `find_implementations`, `get_doc_coverage`; wire batch lookup; expose `totalCount` |
-| `src/Directory.Packages.props` | MODIFY | Build | Roslyn 4.14 bump + full dep audit |
-| `CLAUDE.md` | MODIFY | Docs | Refresh for 14-tool surface |
-
----
-
-## Recommended Build Order
-
-Dependencies constrain this ordering:
-
-```
-Step 1: Core contracts
-        Abstractions.cs — add FindImplementationsAsync, GetDocCoverageAsync, GetSymbolsBatchAsync
-        QueryTypes.cs   — add DocCoverageReport, TotalCount on ResponseEnvelope
-        (All downstream layers compile against these; must be first)
-            |
-Step 2: Indexing implementation (no McpServer dependency, parallelizable with Step 3)
-        BM25SearchIndex — add _edgesByFrom/_edgesByTo to PopulateNodes
-        KnowledgeQueryService — implement new interface methods, add cache, use edge index
-            |
-Step 3: McpServer infrastructure (parallelizable with Step 2)
-        DocAgentServerOptions — add RateLimitOptions
-        DocAgentServerOptionsValidator — IValidateOptions implementation
-        StartupValidationService — IHostedService
-        RateLimitFilter — MCP SDK filter
-        ServiceCollectionExtensions — register all new services
-            |
-Step 4: McpServer tool surface (depends on Steps 1-3)
-        DocTools — add find_implementations, get_doc_coverage, wire batch lookup, expose totalCount
-            |
-Step 5: Package upgrade (standalone; isolate any compile breaks from Roslyn API delta)
-        Directory.Packages.props — Roslyn 4.14 + full dep audit
-            |
-Step 6: Documentation
-        CLAUDE.md — refresh for 14-tool surface
-```
+| JSDoc Tag | DocComment Field | Notes |
+|-----------|-----------------|-------|
+| `@description` / first line | `Summary` | |
+| `@remarks` | `Remarks` | |
+| `@param name desc` | `Params["name"]` | |
+| `@typeParam T desc` / `@template T desc` | `TypeParams["T"]` | |
+| `@returns desc` | `Returns` | |
+| `@example` | `Examples` list | |
+| `@throws` / `@exception` | `Exceptions` list | |
+| `@see` / `@link` | `SeeAlso` list | |
 
 ---
 
-## Data Flow: New Features
+## Snapshot Storage: Same artifacts/ Directory
 
-### find_implementations
+TypeScript snapshots use the **same** `artifacts/` directory and `manifest.json` as C# snapshots. Rationale:
 
-```
-MCP Client -> find_implementations(interfaceSymbolId)
-    -> DocTools.FindImplementations
-    -> IKnowledgeQueryService.FindImplementationsAsync(id)
-    -> KnowledgeQueryService: resolve snapshot
-       -> _edgesByTo[id] (O(1)) -> filter Kind=Implements|Overrides
-       -> foreach match: _nodes[edge.From] (O(1))
-    -> return IAsyncEnumerable<SymbolNode>
-    -> DocTools: PromptInjectionScanner.Scan on docs -> format -> response
-```
+1. **SnapshotStore is language-agnostic.** It stores `SymbolGraphSnapshot` objects. TS snapshots are `SymbolGraphSnapshot` objects. No changes needed.
+2. **manifest.json already has `ProjectName`.** TS projects will have distinct names (e.g., "my-ts-app" vs "DocAgent.Core"), so no collision.
+3. **Content-addressed storage prevents conflicts.** Each snapshot gets a unique XxHash128 filename.
+4. **All query tools work unchanged.** `search_symbols`, `get_references`, `diff_snapshots` etc. operate on `SymbolGraphSnapshot` -- they do not know or care about the source language.
 
-### get_doc_coverage
-
-```
-MCP Client -> get_doc_coverage(projectFilter?)
-    -> DocTools.GetDocCoverage
-    -> IKnowledgeQueryService.GetDocCoverageAsync(projectFilter)
-    -> KnowledgeQueryService: resolve snapshot
-       -> _nodes.Values (already loaded at IndexAsync time)
-       -> filter: Real + Public + optional projectFilter
-       -> partition by Docs?.Summary != null
-       -> compute TotalPublicSymbols, DocumentedCount, CoveragePercent, UndocumentedIds
-    -> return DocCoverageReport
-    -> DocTools: format -> JSON/markdown/tron response
-```
-
-### Rate limiting
-
-```
-MCP Client -> any tool call
-    -> RateLimitFilter.OnBeforeAsync
-    -> RateLimiter.AcquireAsync (FixedWindowRateLimiter or ConcurrencyLimiter)
-    -> if rejected: return { "error": "rate_limit_exceeded", "retryAfterSeconds": N }
-    -> else: proceed to tool method
-    -> (tool executes)
-    -> RateLimitFilter.OnAfterAsync: release lease
-```
-
-### Startup validation
-
-```
-Host.StartAsync()
-    -> IValidateOptions<DocAgentServerOptions>.Validate(opts)   [triggered by ValidateOnStart()]
-    -> check IngestionTimeoutSeconds > 0
-    -> check ArtifactsDir writable (if set)
-    -> check RateLimit values >= 0
-    -> if fail: throw OptionsValidationException -> host does not start
-    -> if pass: StartupValidationService.StartAsync -> log effective config summary at Information
-```
+The only addition: an optional `LanguageOrigin` string property on `SymbolGraphSnapshot` (default null for backward compat with existing C# snapshots, "typescript" for TS snapshots). This is informational only -- it does not affect query, diff, or review behavior.
 
 ---
 
-## Architectural Patterns
+## Aspire Integration
 
-### Pattern 1: Decorator for cross-cutting policy (extend for rate limiting)
+The `DocAgent.AppHost/Program.cs` adds the Node.js sidecar as an Aspire resource using `Aspire.Hosting.NodeJs` (NuGet package):
 
-**What:** Wrap a concern with a policy shell via the MCP SDK filter mechanism.
-**Current use:** `AuditFilter` already applies to all tool calls.
-**v1.5 extension:** `RateLimitFilter` follows the same pattern.
-**Trade-offs:** Clean separation; avoids duplicating enforcement in 12+ tool methods. Requires understanding MCP SDK filter contract.
-
-### Pattern 2: IOptions + IValidateOptions for configuration validation
-
-**What:** .NET's built-in options validation pattern. Runs at first-use or host startup.
-**When to use:** Any strongly-typed configuration class with invariants.
-**Example:**
 ```csharp
-services.AddOptions<DocAgentServerOptions>().ValidateOnStart();
-services.AddSingleton<IValidateOptions<DocAgentServerOptions>, DocAgentServerOptionsValidator>();
+// Program.cs additions
+var tsExtractor = builder.AddNodeApp("ts-extractor",
+    scriptPath: "../ts-symbol-extractor/dist/index.js",
+    workingDirectory: "../ts-symbol-extractor");
+
+var mcpServer = builder.AddProject<Projects.DocAgent_McpServer>("docagent-mcp")
+    .WithEnvironment("DOCAGENT_ARTIFACTS_DIR", ...)
+    .WithEnvironment("DOCAGENT_TS_EXTRACTOR_PATH",
+        "../ts-symbol-extractor/dist/index.js");
 ```
-**Trade-offs:** Eager startup failure is user-friendly. `ValidateOnStart()` prevents misconfigured server from accepting requests.
 
-### Pattern 3: In-memory cache with snapshot-keyed dictionaries (extend for edge index)
+**Important caveat:** Aspire's `AddNodeApp` runs Node.js as a long-lived background process. For the sidecar pattern (spawned per-request or kept warm with stdin/stdout), the C# `TypeScriptIngestionService` manages the process directly via `System.Diagnostics.Process`. Aspire's role is limited to:
+- Ensuring Node.js and npm are available in the dev environment
+- Running `npm install` / `npm run build` during app host startup (via npm scripts)
+- Dashboard visibility for the Node.js project
+- Environment variable wiring
 
-**What:** `BM25SearchIndex._nodes` holds all `Real` `SymbolNode`s keyed by `SymbolId`. Built during `PopulateNodes` at `IndexAsync` time.
-**v1.5 extension:** `_edgesByFrom` and `_edgesByTo` dictionaries built in the same `PopulateNodes` pass.
-**Trade-offs:** Memory grows with snapshot size (one dict entry per edge). Implicit eviction at next `IndexAsync` call. Acceptable for the single-snapshot-per-session design.
+For v2.0: **C# spawns the sidecar on demand per ingestion request (cold start).** The ~200ms Node.js startup overhead is negligible compared to TypeScript compilation time (seconds to minutes). Warm process pooling is a v2.1 optimization if needed.
+
+### Process Lifecycle
+
+| Strategy | Pros | Cons | When |
+|----------|------|------|------|
+| **Cold start** (spawn per request) | Simplest, no state leak, clean isolation | ~200ms startup overhead | **v2.0 default** |
+| **Warm pool** (long-lived process) | Fast repeated ingestions | Must handle crashes, stdin buffer management | v2.1 if latency matters |
 
 ---
 
-## Anti-Patterns
+## Patterns to Follow
 
-### Anti-Pattern 1: Linear scan of snapshot.Edges per GetSymbolAsync call
+### Pattern 1: PipelineOverride Seam (Already Established)
 
-**What people do:** Iterate `snapshot.Edges` (O(E)) on every `GetSymbolAsync` to find parent/child navigation hints.
-**Why it's wrong:** Already present in shipped code; becomes a bottleneck for large solutions with thousands of edges and frequent `get_symbol` calls.
-**Do this instead:** Build `_edgesByFrom`/`_edgesByTo` dictionaries in `PopulateNodes` so `GetSymbolAsync` does O(1) lookups.
+The existing `IngestionService` has a `PipelineOverride` property for testing without MSBuild. `TypeScriptIngestionService` must follow the same pattern:
 
-### Anti-Pattern 2: Adding rate limiting inside each tool method
+```csharp
+internal Func<string, CancellationToken, Task<SymbolGraphSnapshot>>? PipelineOverride { get; set; }
+```
 
-**What people do:** Inject `RateLimiter` into every tool class and call `AcquireAsync` at the top of each method.
-**Why it's wrong:** 12+ tools means 12+ enforcement points. Easy to miss one.
-**Do this instead:** Single `RateLimitFilter` applied at MCP server level, parallel to `AuditFilter`.
+This allows tests to inject canned JSON responses without spawning Node.js.
 
-### Anti-Pattern 3: Extending IKnowledgeQueryService without updating test doubles
+### Pattern 2: Closure-Based Singleton Path Resolution
 
-**What people do:** Add methods to `IKnowledgeQueryService` in `Abstractions.cs` but forget `InMemorySearchIndex` and any test helper stubs in `DocAgent.Tests`.
-**Why it's wrong:** `InMemorySearchIndex` implements `ISearchIndex`, not `IKnowledgeQueryService` directly — but `KnowledgeQueryService` unit tests likely use mock/stub implementations of the interface. New interface methods cause compile failures in those stubs.
-**Do this instead:** Update all interface implementations and test doubles in the same PR as the interface change.
+The existing `ServiceCollectionExtensions.AddDocAgent()` uses a closure to share the artifacts directory between `SnapshotStore` and `BM25SearchIndex`. TypeScript ingestion must use the same resolved path -- no separate artifacts directory.
 
-### Anti-Pattern 4: Loading snapshot from disk for doc coverage
+### Pattern 3: PathAllowlist Before Pipeline Work
 
-**What people do:** Call `_snapshotStore.LoadAsync` to deserialize the full snapshot just to count documentation status.
-**Why it's wrong:** Snapshot is already in memory as `_nodes` in `BM25SearchIndex` after indexing.
-**Do this instead:** Compute doc coverage from `_nodes` directly (already populated). Query `KnowledgeQueryService` which can access `_nodes` via `ISearchIndex.GetAsync` — or expose the node collection as an indexed batch operation via `GetSymbolsBatchAsync`.
+Every tool validates the path against `PathAllowlist` before doing any pipeline work. `ingest_typescript` must follow this pattern exactly -- check the tsconfig.json path before spawning the sidecar.
 
-### Anti-Pattern 5: Using ConfigureAwait(false) inconsistently in async streams
+### Pattern 4: Deterministic Snapshot Output via SymbolSorter
 
-**What people do:** Mix `ConfigureAwait(false)` and no-configure in `IAsyncEnumerable` methods (`GetReferencesAsync`, `FindImplementationsAsync`).
-**Why it's wrong:** The existing `GetReferencesAsync` implementation uses `ConfigureAwait(false)` for the initial `ResolveSnapshotAsync` but not for the yield loop. This is intentional in async streams (the `[EnumeratorCancellation]` attribute handles the correct pattern).
-**Do this instead:** Follow the existing `GetReferencesAsync` pattern exactly for `FindImplementationsAsync`.
+The existing `SymbolSorter` sorts nodes and edges for deterministic output. The C# side should sort after deserialization using the existing `SymbolSorter`, rather than requiring the sidecar to sort. This keeps the sidecar simple and reuses proven sorting logic.
+
+### Pattern 5: Content Hash Computed by SnapshotStore
+
+The sidecar emits `contentHash: null`. The C# `SnapshotStore.SaveAsync()` computes the XxHash128 content hash. This matches the existing `RoslynSymbolGraphBuilder` pattern exactly.
+
+### Pattern 6: Per-Path Semaphore Serialization
+
+The existing `IngestionService` uses `ConcurrentDictionary<string, SemaphoreSlim>` to serialize same-project ingestions while allowing different projects in parallel. `TypeScriptIngestionService` should use the same pattern.
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Adding Language-Specific Query Tools
+
+**What:** Creating `search_typescript_symbols`, `get_typescript_symbol`, etc.
+**Why bad:** Doubles the tool surface area. The existing 14 tools already work on any `SymbolGraphSnapshot`.
+**Instead:** Use the existing tools. If a user wants only TS symbols, they use the `project` filter parameter on `search_symbols`.
+
+### Anti-Pattern 2: Mixed-Language Snapshots
+
+**What:** Putting C# and TypeScript symbols in the same `SymbolGraphSnapshot`.
+**Why bad:** Breaks incremental ingestion, diffing, and content hashing. Cross-language edges are explicitly out of scope for v2.0.
+**Instead:** Separate snapshots per language per project. Query tools can search across all loaded snapshots.
+
+### Anti-Pattern 3: Sidecar as HTTP Server
+
+**What:** Running the Node.js sidecar as a long-lived HTTP server with Express/Fastify.
+**Why bad:** Port management, health checks, connection pooling, retry logic -- all unnecessary for a same-machine subprocess.
+**Instead:** stdin/stdout NDJSON. The parent process owns the lifecycle.
+
+### Anti-Pattern 4: Shared Code-Generated Types Between C# and Node.js
+
+**What:** Generating C# classes from TypeScript interfaces (or vice versa) to keep them in sync.
+**Why bad:** Build-time code generation adds toolchain complexity. The contract is simple JSON.
+**Instead:** Define the JSON contract in a `PROTOCOL.md` document. Write a C# `TypeScriptExtractionResponse` record and a TypeScript `ExtractionResponse` interface. Test with fixture files that both sides validate.
+
+### Anti-Pattern 5: Using ts-morph Instead of Raw Compiler API
+
+**What:** Using ts-morph (wrapper library) instead of the TypeScript Compiler API directly.
+**Why bad:** ts-morph adds ~4MB dependency and an abstraction layer over `ts.createProgram()`. The extraction logic is straightforward tree-walking -- the wrapper adds no value and makes it harder to control memory and performance.
+**Instead:** Use `typescript` package directly: `ts.createProgram()`, `program.getTypeChecker()`, walk `ts.forEachChild()`.
+
+---
+
+## New Components (Build Order)
+
+Ordered by dependency -- each step builds on the previous:
+
+| Order | Component | Type | Depends On | Estimated Effort |
+|-------|-----------|------|------------|-----------------|
+| 1 | JSON contract types (`TypeScriptExtractionResponse`, etc.) | C# records in McpServer | Core domain types | Small |
+| 2 | `ts-symbol-extractor/` Node.js project scaffold | New Node.js project | npm, typescript | Small |
+| 3 | TS symbol walker (core extraction logic) | TypeScript code in sidecar | TypeScript Compiler API | **Large** -- core of the work |
+| 4 | NDJSON stdin/stdout handler in sidecar | TypeScript code in sidecar | Step 3 | Small |
+| 5 | `TypeScriptIngestionService` (C# process spawner + deserializer) | C# class in McpServer | Steps 1, 4 | Medium |
+| 6 | `ingest_typescript` MCP tool | C# tool class in McpServer | Step 5, PathAllowlist | Small |
+| 7 | Aspire AppHost wiring | C# modification to AppHost | Step 2 (npm build) | Small |
+| 8 | Incremental TS ingestion (SHA-256 file hashing) | C# + TS | Steps 5, existing IncrementalIngestionEngine | Medium |
+
+### Build Order Rationale
+
+Steps 1-2 can run in parallel (C# contracts and Node.js scaffold are independent). Step 3 is the critical path -- the TS symbol walker is the most complex new code. Steps 5-6 are blocked on steps 3-4. Step 7 is independent of steps 3-6. Step 8 should come last because incremental ingestion requires the full pipeline to work first.
+
+---
+
+## Modified Components (Minimal Changes)
+
+Only these existing files need changes:
+
+| File | Change | Scope |
+|------|--------|-------|
+| `DocAgent.AppHost/Program.cs` | Add `Aspire.Hosting.NodeJs` reference and `AddNodeApp` call | 3-5 lines |
+| `DocAgent.McpServer/ServiceCollectionExtensions.cs` | Register `TypeScriptIngestionService` and `ITypeScriptIngestionService` | 2-3 lines |
+| `DocAgent.Core/Symbols.cs` (optional) | Add `LanguageOrigin` string property to `SymbolGraphSnapshot` (default null) | 1 line on record + MessagePack compat |
+| `DocAgent.McpServer/Config/DocAgentServerOptions.cs` | Add `TypeScriptExtractorPath` config property | 1-2 lines |
+| `src/Directory.Packages.props` | Add `Aspire.Hosting.NodeJs` package version | 1 line |
+| `CLAUDE.md` | Document `ingest_typescript` tool | ~20 lines |
+
+Everything else (SnapshotStore, BM25SearchIndex, DocTools, ChangeTools, SolutionTools, SymbolGraphDiffer, KnowledgeQueryService, PathAllowlist, AuditLogger, RateLimiter, all existing MCP tools) remains **completely unchanged**.
+
+---
+
+## Scalability Considerations
+
+| Concern | At 1 project | At 10 projects (monorepo) | At 100+ files per project |
+|---------|--------------|--------------------------|--------------------------|
+| Sidecar startup | ~200ms cold start | Same (one process per ingestion call) | Same |
+| Memory (Node.js) | ~50-100MB for TS compiler | ~200-500MB for large monorepo | Scales with file count |
+| Memory (C#) | Negligible (JSON deserialization) | Same per-project pattern | Same |
+| Snapshot size | Small (.msgpack) | One snapshot per TS project | Scales linearly with symbols |
+| Index rebuild | Fast (BM25 is quick) | Per-project index | Same |
 
 ---
 
 ## Integration Points Summary
 
-| Boundary | Communication | v1.5 Change |
-|----------|---------------|-------------|
-| Core.IKnowledgeQueryService | Interface contract between Indexing and McpServer | Add 3 new methods: FindImplementationsAsync, GetDocCoverageAsync, GetSymbolsBatchAsync |
-| Core.ResponseEnvelope<T> | Response wrapper type | Add TotalCount field (default 0 for backward compat) |
-| Indexing.BM25SearchIndex | Stores _nodes; now also stores edge dicts | Add _edgesByFrom, _edgesByTo |
-| Indexing.KnowledgeQueryService | Manifest read per query | Add TTL cache; invalidation hook from IngestionService |
-| McpServer.DocTools | Calls IKnowledgeQueryService | Add find_implementations, get_doc_coverage tool methods; use batch lookup |
-| McpServer.Filters | AuditFilter already registered | Add RateLimitFilter alongside it |
-| McpServer.Config | DocAgentServerOptions | Add RateLimitOptions; add IValidateOptions registration |
-| IngestionService -> KnowledgeQueryService | Currently none | Add cache invalidation signal after successful ingestion |
+| Boundary | Current | v2.0 Change |
+|----------|---------|-------------|
+| `SnapshotStore` | Stores C# snapshots | Stores TS snapshots too (same API, no changes) |
+| `BM25SearchIndex` | Indexes C# snapshots | Indexes TS snapshots too (same API, no changes) |
+| `DocTools` (7 tools) | Queries snapshots | Queries TS snapshots identically (no changes) |
+| `ChangeTools` (3 tools) | Diffs snapshots | Diffs TS snapshots identically (no changes) |
+| `IngestionTools` | C# ingestion only | New `ingest_typescript` tool (new class or added to existing) |
+| `PathAllowlist` | Validates .csproj/.sln paths | Also validates tsconfig.json paths (no code change needed) |
+| `AuditFilter` | Audits all tool calls | Audits `ingest_typescript` calls automatically (no change) |
+| `RateLimitFilter` | Rate limits all tools | Rate limits `ingest_typescript` automatically (no change) |
+| `SymbolGraphDiffer` | Diffs C# snapshots | Diffs TS snapshots identically (static, no change) |
 
 ---
 
 ## Sources
 
-- `src/DocAgent.Core/Abstractions.cs` — interface contracts (direct read)
-- `src/DocAgent.Core/QueryTypes.cs` — response types (direct read)
-- `src/DocAgent.Core/Symbols.cs` — domain types including SymbolEdgeKind, NodeKind (direct read)
-- `src/DocAgent.Indexing/KnowledgeQueryService.cs` — full facade implementation (direct read)
-- `src/DocAgent.Indexing/BM25SearchIndex.cs` — index implementation, _nodes dict pattern (direct read)
-- `src/DocAgent.McpServer/Tools/DocTools.cs` — all 5 tool implementations (direct read)
-- `src/DocAgent.McpServer/Config/DocAgentServerOptions.cs` — current config shape (direct read)
-- `src/DocAgent.McpServer/ServiceCollectionExtensions.cs` — DI wiring pattern (direct read)
-- `docs/Architecture.md` — project dependency graph (direct read)
-- `.planning/PROJECT.md` — v1.5 milestone requirements and key decisions (direct read)
-
----
-
-*Architecture research for: DocAgentFramework v1.5 Robustness*
-*Researched: 2026-03-04*
+- [Aspire AddNodeApp API reference](https://learn.microsoft.com/en-us/dotnet/api/aspire.hosting.nodeapphostingextension.addnodeapp?view=dotnet-aspire-9.0) -- MEDIUM confidence (API may have changed in later Aspire versions)
+- [Aspire.Hosting.NodeJs NuGet package](https://www.nuget.org/packages/Aspire.Hosting.NodeJs) -- HIGH confidence
+- [TypeScript Compiler API wiki](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- HIGH confidence
+- [ts-morph documentation](https://ts-morph.com/) -- HIGH confidence (evaluated and rejected)
+- [C# to Node.js stdin/stdout IPC pattern](https://gist.github.com/elerch/5628117) -- MEDIUM confidence (community pattern)
+- [IPC between .NET and Node.js](https://www.hardkoded.com/blog/interprocess-communication) -- MEDIUM confidence
+- Existing codebase: `IngestionService.cs`, `SnapshotStore.cs`, `RoslynSymbolGraphBuilder.cs`, `Symbols.cs`, `Abstractions.cs`, `ServiceCollectionExtensions.cs`, `AppHost/Program.cs` -- HIGH confidence (primary source, direct reads)

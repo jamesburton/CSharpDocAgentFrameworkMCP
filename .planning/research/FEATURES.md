@@ -1,194 +1,249 @@
-# Feature Research
+# Feature Landscape
 
-**Domain:** .NET MCP server with Roslyn-based symbol query pipeline
-**Researched:** 2026-03-04
-**Confidence:** HIGH (MCP spec, Roslyn API docs verified) / MEDIUM (rate limiting, startup validation patterns)
+**Domain:** TypeScript symbol extraction and graph generation for existing MCP doc server
+**Researched:** 2026-03-08
+**Confidence:** HIGH (existing model inspected, TS Compiler API well-documented)
 
 ## Scope Note
 
-This is a subsequent milestone research document. The 12 existing MCP tools are already shipped. Research focuses exclusively on the **v1.5 target features**: pagination for large result sets, `find_implementations` tool, doc coverage metrics tool, rate limiting, startup config validation, CLAUDE.md refresh, Roslyn 4.14 upgrade, and performance optimisations (O(1) symbol lookup, batched project resolution, search metadata caching).
+This is a subsequent milestone (v2.0) research document. The 14 existing MCP tools and full C#/Roslyn pipeline are already shipped. Research focuses exclusively on what is needed to make TypeScript codebases queryable through the same tool surface via the existing `SymbolNode`/`SymbolEdge` graph model.
 
 ---
 
-## Feature Landscape
+## SymbolNode Model Mapping Analysis
 
-### Table Stakes (Users Expect These)
+### Existing Model (from `DocAgent.Core/Symbols.cs`)
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Pagination on `get_references`** | `get_references` returns unbounded lists for widely-used types; offset/limit already exists on `search_symbols`; agents expect consistent pagination contract across all list-returning tools | MEDIUM | MCP spec cursor pagination applies to list operations (`tools/list`, etc.), **not** tool call responses. Correct approach: add `offset`/`limit` params matching `search_symbols` convention. Return `total`, `offset`, `limit`, `hasMore` in envelope. |
-| **`find_implementations` tool** | "Go to Implementation" is a first-class code navigation primitive. Agents navigating interface/abstract-member hierarchies need it. Without it, users must parse `get_references` and filter manually — unreliable. | MEDIUM | `SymbolFinder.FindImplementationsAsync(ISymbol, Solution, ...)` + `FindDerivedClassesAsync` in `Microsoft.CodeAnalysis.FindSymbols`. Requires live `Solution` — same MSBuildWorkspace pattern as ingestion. PathAllowlist enforcement required. Add offset/limit for large impl sets. |
-| **Startup config validation** | Production deployments fail silently when `AllowedPaths` is empty or `ArtifactsDir` is inaccessible. Operators expect container-fail-fast behaviour at startup, not opaque runtime errors. | LOW | `ValidateOnStart()` + `ValidateDataAnnotations()` on `DocAgentServerOptions`. Add `[Required]` / `[Range]` attributes. Add `IHostedService` or `IStartupFilter` to verify `ArtifactsDir` is accessible. All changes stay inside `Config/` layer. |
-| **Roslyn 4.14 upgrade + package audit** | Current pin is 4.12.0. Roslyn 4.14 ships with .NET 9 SDK. Staying on old Roslyn risks incompatibility with .NET 10 toolchain and misses upstream bug fixes. Consumers expect dependencies to track the platform. | LOW-MEDIUM | `Microsoft.CodeAnalysis.CSharp` 4.14.0 confirmed on NuGet. BenchmarkDotNet project already isolated to prevent transitive conflicts. Central package management via `Directory.Packages.props` — single-line bump. Full dep audit: MessagePack 3.x, Lucene.Net, ModelContextProtocol SDK, Aspire packages. |
-| **CLAUDE.md refresh** | CLAUDE.md documents the MCP tool surface. Currently lists v1.0 tools only. Agents consuming this server via Claude Code read CLAUDE.md as primary API reference. Stale docs cause agents to call nonexistent or wrong-signature tools. | LOW | Refresh to list all 12 existing tools with correct parameter signatures. Add v1.5 tools (`find_implementations`, `doc_coverage`) after implementation. Non-code change, but critical for downstream agent usability — do last. |
+The current `SymbolNode` record carries: `SymbolId`, `SymbolKind` (14 values), `DisplayName`, `FullyQualifiedName`, `Accessibility`, `DocComment`, `SourceSpan`, `ReturnType`, `Parameters`, `GenericConstraints`, `ProjectOrigin`, `NodeKind`.
 
-### Differentiators (Competitive Advantage)
+The `SymbolEdgeKind` enum has: `Contains`, `Inherits`, `Implements`, `Calls`, `References`, `Overrides`, `Returns`.
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **`doc_coverage` tool** | Surfaces what existing Roslyn analyzers already compute (doc coverage policy) as a queryable MCP tool. Agents doing code review or PR analysis can query coverage per-namespace or per-project. Turns an internal analyzer into an agent-visible metric. | MEDIUM | Walk `SymbolGraphSnapshot.Nodes` filtering to `NodeKind.Real` (exclude stubs). Check `node.DocComment` non-null and non-empty. Group by project → namespace → type. Output: total symbols, documented symbols, coverage %, breakdown table. No new ingestion needed — pure post-processing of existing snapshot. |
-| **O(1) symbol lookup by SymbolId** | Current `GetSymbolAsync` may do linear scan over snapshot. At solution scale (10K+ symbols), this is measurable latency. O(1) lookup via `Dictionary<SymbolId, SymbolNode>` built at snapshot load time gives sub-millisecond `get_symbol` and `get_references`. | LOW-MEDIUM | Build lookup dictionary in `SnapshotStore.Load()`. Cache alongside snapshot in `BM25SearchIndex` or a new `SymbolLookupCache`. BenchmarkDotNet regression guard already in place — improvement immediately visible. Prerequisite for `find_implementations` at scale. |
-| **Search metadata caching** | Repeated `search_symbols` queries over unchanged snapshot may rebuild BM25 scorer context. Caching last-used snapshot version avoids redundant index hydration and reduces per-query overhead under concurrent agent usage. | MEDIUM | Track `snapshotVersion` in `BM25SearchIndex`; skip re-init if version matches. Use `SemaphoreSlim` for thread safety. Not agent-visible, but improves throughput. |
-| **Batched project resolution** | Current solution ingestion resolves projects sequentially within each dependency tier. Batching 4–8 independent-tier projects in parallel reduces wall-clock ingestion time. | MEDIUM | Existing `DependencyCascade` topological sort already groups projects by tier. Each tier can be parallelised with `Task.WhenAll`. MSBuildWorkspace is not thread-safe for open operations — batch only file-level parse work after workspace open. BenchmarkDotNet guards regressions. |
-| **Rate limiting on tool calls** | Prevents a stuck agent retry loop from exhausting server resources or generating excessive audit log volume. Key for multi-agent or long-running deployment scenarios. | MEDIUM | .NET 7+ `System.Threading.RateLimiting` — `TokenBucketRateLimiter` for burst tolerance or `FixedWindowRateLimiter` for strict quotas. For stdio transport, rate limiting is per-process. Simplest form: shared `RateLimiter` injected into tool classes; tools call `TryAcquire()` and return structured `rate_limited` error if denied. Configure via `DocAgentServerOptions.RateLimit`. |
+### Natural Mappings (TypeScript to Existing SymbolKind)
 
-### Anti-Features (Commonly Requested, Often Problematic)
+| TypeScript Concept | SymbolKind | Confidence | Notes |
+|-------------------|------------|------------|-------|
+| `class` declaration | `Type` | HIGH | Direct 1:1. TS classes have constructors, methods, properties like C#. |
+| `interface` declaration | `Type` | HIGH | Same as C# interface. Distinguish via metadata or naming convention in `DisplayName`. |
+| `enum` declaration | `Type` | HIGH | TS enums map directly. `const enum` is a compile-time variant but structurally identical. |
+| Enum member | `EnumMember` | HIGH | Direct 1:1. |
+| `function` declaration | `Method` | HIGH | Top-level functions are methods without a containing type. Use `Contains` edge from module. |
+| Method (class member) | `Method` | HIGH | Direct 1:1. |
+| Constructor | `Constructor` | HIGH | Direct 1:1. |
+| Property (class member) | `Property` | HIGH | Direct 1:1. Includes `readonly`, optional (`?`). |
+| Field (class member) | `Field` | HIGH | TS doesn't distinguish field vs property syntactically but `declare` fields exist. Map class fields to `Field`. |
+| Parameter | `Parameter` | HIGH | Direct 1:1. Includes destructured params (flatten to named params). |
+| Generic type parameter | `TypeParameter` | HIGH | `<T extends Foo>` maps to `GenericConstraint`. |
+| Getter/Setter | `Property` | HIGH | TS accessors map to `Property` with implicit get/set. |
+| Namespace (TS `namespace`) | `Namespace` | HIGH | Direct 1:1. |
+| Module (file-level) | `Namespace` | MEDIUM | ES modules are file-scoped. Treat each file as an implicit namespace node. |
+| `type` alias | `Delegate` | MEDIUM | Reuse `Delegate` kind (closest existing). See Gaps section for better option. |
+| Index signature | `Indexer` | HIGH | `[key: string]: T` maps to `Indexer`. |
+| Event (`on`/`emit` patterns) | `Event` | LOW | TS has no native event keyword. Only applicable for EventEmitter patterns. Likely skip. |
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **HTTP/SSE MCP transport** | Enables remote agent connections and multi-client scenarios | Adds auth, TLS, connection management complexity; stdio is sufficient for local agent use; explicitly deferred in PROJECT.md | Keep stdio; document deployment pattern (agent host runs server as stdio subprocess) |
-| **Cursor persistence across MCP sessions** | MCP spec mentions cursors — clients might want to resume paginated tool queries after restart | MCP spec explicitly says clients MUST NOT persist cursors across sessions; cursor position in a snapshot may not exist after re-ingestion | Document in tool descriptions that pagination state is session-scoped; return clear error on invalid offset |
-| **Embeddings/vector similarity search** | Natural language queries over doc content seem compelling | Embedding model dependency (OpenAI or local), latency, non-deterministic results, breaks reproducibility guarantee; `IVectorIndex` interface already reserved | Keep `IVectorIndex` stub; defer embeddings to v2; improve BM25 CamelCase tokenisation instead |
-| **Real-time file watcher auto-ingestion** | Agents want snapshot to always be current without explicit `ingest_project` call | File watcher adds background thread complexity, debounce logic, non-deterministic ingestion timing that breaks reproducibility guarantees; SHA-256 incremental ingestion already makes explicit re-ingestion fast | Expose `ingest_project`/`ingest_solution` in CLAUDE.md with "call after build" guidance; consider `--watch` CLI flag as future V2 feature |
-| **Per-symbol rate limiting** | Fine-grained control over which symbols can be queried | PathAllowlist already handles namespace/path security; per-symbol rate limiting adds O(symbol-count) state with marginal security benefit over existing model | Keep rate limiting at tool-call level; use PathAllowlist for access control |
+### Natural Edge Mappings
+
+| TypeScript Relationship | SymbolEdgeKind | Notes |
+|------------------------|----------------|-------|
+| Class extends class | `Inherits` | Direct 1:1. |
+| Class implements interface | `Implements` | Direct 1:1. |
+| Interface extends interface | `Inherits` | Direct 1:1. |
+| Module contains declaration | `Contains` | Direct 1:1. Parent-child containment. |
+| Function returns type | `Returns` | Direct 1:1. |
+| Symbol references another | `References` | Import references, type references. |
+| Method overrides parent | `Overrides` | Direct 1:1. |
+| Function calls function | `Calls` | Requires deeper analysis; can be extracted from checker. |
+
+### Accessibility Mapping
+
+| TypeScript | Accessibility Enum | Notes |
+|-----------|-------------------|-------|
+| `public` (default) | `Public` | TS class members default to public. |
+| `private` | `Private` | Direct 1:1. |
+| `protected` | `Protected` | Direct 1:1. |
+| `#private` (ES private) | `Private` | ES private fields map to Private. Distinguish via naming if needed. |
+| `export` (module-level) | `Public` | Exported = public API surface. |
+| Not exported | `Internal` | Non-exported module members = internal. |
+| `export default` | `Public` | Default exports are public. |
+
+### DocComment Mapping (JSDoc to DocComment)
+
+| JSDoc Tag | DocComment Field | Notes |
+|-----------|-----------------|-------|
+| `/** description */` | `Summary` | First paragraph before any tags. |
+| `@remarks` | `Remarks` | Direct 1:1. |
+| `@param name description` | `Params` dictionary | Direct 1:1. |
+| `@typeParam T description` | `TypeParams` dictionary | Direct 1:1. TSDoc standard. |
+| `@returns description` | `Returns` | Direct 1:1. |
+| `@example` | `Examples` list | Direct 1:1. |
+| `@throws` / `@exception` | `Exceptions` list | Direct 1:1. Type from `{ErrorType}` syntax. |
+| `@see` | `SeeAlso` list | Direct 1:1. |
+| `@deprecated` | No direct field | Store in `Remarks` or add to `Summary` with prefix. |
+| `@since`, `@version` | No direct field | Store in `Remarks`. |
+| `@internal` | Sets `Accessibility` to `Internal` | Semantic tag, not doc content. |
+
+---
+
+## Table Stakes
+
+Features users expect. Missing = TypeScript support feels incomplete.
+
+| Feature | Why Expected | Complexity | Dependencies on Existing Model |
+|---------|--------------|------------|-------------------------------|
+| **Class extraction** (name, members, heritage) | Classes are the primary OOP building block in TS. Every doc tool handles them. | LOW | Direct mapping to `SymbolKind.Type` + `Contains` edges. No model changes. |
+| **Interface extraction** (name, members, extends) | Interfaces define API contracts. Widely used in TS codebases. | LOW | Direct mapping to `SymbolKind.Type` + `Inherits`/`Contains` edges. No model changes. |
+| **Function extraction** (standalone + methods) | Functions are fundamental. Top-level functions and class methods must be captured. | LOW | `SymbolKind.Method`. Parameters map to `ParameterInfo`. `ReturnType` field exists. No model changes. |
+| **Enum extraction** (regular + const enums) | Enums exist in TS and map directly. | LOW | `SymbolKind.Type` + `SymbolKind.EnumMember`. No model changes. |
+| **Module/export structure** | ES module exports define the public API surface. Without export tracking, you cannot determine what is public. | MEDIUM | Use `Namespace` kind for modules. `Accessibility.Public` for exported, `Internal` for non-exported. `Contains` edges for parent-child. No model changes needed. |
+| **Type alias extraction** | `type Foo = ...` is ubiquitous in TS. Must appear in symbol graph. | MEDIUM | Reuse `SymbolKind.Delegate` or add new `SymbolKind.TypeAlias`. Store RHS type string in `ReturnType` field. See Gaps section. |
+| **Generic type parameters and constraints** | `<T extends Foo>` is common. Must be captured for API comprehension. | LOW | `GenericConstraint` record exists and maps directly. No model changes. |
+| **Property and field extraction** | Class properties (including `readonly`, optional) are core members. | LOW | `SymbolKind.Property` / `SymbolKind.Field`. No model changes. |
+| **Constructor extraction** | `constructor()` must appear as a member. | LOW | `SymbolKind.Constructor`. `ParameterInfo` for params. No model changes. |
+| **Source spans** | File path + line numbers for each symbol. Required for "go to definition" workflows. | LOW | `SourceSpan` record exists and maps directly. No model changes. |
+| **JSDoc extraction** (summary, params, returns) | TSDoc/JSDoc is the standard documentation format. Without it, `DocComment` is always null. | MEDIUM | `DocComment` record maps well. TS Compiler API provides `symbol.getDocumentationComment(checker)`. Some edge cases with multiple JSDoc blocks. |
+| **Inheritance/implementation edges** | `extends` and `implements` relationships must be captured. | LOW | `SymbolEdgeKind.Inherits` and `Implements` exist. No model changes. |
+| **tsconfig.json as project entry point** | Standard TS project definition. Equivalent to `.csproj` for C#. | LOW | `ProjectName` from tsconfig path. `SourceFingerprint` from file hashes. No model changes. |
+| **Incremental ingestion** | SHA-256 file hashing already exists for C#. TS must use same pattern. | MEDIUM | Reuse existing `SourceFingerprint` / SHA-256 infrastructure. File change detection applies identically. |
+| **Deterministic snapshot output** | Same TS source must produce identical `SymbolGraphSnapshot`. Core contract. | MEDIUM | Sort nodes/edges deterministically via existing `SymbolSorter`. Same challenge as C# pipeline, same solution. |
+
+---
+
+## Differentiators
+
+Features that set the tool apart from basic TS doc generators.
+
+| Feature | Value Proposition | Complexity | Dependencies on Existing Model |
+|---------|-------------------|------------|-------------------------------|
+| **Full JSDoc/TSDoc tag extraction** (all tags, not just summary) | Most tools extract only `@param`/`@returns`. Extracting `@example`, `@throws`, `@see`, `@deprecated`, `@remarks` gives agents richer context. | MEDIUM | `DocComment` already has fields for all of these. TS Compiler API `ts.getJSDocTags()` provides access. |
+| **Declaration merging resolution** | TS allows interfaces and namespaces to merge across files. Reporting the merged symbol is valuable and non-trivial. | HIGH | Single `SymbolNode` with merged members. Multiple `SourceSpan` values needed (model only supports one). |
+| **Ambient declaration support** (`.d.ts` files) | `.d.ts` files define types for JS libraries. Ingesting `.d.ts` gives agents visibility into the full type surface. | MEDIUM | Map to `NodeKind.Stub` (external reference nodes). Same pattern as NuGet stub nodes in C#. |
+| **Re-export tracking** (`export { X } from './y'`) | TS modules re-export extensively. Tracking the re-export chain shows the true public API surface. | MEDIUM | Model as `References` edges. |
+| **Overload signatures** | TS functions can have multiple overload signatures. Capturing all overloads gives agents the full API surface. | MEDIUM | Each overload becomes a separate `SymbolNode` with unique `SymbolId` per overload. |
+| **Monorepo / multi-tsconfig support** | Real-world TS projects use workspace monorepos with multiple `tsconfig.json`. | MEDIUM | Each tsconfig = one `SymbolGraphSnapshot`. Discovery logic in sidecar. |
+| **Cross-file reference edges** | Track which symbols reference which across files within a project. Enables `get_references` for TS. | MEDIUM | `SymbolEdgeKind.References` with `EdgeScope.IntraProject`. |
+
+---
+
+## Anti-Features
+
+Features to explicitly NOT build in v2.0.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Union type decomposition** | Union types are type expressions, not declarations. No stable identity, no members. Would create thousands of synthetic nodes. | Store as string in `ReturnType` or `TypeName` (e.g., `"string \| number"`). |
+| **Mapped type expansion** | Compile-time transformations. Expanded form depends on input type. | Store expression as string (e.g., `"Partial<User>"`). |
+| **Conditional type evaluation** | Polymorphic -- resolved form changes per call site. | Store expression as string. |
+| **Template literal type expansion** | Combinatorial explosion. | Store expression as string. |
+| **Type inference / hover resolution** | Requires full type checker per-expression. Expensive, non-deterministic. | Out of scope. |
+| **Cross-language edges (C# <-> TS)** | Requires semantic understanding of HTTP routes/RPCs. | Separate snapshots per language. |
+| **Runtime JavaScript analysis** | Without type info, extraction is unreliable. | Support `.ts`/`.tsx` + `.d.ts` only. |
+| **Decorator metadata extraction** | Evolving API (TC39 stage 3 vs legacy). Framework-specific. | Extract decorator names in `Remarks` or ignore. |
+| **Language-specific query tools** | Doubles tool surface. Existing 14 tools work on any `SymbolGraphSnapshot`. | Use `project` filter on existing tools. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[O(1) symbol lookup]
-    └──enables──> [find_implementations] (fast node resolution for large impl sets)
-    └──enables──> [doc_coverage] (fast full-graph traversal)
-
-[Roslyn 4.14 upgrade]
-    └──enables──> [find_implementations] (build on target Roslyn version)
-    └──prerequisite for──> [analyzer correctness on .NET 10]
-
-[Startup validation]
-    └──depends on──> [DocAgentServerOptions] (already exists — add attributes + ValidateOnStart)
-
-[Pagination on get_references]
-    └──depends on──> [existing get_references tool] (shipped v1.0)
-    └──same pattern as──> [search_symbols offset/limit] (already implemented)
-
-[find_implementations pagination]
-    └──same pattern as──> [Pagination on get_references]
-
-[Rate limiting]
-    └──depends on──> [DocAgentServerOptions] (add RateLimitOptions nested config)
-    └──independent from──> [pagination, find_implementations, doc_coverage]
-
-[CLAUDE.md refresh]
-    └──depends on──> [all v1.5 tools complete] (document last, after tools land)
-    └──independent from──> [code changes]
+[tsconfig.json discovery]
+    |
+    v
+[TypeScript Compiler API program creation]
+    |
+    +---> [Symbol extraction: classes, interfaces, functions, enums]
+    |         |
+    |         +---> [Member extraction: methods, properties, fields, constructors]
+    |         |
+    |         +---> [Inheritance/implementation edge extraction]
+    |         |
+    |         +---> [Generic constraint extraction]
+    |
+    +---> [Module/export structure extraction]
+    |         |
+    |         +---> [Accessibility mapping (exported = public)]
+    |
+    +---> [JSDoc/TSDoc extraction]
+    |
+    +---> [Source span extraction]
+    |
+    +---> [SymbolId generation] (must be stable, deterministic)
+    |
+    v
+[SymbolGraphSnapshot assembly]
+    |
+    +---> [Incremental ingestion] (reuse SHA-256 file hashing)
+    |
+    +---> [Deterministic serialization] (reuse MessagePack pipeline)
+    |
+    v
+[All 14 existing MCP tools work against TS snapshots]
 ```
-
-### Dependency Notes
-
-- **`find_implementations` benefits from O(1) lookup:** Building implementation lists for widely-implemented interfaces (e.g., `IDisposable`) requires resolving many SymbolIds quickly. Build lookup cache before implementing this tool.
-- **`doc_coverage` is standalone:** Pure snapshot post-processing. No dependency on lookup optimisations, but benefits from them at scale.
-- **Roslyn 4.14 should precede `find_implementations`:** `SymbolFinder.FindImplementationsAsync` behaviour has improved across Roslyn releases. Build on the target version.
-- **Rate limiting is cross-cutting:** Can be added as a decorator on tool dispatch without touching search/indexing logic. Can be done in parallel with other features.
 
 ---
 
-## MVP Definition for v1.5
+## Gaps Requiring Model Attention
 
-### Build in v1.5 (Current Milestone)
+### Gap 1: Type Aliases Have No SymbolKind
 
-- [x] **Roslyn 4.14 upgrade + full package audit** — foundational; do first to avoid building on stale deps
-- [x] **Startup config validation** — `ValidateOnStart` + filesystem accessibility check; LOW complexity, HIGH operational value
-- [x] **O(1) symbol lookup + search metadata caching** — performance; unlocks `find_implementations` scalability
-- [x] **Pagination on `get_references`** — consistent with `search_symbols`; offset/limit pattern already established
-- [x] **`find_implementations` tool** — new MCP tool; `SymbolFinder.FindImplementationsAsync` + `FindDerivedClassesAsync`
-- [x] **`doc_coverage` tool** — new MCP tool; post-processes existing snapshot; no new ingestion needed
-- [x] **Rate limiting** — `TokenBucketRateLimiter` on tool dispatch; configurable via options
-- [x] **CLAUDE.md refresh** — non-code; update after above tools land
+**Problem:** TypeScript `type Foo = string | number` is extremely common but has no natural `SymbolKind`. The closest existing kind is `Delegate`, which is semantically misleading.
 
-### Future Consideration (v2+)
+**Recommendation:** Add `SymbolKind.TypeAlias = 14`. One-line enum addition. All existing C# symbols remain unaffected. The `kindFilter` parameter on `search_symbols` already accepts string values, so "TypeAlias" works immediately.
 
-- [ ] **Embeddings/vector search** — `IVectorIndex` interface reserved; defer pending embedding provider decision
-- [ ] **HTTP/SSE transport** — explicitly out of scope until remote multi-client use case is validated
-- [ ] **Real-time file watcher** — optional `--watch` CLI flag; deferred
-- [ ] **Query DSL over symbol graph** — speculative long-term
-- [ ] **Polyglot (Tree-sitter, LSP bridge)** — future tier
+### Gap 2: Multiple Source Spans (Declaration Merging)
 
----
+**Problem:** TS interfaces can be declared across multiple files. Current `SymbolNode.Span` is a single `SourceSpan?`.
 
-## Feature Prioritization Matrix
+**Recommendation:** Use primary declaration site for `Span` in v2.0. Declaration merging is a differentiator for later.
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Roslyn 4.14 upgrade + dep audit | MEDIUM | LOW | P1 |
-| Startup config validation | HIGH | LOW | P1 |
-| O(1) symbol lookup | HIGH | LOW | P1 |
-| Search metadata caching | MEDIUM | MEDIUM | P1 |
-| Pagination on `get_references` | HIGH | LOW | P1 |
-| `find_implementations` tool | HIGH | MEDIUM | P1 |
-| `doc_coverage` tool | HIGH | MEDIUM | P1 |
-| Rate limiting | MEDIUM | MEDIUM | P2 |
-| Batched project resolution | MEDIUM | MEDIUM | P2 |
-| CLAUDE.md refresh | HIGH | LOW | P1 (last) |
+### Gap 3: `export` as Accessibility
+
+**Recommendation:** Map `export` to `Accessibility.Public` and non-export to `Accessibility.Internal`.
+
+### Gap 4: Function Overloads
+
+**Recommendation:** One `SymbolNode` per overload with suffix in SymbolId (e.g., `proj:myFunc#0`, `proj:myFunc#1`). Defer to v2.1.
+
+### Gap 5: No Modifier Flags
+
+**Recommendation:** Defer `abstract`, `static`, `readonly` flags. Not essential for v2.0 symbol navigation.
 
 ---
 
-## Implementation Notes by Feature
+## MVP Recommendation
 
-### Pagination on `get_references`
+### Build in v2.0
 
-MCP spec cursor-based pagination (opaque `nextCursor` token in response, `cursor` in request) applies to MCP **list operations** (`tools/list`, `resources/list`, etc.) — **not** to tool call responses, which are free-form text/JSON strings. The correct pattern for tool response pagination is the offset/limit approach already used by `search_symbols`. Add `offset` (default 0) and `limit` (default 50, max 200) parameters to `get_references`. Return `total`, `offset`, `limit`, `hasMore` in the JSON envelope.
+1. Symbol extraction for all declaration types (classes, interfaces, functions, enums, type aliases, namespaces, constructors, methods, properties, fields)
+2. JSDoc extraction (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
+3. Inheritance and implementation edges (`extends`, `implements`)
+4. Module export structure (export = public, non-export = internal)
+5. Source spans (file path + line range for every symbol)
+6. Stable SymbolId generation
+7. tsconfig.json as entry point
+8. Incremental ingestion (reuse SHA-256 file hashing)
+9. `ingest_typescript` MCP tool
+10. Add `SymbolKind.TypeAlias` (one enum value)
 
-### `find_implementations`
+### Defer to v2.1+
 
-```
-SymbolFinder.FindImplementationsAsync(ISymbol, Solution, IImmutableSet<Project>?, CancellationToken)
-SymbolFinder.FindDerivedClassesAsync(INamedTypeSymbol, Solution, bool transitive, ...)
-```
-
-Requires loading a live `Solution` via MSBuildWorkspace. Consider caching the last-opened workspace (invalidate on snapshot version change). Two sub-queries: (1) interface member implementations, (2) derived classes/abstract overrides. PathAllowlist on source spans. Output formats: json/markdown/tron consistent with existing tools. Pagination: offset/limit.
-
-### `doc_coverage`
-
-Walk `SymbolGraphSnapshot.Nodes` filtering `NodeKind.Real` only (exclude stubs). For each node, check `node.DocComment` non-null and non-empty. Group by project → namespace → type. Return coverage ratio at each level. Add `--minKind` filter to exclude parameters/fields if too noisy. Optional: flag symbols with `DocComment` that only contains `<inheritdoc/>` as "undocumented" (configurably).
-
-### Startup Validation Pattern
-
-```csharp
-// DocAgentServerOptions — add data annotations
-[Required(AllowEmptyStrings = false)]
-public string? ArtifactsDir { get; set; }
-
-// Program.cs / service registration
-services.AddOptions<DocAgentServerOptions>()
-    .Bind(configuration.GetSection("DocAgent"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();  // .NET 6+ — throws on startup if validation fails
-
-// IHostedService for filesystem check
-// Verify ArtifactsDir exists and is writable before first tool call
-```
-
-### Rate Limiting
-
-```csharp
-// DocAgentServerOptions additions
-public RateLimitOptions RateLimit { get; set; } = new();
-
-public sealed class RateLimitOptions {
-    public bool Enabled { get; set; } = false;
-    public int CallsPerMinute { get; set; } = 120;
-    public int BurstSize { get; set; } = 20;
-}
-
-// Tool method entry pattern
-// Inject TokenBucketRateLimiter; call TryAcquire()
-// Return: { "error": "rate_limited", "retryAfterMs": N } if denied
-```
+- Declaration merging (multi-span symbols)
+- `.d.ts` / ambient declaration ingestion (stub nodes)
+- Re-export chain tracking
+- Monorepo multi-tsconfig discovery
+- Function overload signatures
+- Modifier flags (`abstract`, `static`, `readonly`)
+- Decorator extraction
 
 ---
 
 ## Sources
 
-- [MCP Pagination Specification (2025-03-26)](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/pagination) — HIGH confidence
-- [SymbolFinder.FindImplementationsAsync — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.findsymbols.symbolfinder.findimplementationsasync?view=roslyn-dotnet-4.9.0) — HIGH confidence
-- [SymbolFinder.FindDerivedClassesAsync — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.findsymbols.symbolfinder.findderivedclassesasync?view=roslyn-dotnet-4.9.0) — HIGH confidence
-- [Microsoft.CodeAnalysis 4.14.0 on NuGet](https://www.nuget.org/packages/Microsoft.CodeAnalysis/4.14.0) — HIGH confidence
-- [.NET IOptions ValidateOnStart pattern — Microsoft Learn](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/options?view=aspnetcore-10.0) — HIGH confidence
-- [Rate Limiting for .NET — .NET Blog](https://devblogs.microsoft.com/dotnet/announcing-rate-limiting-for-dotnet/) — HIGH confidence
-- [MCP In .NET Pagination Docs](https://mcpindotnet.github.io/docs/concepts/architecture-overview/layers/data-layer/utility-features/pagination/) — MEDIUM confidence (community docs)
-- Existing codebase: `DocTools.cs`, `DocAgentServerOptions.cs`, `PROJECT.md` — HIGH confidence (direct inspection)
+- Existing codebase: `src/DocAgent.Core/Symbols.cs`, `src/DocAgent.Core/DiffTypes.cs` -- HIGH confidence (direct inspection)
+- `.planning/PROJECT.md` -- HIGH confidence (project requirements and scope)
+- [TypeScript Compiler API Wiki](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- HIGH confidence
+- [TSDoc Standard](https://tsdoc.org/) -- HIGH confidence
+- [TypeScript Declaration Merging](https://www.typescriptlang.org/docs/handbook/declaration-merging.html) -- HIGH confidence
+- [TypeDoc GitHub](https://github.com/TypeStrong/typedoc) -- MEDIUM confidence (reference for TS doc extraction)
 
 ---
-*Feature research for: DocAgentFramework v1.5 Robustness milestone*
-*Researched: 2026-03-04*
+*Feature research for: DocAgentFramework v2.0 TypeScript Language Support*
+*Researched: 2026-03-08*
