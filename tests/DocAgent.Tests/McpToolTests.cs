@@ -79,6 +79,10 @@ public sealed class McpToolTests
 
     private sealed class StubKnowledgeQueryService : IKnowledgeQueryService
     {
+        private static readonly SymbolId ImplClassId = new("MyAssembly::MyNamespace.ImplClass");
+        private static readonly SymbolId DerivedClassId = new("MyAssembly::MyNamespace.DerivedClass");
+        private static readonly SymbolId StubImplId = new("External::StubImpl");
+
         public Task<QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>> SearchAsync(
             string query, SymbolKind? kindFilter = null, int offset = 0, int limit = 20,
             string? snapshotVersion = null, string? projectFilter = null, CancellationToken ct = default)
@@ -103,6 +107,30 @@ public sealed class McpToolTests
                     RelatedIds: []);
                 return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Ok(Wrap(detail)));
             }
+            if (id == ImplClassId)
+            {
+                var node = new SymbolNode(ImplClassId, SymbolKind.Type, "ImplClass", "MyNamespace.ImplClass",
+                    [], Accessibility.Public, null, null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(),
+                    ProjectOrigin: "MyAssembly", NodeKind: NodeKind.Real);
+                var detail = new SymbolDetail(node, null, [], []);
+                return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Ok(Wrap(detail)));
+            }
+            if (id == DerivedClassId)
+            {
+                var node = new SymbolNode(DerivedClassId, SymbolKind.Type, "DerivedClass", "MyNamespace.DerivedClass",
+                    [], Accessibility.Public, null, null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(),
+                    ProjectOrigin: "MyAssembly", NodeKind: NodeKind.Real);
+                var detail = new SymbolDetail(node, null, [], []);
+                return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Ok(Wrap(detail)));
+            }
+            if (id == StubImplId)
+            {
+                var node = new SymbolNode(StubImplId, SymbolKind.Type, "StubImpl", "External.StubImpl",
+                    [], Accessibility.Public, null, null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(),
+                    ProjectOrigin: "External", NodeKind: NodeKind.Stub);
+                var detail = new SymbolDetail(node, null, [], []);
+                return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Ok(Wrap(detail)));
+            }
             return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Fail(QueryErrorKind.NotFound, "Symbol not found"));
         }
 
@@ -125,6 +153,9 @@ public sealed class McpToolTests
         {
             yield return new SymbolEdge(new SymbolId("MyAssembly::Caller1"), KnownId, SymbolEdgeKind.Calls);
             yield return new SymbolEdge(new SymbolId("MyAssembly::Caller2"), KnownId, SymbolEdgeKind.References);
+            yield return new SymbolEdge(ImplClassId, KnownId, SymbolEdgeKind.Implements);
+            yield return new SymbolEdge(DerivedClassId, KnownId, SymbolEdgeKind.Inherits);
+            yield return new SymbolEdge(StubImplId, KnownId, SymbolEdgeKind.Implements);
             await Task.CompletedTask;
         }
     }
@@ -320,10 +351,10 @@ public sealed class McpToolTests
         var root = Parse(json);
 
         root.TryGetProperty("total", out var total).Should().BeTrue();
-        total.GetInt32().Should().Be(2);
+        total.GetInt32().Should().Be(5);
 
         root.TryGetProperty("references", out var refs).Should().BeTrue();
-        refs.GetArrayLength().Should().Be(2);
+        refs.GetArrayLength().Should().Be(5);
     }
 
     [Fact]
@@ -334,6 +365,83 @@ public sealed class McpToolTests
         var root = Parse(json);
 
         root.TryGetProperty("error", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetReferences_WithoutPagination_ReturnsAllEdges()
+    {
+        var tools = CreateTools();
+        var json = await tools.GetReferences(KnownId.Value);
+        var root = Parse(json);
+
+        // total == totalCount when no pagination
+        root.GetProperty("total").GetInt32().Should().Be(root.GetProperty("totalCount").GetInt32());
+        root.GetProperty("references").GetArrayLength().Should().Be(root.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetReferences_WithPagination_ReturnsSubset()
+    {
+        var tools = CreateTools();
+        var json = await tools.GetReferences(KnownId.Value, offset: 0, limit: 2);
+        var root = Parse(json);
+
+        root.GetProperty("total").GetInt32().Should().Be(2);
+        root.GetProperty("totalCount").GetInt32().Should().Be(5);
+        root.GetProperty("references").GetArrayLength().Should().Be(2);
+        root.GetProperty("offset").GetInt32().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetReferences_WithOffset_SkipsEdges()
+    {
+        var tools = CreateTools();
+        var json = await tools.GetReferences(KnownId.Value, offset: 3, limit: 10);
+        var root = Parse(json);
+
+        root.GetProperty("total").GetInt32().Should().Be(2); // 5 total - skip 3 = 2 remaining
+        root.GetProperty("totalCount").GetInt32().Should().Be(5);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // find_implementations tests
+    // ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task FindImplementations_ValidInterface_ReturnsImplementingTypes()
+    {
+        var tools = CreateTools();
+        var json = await tools.FindImplementations(KnownId.Value);
+        var root = Parse(json);
+
+        root.GetProperty("totalCount").GetInt32().Should().Be(2); // ImplClass + DerivedClass (stub excluded)
+        var impls = root.GetProperty("implementations");
+        impls.GetArrayLength().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task FindImplementations_ExcludesStubNodes()
+    {
+        var tools = CreateTools();
+        var json = await tools.FindImplementations(KnownId.Value);
+        var root = Parse(json);
+
+        var ids = root.GetProperty("implementations")
+            .EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString())
+            .ToList();
+
+        ids.Should().NotContain("External::StubImpl");
+    }
+
+    [Fact]
+    public async Task FindImplementations_EmptyId_ReturnsError()
+    {
+        var tools = CreateTools();
+        var json = await tools.FindImplementations("");
+        var root = Parse(json);
+
+        root.GetProperty("error").GetString().Should().Be("invalid_input");
     }
 
     // ─────────────────────────────────────────────────────────────────
