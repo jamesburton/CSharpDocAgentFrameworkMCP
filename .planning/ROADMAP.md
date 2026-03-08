@@ -100,11 +100,11 @@ Full details: milestones/v1.5-ROADMAP.md
   2. The C# `TypeScriptIngestionService` can spawn the sidecar process, send an NDJSON request with a tsconfig.json path on stdin, and receive a valid (stub) SymbolGraphSnapshot-shaped JSON response on stdout
   3. The sidecar project has package.json, esbuild bundling to a single dist/index.js, and vitest test setup with at least one passing test
   4. All sidecar logging goes to stderr; no stdout pollution breaks NDJSON deserialization
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 28-01: TBD
-- [ ] 28-02: TBD
+- [ ] 28-01-PLAN.md — Node.js sidecar scaffold, NDJSON IPC protocol, stub extractor with vitest tests
+- [ ] 28-02-PLAN.md — C# TypeScriptIngestionService, NodeAvailabilityValidator, DI registration
 
 ### Phase 29: Core Symbol Extraction
 **Goal**: The TypeScript sidecar extracts all declaration types, relationships, documentation, and source spans from a real TypeScript project into a complete, deterministic SymbolGraphSnapshot
@@ -184,7 +184,7 @@ Plans:
 | 25. Server Infrastructure | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 26. API Extensions | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
-| 28. Sidecar Scaffold and IPC Protocol | v2.0 | 0/TBD | Not started | - |
+| 28. Sidecar Scaffold and IPC Protocol | v2.0 | 0/2 | Not started | - |
 | 29. Core Symbol Extraction | v2.0 | 0/TBD | Not started | - |
 | 30. MCP Integration and Incremental Ingestion | v2.0 | 0/TBD | Not started | - |
 | 31. Verification and Hardening | v2.0 | 0/TBD | Not started | - |
