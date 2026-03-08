@@ -556,4 +556,179 @@ public sealed class McpToolTests
         root.TryGetProperty("snapshotVersion", out var snapProp).Should().BeTrue();
         snapProp.GetString().Should().Be("snap-v1");
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // get_doc_coverage tests
+    // ─────────────────────────────────────────────────────────────────
+
+    private sealed class CoverageStub : IKnowledgeQueryService
+    {
+        private static readonly SymbolNode[] _nodes =
+        [
+            // ProjectA, MyApp.Models namespace — 2 documented, 1 undocumented
+            new(new SymbolId("ProjectA::MyApp.Models.User"), SymbolKind.Type, "User", "MyApp.Models.User",
+                [], Accessibility.Public,
+                new DocComment("A user entity.", null, new Dictionary<string, string>(), new Dictionary<string, string>(), null, [], [], []),
+                null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "ProjectA", NodeKind: NodeKind.Real),
+
+            new(new SymbolId("ProjectA::MyApp.Models.User.Name"), SymbolKind.Property, "Name", "MyApp.Models.User.Name",
+                [], Accessibility.Public,
+                new DocComment("The user name.", null, new Dictionary<string, string>(), new Dictionary<string, string>(), null, [], [], []),
+                null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "ProjectA", NodeKind: NodeKind.Real),
+
+            new(new SymbolId("ProjectA::MyApp.Models.User.Id"), SymbolKind.Property, "Id", "MyApp.Models.User.Id",
+                [], Accessibility.Public, null, null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(),
+                ProjectOrigin: "ProjectA", NodeKind: NodeKind.Real),
+
+            // ProjectA, MyApp.Services namespace — 1 documented, 1 undocumented
+            new(new SymbolId("ProjectA::MyApp.Services.UserService"), SymbolKind.Type, "UserService", "MyApp.Services.UserService",
+                [], Accessibility.Public,
+                new DocComment("User service.", null, new Dictionary<string, string>(), new Dictionary<string, string>(), null, [], [], []),
+                null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "ProjectA", NodeKind: NodeKind.Real),
+
+            new(new SymbolId("ProjectA::MyApp.Services.UserService.GetUser"), SymbolKind.Method, "GetUser", "MyApp.Services.UserService.GetUser",
+                [], Accessibility.Public, null, null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(),
+                ProjectOrigin: "ProjectA", NodeKind: NodeKind.Real),
+
+            // ProjectB — 1 public documented, 1 internal documented (should be excluded)
+            new(new SymbolId("ProjectB::MyApp.Data.Repository"), SymbolKind.Type, "Repository", "MyApp.Data.Repository",
+                [], Accessibility.Public,
+                new DocComment("Data repository.", null, new Dictionary<string, string>(), new Dictionary<string, string>(), null, [], [], []),
+                null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "ProjectB", NodeKind: NodeKind.Real),
+
+            new(new SymbolId("ProjectB::MyApp.Data.Repository.Save"), SymbolKind.Method, "Save", "MyApp.Data.Repository.Save",
+                [], Accessibility.Internal,
+                new DocComment("Saves data.", null, new Dictionary<string, string>(), new Dictionary<string, string>(), null, [], [], []),
+                null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "ProjectB", NodeKind: NodeKind.Real),
+
+            // Stub node — should be excluded
+            new(new SymbolId("External::System.Object"), SymbolKind.Type, "Object", "System.Object",
+                [], Accessibility.Public,
+                new DocComment("Base object.", null, new Dictionary<string, string>(), new Dictionary<string, string>(), null, [], [], []),
+                null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "External", NodeKind: NodeKind.Stub),
+        ];
+
+        private static readonly Dictionary<SymbolId, SymbolNode> _nodeMap = _nodes.ToDictionary(n => n.Id);
+
+        public Task<QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>> SearchAsync(
+            string query, SymbolKind? kindFilter = null, int offset = 0, int limit = 20,
+            string? snapshotVersion = null, string? projectFilter = null, CancellationToken ct = default)
+        {
+            IReadOnlyList<SearchResultItem> items = _nodes.Select(n =>
+                new SearchResultItem(n.Id, 1.0, n.Docs?.Summary ?? "", n.Kind, n.DisplayName)).ToList();
+            return Task.FromResult(QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>.Ok(Wrap(items)));
+        }
+
+        public Task<QueryResult<ResponseEnvelope<SymbolDetail>>> GetSymbolAsync(
+            SymbolId id, string? snapshotVersion = null, CancellationToken ct = default)
+        {
+            if (_nodeMap.TryGetValue(id, out var node))
+            {
+                var detail = new SymbolDetail(node, null, [], []);
+                return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Ok(Wrap(detail)));
+            }
+            return Task.FromResult(QueryResult<ResponseEnvelope<SymbolDetail>>.Fail(QueryErrorKind.NotFound, "Symbol not found"));
+        }
+
+        public Task<QueryResult<ResponseEnvelope<GraphDiff>>> DiffAsync(
+            SnapshotRef a, SnapshotRef b, CancellationToken ct = default) =>
+            Task.FromResult(QueryResult<ResponseEnvelope<GraphDiff>>.Fail(QueryErrorKind.NotFound, "n/a"));
+
+        public async IAsyncEnumerable<SymbolEdge> GetReferencesAsync(
+            SymbolId id, bool crossProjectOnly = false, [EnumeratorCancellation] CancellationToken ct = default)
+        { await Task.CompletedTask; yield break; }
+    }
+
+    [Fact]
+    public async Task GetDocCoverage_GroupsByProject()
+    {
+        var tools = CreateTools(svc: new CoverageStub());
+        var json = await tools.GetDocCoverage();
+        var root = Parse(json);
+
+        root.GetProperty("byProject").GetArrayLength().Should().BeGreaterOrEqualTo(2);
+        var projectNames = root.GetProperty("byProject")
+            .EnumerateArray()
+            .Select(e => e.GetProperty("project").GetString())
+            .ToList();
+        projectNames.Should().Contain("ProjectA");
+        projectNames.Should().Contain("ProjectB");
+    }
+
+    [Fact]
+    public async Task GetDocCoverage_GroupsByNamespace()
+    {
+        var tools = CreateTools(svc: new CoverageStub());
+        var json = await tools.GetDocCoverage();
+        var root = Parse(json);
+
+        root.GetProperty("byNamespace").GetArrayLength().Should().BeGreaterOrEqualTo(2);
+        var namespaces = root.GetProperty("byNamespace")
+            .EnumerateArray()
+            .Select(e => e.GetProperty("namespace").GetString())
+            .ToList();
+        namespaces.Should().Contain("MyApp.Models");
+        namespaces.Should().Contain("MyApp.Services");
+    }
+
+    [Fact]
+    public async Task GetDocCoverage_GroupsByKind()
+    {
+        var tools = CreateTools(svc: new CoverageStub());
+        var json = await tools.GetDocCoverage();
+        var root = Parse(json);
+
+        root.GetProperty("byKind").GetArrayLength().Should().BeGreaterOrEqualTo(1);
+        var kinds = root.GetProperty("byKind")
+            .EnumerateArray()
+            .Select(e => e.GetProperty("kind").GetString())
+            .ToList();
+        kinds.Should().Contain("Type");
+    }
+
+    [Fact]
+    public async Task GetDocCoverage_ExcludesNonPublicSymbols()
+    {
+        var tools = CreateTools(svc: new CoverageStub());
+        var json = await tools.GetDocCoverage();
+        var root = Parse(json);
+
+        // Internal method in ProjectB should NOT be counted
+        // ProjectB should only have Repository (Type, Public) as candidate
+        var projectB = root.GetProperty("byProject")
+            .EnumerateArray()
+            .First(e => e.GetProperty("project").GetString() == "ProjectB");
+        projectB.GetProperty("total").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetDocCoverage_ComputesCoveragePercentCorrectly()
+    {
+        var tools = CreateTools(svc: new CoverageStub());
+        var json = await tools.GetDocCoverage();
+        var root = Parse(json);
+
+        root.TryGetProperty("totalCandidates", out _).Should().BeTrue();
+        root.TryGetProperty("totalDocumented", out _).Should().BeTrue();
+        root.TryGetProperty("overallCoveragePercent", out _).Should().BeTrue();
+
+        var total = root.GetProperty("totalCandidates").GetInt32();
+        var documented = root.GetProperty("totalDocumented").GetInt32();
+        total.Should().BeGreaterThan(0);
+        documented.Should().BeLessOrEqualTo(total);
+    }
+
+    [Fact]
+    public async Task GetDocCoverage_WithProjectFilter_FiltersByProject()
+    {
+        var tools = CreateTools(svc: new CoverageStub());
+        var json = await tools.GetDocCoverage(project: "ProjectA");
+        var root = Parse(json);
+
+        var projects = root.GetProperty("byProject")
+            .EnumerateArray()
+            .Select(e => e.GetProperty("project").GetString())
+            .ToList();
+        projects.Should().OnlyContain(p => p == "ProjectA");
+    }
 }
