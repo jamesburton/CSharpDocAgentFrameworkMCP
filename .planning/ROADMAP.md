@@ -72,7 +72,7 @@ Full details: milestones/v1.3-ROADMAP.md
 
 **Build order:** Dependencies first (PKG), then performance (PERF), then server infrastructure (OPS-02/03) in parallel with performance, then API tools (API), then documentation last (OPS-01). This order reflects technical dependencies; user priority (operational polish first) governs scope decisions within each phase.
 
-- [ ] **Phase 23: Dependency Foundation** — Roslyn 4.14 upgrade and full NuGet audit
+- [x] **Phase 23: Dependency Foundation** — Roslyn 4.14 upgrade and full NuGet audit (completed 2026-03-06)
 - [ ] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching
 - [ ] **Phase 25: Server Infrastructure** — Startup validation and rate limiting
 - [ ] **Phase 26: API Extensions** — Pagination, find_implementations, get_doc_coverage tools
@@ -89,7 +89,7 @@ Full details: milestones/v1.3-ROADMAP.md
   2. The VersionOverride workaround in DocAgent.Tests.csproj is removed from the solution
   3. `NuGetAudit` is enabled in Directory.Build.props and `dotnet restore` reports no known vulnerabilities
   4. All five Microsoft.CodeAnalysis.* packages are at 4.14.0 and the package audit baseline is recorded
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 23-01-PLAN.md — Roslyn 4.14.0 upgrade, csproj cleanup, and NuGetAudit enablement
@@ -103,7 +103,10 @@ Plans:
   2. `GetReferencesAsync` edge traversal uses pre-built `_edgesByFrom`/`_edgesByTo` dictionaries built at index time
   3. `SearchAsync` metadata retrieval uses a TTL-cached node map instead of per-hit async disk reads
   4. All 330 existing tests continue to pass with identical output (determinism preserved — no Dictionary ordering in serialisation paths)
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 24-01-PLAN.md — SnapshotLookup cache with O(1) symbol, edge, and metadata lookups
 
 ### Phase 25: Server Infrastructure
 **Goal**: The MCP server fails fast on invalid startup configuration and throttles tool invocations to prevent stuck-agent retry storms
@@ -114,7 +117,11 @@ Plans:
   2. A client that exceeds the configured token-bucket limit receives a structured error response (not an unhandled exception) and the server continues operating normally for subsequent calls
   3. The rate limiter is a DI singleton — ingestion tool calls are not counted against the query rate limit
   4. The startup validator is unit-testable in isolation via ServiceCollection without requiring Aspire or a running process
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 25-01-PLAN.md — Startup configuration validation with fail-fast on invalid config
+- [ ] 25-02-PLAN.md — Token-bucket rate limiting with separate query/ingestion buckets
 
 ### Phase 26: API Extensions
 **Goal**: Agents can paginate large reference lists, navigate to implementations of interfaces/base classes, and query documentation coverage metrics — all via MCP tools
@@ -164,8 +171,8 @@ Plans:
 | 20. MSBuild Performance Benchmarks | v1.3 | 2/2 | Complete | 2026-03-03 |
 | 21. Code and Audit Cleanup | v1.3 | 1/1 | Complete | 2026-03-03 |
 | 22. Documentation Refresh | v1.3 | 1/1 | Complete | 2026-03-04 |
-| 23. Dependency Foundation | v1.5 | 0/1 | Planning | - |
-| 24. Query Performance | v1.5 | 0/TBD | Not started | - |
-| 25. Server Infrastructure | v1.5 | 0/TBD | Not started | - |
+| 23. Dependency Foundation | 1/1 | Complete   | 2026-03-06 | - |
+| 24. Query Performance | v1.5 | 0/1 | Not started | - |
+| 25. Server Infrastructure | v1.5 | 0/2 | Not started | - |
 | 26. API Extensions | v1.5 | 0/TBD | Not started | - |
 | 27. Documentation Refresh | v1.5 | 0/TBD | Not started | - |
