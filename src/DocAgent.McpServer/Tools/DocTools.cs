@@ -298,6 +298,8 @@ public sealed class DocTools
         [Description("When true, returns only cross-project edges (EdgeScope.CrossProject).")] bool crossProjectOnly = false,
         [Description("Include surrounding code context (not yet implemented)")] bool includeContext = false,
         [Description("Output format: json|markdown|tron")] string format = "json",
+        [Description("Result offset for pagination (default: return all)")] int offset = 0,
+        [Description("Result limit; 0 = return all (default), max 200")] int limit = 0,
         CancellationToken cancellationToken = default)
     {
         using var activity = DocAgentTelemetry.Source.StartActivity(
@@ -338,15 +340,24 @@ public sealed class DocTools
                 nodeProjectCache[nodeId] = nodeResult.Value!.Payload.Node.ProjectOrigin;
         }
 
-        activity?.SetTag("tool.result_count", edges.Count);
+        // Apply pagination
+        var totalCount = edges.Count;
+        var paginatedEdges = limit > 0
+            ? edges.Skip(offset).Take(Math.Min(limit, 200)).ToList()
+            : edges;
+
+        activity?.SetTag("tool.result_count", paginatedEdges.Count);
         activity?.SetStatus(ActivityStatusCode.Ok);
         return FormatResponse(format, () =>
         {
             var payload = new
             {
                 promptInjectionWarning = hasInjectionWarning,
-                total = edges.Count,
-                references = edges.Select(e => new
+                total = paginatedEdges.Count,
+                totalCount = totalCount,
+                offset = offset,
+                limit = limit > 0 ? Math.Min(limit, 200) : totalCount,
+                references = paginatedEdges.Select(e => new
                 {
                     fromId = e.From.Value,
                     toId = e.To.Value,
@@ -358,8 +369,110 @@ public sealed class DocTools
             };
             return JsonSerializer.Serialize(payload, s_jsonOptions);
         },
-        () => TronSerializer.SerializeReferences(edges),
-        () => RenderReferencesMarkdown(edges));
+        () => TronSerializer.SerializeReferences(paginatedEdges),
+        () => RenderReferencesMarkdown(paginatedEdges));
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tool: find_implementations
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "find_implementations"), Description("Find all types implementing a given interface or deriving from a base class.")]
+    public async Task<string> FindImplementations(
+        [Description("Stable SymbolId of the interface or base class")] string symbolId,
+        [Description("Output format: json|markdown|tron")] string format = "json",
+        CancellationToken cancellationToken = default)
+    {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.find_implementations", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "find_implementations");
+        if (DocAgentTelemetry.VerboseMode)
+            activity?.SetTag("tool.input.symbolId", symbolId);
+
+        try
+        {
+        if (string.IsNullOrWhiteSpace(symbolId))
+            return ErrorResponse(QueryErrorKind.InvalidInput, "symbolId is required.");
+
+        var id = new SymbolId(symbolId);
+
+        // Collect ALL references for this symbol
+        var allEdges = new List<SymbolEdge>();
+        try
+        {
+            await foreach (var edge in _query.GetReferencesAsync(id, crossProjectOnly: false, cancellationToken))
+                allEdges.Add(edge);
+        }
+        catch (SymbolNotFoundException)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "NotFound");
+            return ErrorResponse(QueryErrorKind.NotFound, $"Symbol '{symbolId}' not found.");
+        }
+
+        // Filter to Implements/Inherits edges pointing TO this symbol
+        var implEdges = allEdges
+            .Where(e => (e.Kind == SymbolEdgeKind.Implements || e.Kind == SymbolEdgeKind.Inherits) && e.To == id)
+            .ToList();
+
+        // Resolve implementing nodes, excluding stubs
+        var implementations = new List<SymbolNode>();
+        foreach (var edge in implEdges)
+        {
+            var nodeResult = await _query.GetSymbolAsync(edge.From, ct: cancellationToken);
+            if (nodeResult.Success)
+            {
+                var node = nodeResult.Value!.Payload.Node;
+                if (node.NodeKind != NodeKind.Stub)
+                    implementations.Add(node);
+            }
+        }
+
+        activity?.SetTag("tool.result_count", implementations.Count);
+        activity?.SetStatus(ActivityStatusCode.Ok);
+        return FormatResponse(format, () =>
+        {
+            var payload = new
+            {
+                symbolId = symbolId,
+                totalCount = implementations.Count,
+                implementations = implementations.Select(n => new
+                {
+                    id = n.Id.Value,
+                    displayName = n.DisplayName,
+                    kind = n.Kind.ToString(),
+                    fullyQualifiedName = n.FullyQualifiedName,
+                    projectOrigin = n.ProjectOrigin,
+                }).ToList()
+            };
+            return JsonSerializer.Serialize(payload, s_jsonOptions);
+        },
+        () =>
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("FIND_IMPLEMENTATIONS");
+            sb.AppendLine($"  symbolId: {symbolId}");
+            sb.AppendLine($"  totalCount: {implementations.Count}");
+            foreach (var n in implementations)
+                sb.AppendLine($"  - {n.Id.Value} ({n.Kind}) {n.DisplayName}");
+            return sb.ToString();
+        },
+        () =>
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("# Implementations");
+            sb.AppendLine($"**Symbol:** `{symbolId}`");
+            sb.AppendLine($"**Total:** {implementations.Count}");
+            sb.AppendLine();
+            foreach (var n in implementations)
+                sb.AppendLine($"- `{n.Id.Value}` — {n.DisplayName} ({n.Kind})");
+            return sb.ToString();
+        });
         }
         catch (Exception ex)
         {
