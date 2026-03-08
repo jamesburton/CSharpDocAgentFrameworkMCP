@@ -20,9 +20,9 @@ Requirements for v1.5 Robustness milestone. Each maps to roadmap phases.
 
 ### API Completeness
 
-- [ ] **API-01**: get_references supports offset/limit pagination with total count in response envelope
-- [ ] **API-02**: find_implementations tool returns all types implementing a given interface or deriving from a base class, with stub node filtering
-- [ ] **API-03**: get_doc_coverage tool returns documentation coverage metrics grouped by project, namespace, and symbol kind
+- [x] **API-01**: get_references supports offset/limit pagination with total count in response envelope
+- [x] **API-02**: find_implementations tool returns all types implementing a given interface or deriving from a base class, with stub node filtering
+- [x] **API-03**: get_doc_coverage tool returns documentation coverage metrics grouped by project, namespace, and symbol kind
 
 ### Query Performance
 
@@ -72,9 +72,9 @@ Deferred to future milestones. Tracked but not in v1.5 roadmap.
 | PERF-03 | Phase 24 | Complete |
 | OPS-02 | Phase 25 | Complete |
 | OPS-03 | Phase 25 | Complete |
-| API-01 | Phase 26 | Pending |
-| API-02 | Phase 26 | Pending |
-| API-03 | Phase 26 | Pending |
+| API-01 | Phase 26 | Complete |
+| API-02 | Phase 26 | Complete |
+| API-03 | Phase 26 | Complete |
 | OPS-01 | Phase 27 | Pending |
 
 **Coverage:**
@@ -84,4 +84,4 @@ Deferred to future milestones. Tracked but not in v1.5 roadmap.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-08 — PERF-01/02/03 complete (Phase 24), PKG-01/02 complete (Phase 23)*
+*Last updated: 2026-03-08 — API-01/02/03 complete (Phase 26), PERF-01/02/03 complete (Phase 24), PKG-01/02 complete (Phase 23)*
