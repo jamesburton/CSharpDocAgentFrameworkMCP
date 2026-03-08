@@ -66,91 +66,18 @@ Full details: milestones/v1.3-ROADMAP.md
 
 </details>
 
-### ✅ v1.5 Robustness (Shipped 2026-03-08)
+<details>
+<summary>✅ v1.5 Robustness (Phases 23-27) — SHIPPED 2026-03-08</summary>
 
-**Milestone Goal:** Harden the query pipeline, extend the tool surface, upgrade dependencies, and polish operational readiness — making DocAgentFramework production-grade.
+- [x] Phase 23: Dependency Foundation (1/1 plan) — completed 2026-03-06
+- [x] Phase 24: Query Performance (1/1 plan) — completed 2026-03-08
+- [x] Phase 25: Server Infrastructure (2/2 plans) — completed 2026-03-08
+- [x] Phase 26: API Extensions (2/2 plans) — completed 2026-03-08
+- [x] Phase 27: Documentation Refresh (1/1 plan) — completed 2026-03-08
 
-**Build order:** Dependencies first (PKG), then performance (PERF), then server infrastructure (OPS-02/03) in parallel with performance, then API tools (API), then documentation last (OPS-01). This order reflects technical dependencies; user priority (operational polish first) governs scope decisions within each phase.
+Full details: milestones/v1.5-ROADMAP.md
 
-- [x] **Phase 23: Dependency Foundation** — Roslyn 4.14 upgrade and full NuGet audit (completed 2026-03-06)
-- [x] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching (completed 2026-03-08)
-- [x] **Phase 25: Server Infrastructure** — Startup validation and rate limiting (completed 2026-03-08)
-- [x] **Phase 26: API Extensions** — Pagination, find_implementations, get_doc_coverage tools (completed 2026-03-08)
-- [x] **Phase 27: Documentation Refresh** — CLAUDE.md updated to 14-tool surface (completed 2026-03-08)
-
-## Phase Details
-
-### Phase 23: Dependency Foundation
-**Goal**: The build is clean on Roslyn 4.14.0 with no version conflicts and all NuGet dependencies audited for vulnerabilities
-**Depends on**: Nothing (first phase of milestone)
-**Requirements**: PKG-01, PKG-02
-**Success Criteria** (what must be TRUE):
-  1. `dotnet restore` completes with zero NU1107 warnings across all projects including Benchmarks and Analyzers
-  2. The VersionOverride workaround in DocAgent.Tests.csproj is removed from the solution
-  3. `NuGetAudit` is enabled in Directory.Build.props and `dotnet restore` reports no known vulnerabilities
-  4. All five Microsoft.CodeAnalysis.* packages are at 4.14.0 and the package audit baseline is recorded
-**Plans:** 1/1 plans complete
-
-Plans:
-- [x] 23-01-PLAN.md — Roslyn 4.14.0 upgrade, csproj cleanup, and NuGetAudit enablement (completed 2026-03-06)
-
-### Phase 24: Query Performance
-**Goal**: Symbol lookups and edge traversals operate in O(1) time using pre-built index dictionaries, eliminating linear scans from the hot query path
-**Depends on**: Phase 23
-**Requirements**: PERF-01, PERF-02, PERF-03
-**Success Criteria** (what must be TRUE):
-  1. `GetSymbolAsync` and symbol existence checks use dictionary lookup instead of list scan (verifiable by code inspection and existing benchmark baseline holding)
-  2. `GetReferencesAsync` edge traversal uses pre-built `_edgesByFrom`/`_edgesByTo` dictionaries built at index time
-  3. `SearchAsync` metadata retrieval uses a TTL-cached node map instead of per-hit async disk reads
-  4. All 330 existing tests continue to pass with identical output (determinism preserved — no Dictionary ordering in serialisation paths)
-**Plans:** 1 plan
-
-Plans:
-- [x] 24-01-PLAN.md — SnapshotLookup cache with O(1) symbol, edge, and metadata lookups (completed 2026-03-08)
-
-### Phase 25: Server Infrastructure
-**Goal**: The MCP server fails fast on invalid startup configuration and throttles tool invocations to prevent stuck-agent retry storms
-**Depends on**: Phase 23
-**Requirements**: OPS-02, OPS-03
-**Success Criteria** (what must be TRUE):
-  1. Starting the server with AllowedPaths empty or ArtifactsDir non-writable prints a diagnostic error to stderr and exits non-zero before accepting any tool calls
-  2. A client that exceeds the configured token-bucket limit receives a structured error response (not an unhandled exception) and the server continues operating normally for subsequent calls
-  3. The rate limiter is a DI singleton — ingestion tool calls are not counted against the query rate limit
-  4. The startup validator is unit-testable in isolation via ServiceCollection without requiring Aspire or a running process
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] 25-01-PLAN.md — Startup configuration validation with fail-fast on invalid config (completed 2026-03-08)
-- [x] 25-02-PLAN.md — Token-bucket rate limiting with separate query/ingestion buckets (completed 2026-03-08)
-
-### Phase 26: API Extensions
-**Goal**: Agents can paginate large reference lists, navigate to implementations of interfaces/base classes, and query documentation coverage metrics — all via MCP tools
-**Depends on**: Phase 24, Phase 25
-**Requirements**: API-01, API-02, API-03
-**Success Criteria** (what must be TRUE):
-  1. `get_references` called without `offset`/`limit` returns the same response shape as before this phase (no silent truncation of existing callers)
-  2. `get_references` called with explicit `offset`/`limit` returns a paginated envelope with `totalCount`, consistent with `search_symbols` pagination behavior
-  3. `find_implementations` returns all types implementing a given interface or deriving from a base class, with stub nodes (NodeKind.Stub) excluded from results
-  4. `get_doc_coverage` returns documentation coverage metrics grouped by project, namespace, and symbol kind, derived from snapshot post-processing
-  5. All new tools are secured with PathAllowlist enforcement matching the pattern of existing tools
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] 26-01-PLAN.md — Pagination for get_references and find_implementations tool (API-01, API-02) (completed 2026-03-08)
-- [x] 26-02-PLAN.md — Documentation coverage tool get_doc_coverage (API-03) (completed 2026-03-08)
-
-### Phase 27: Documentation Refresh
-**Goal**: CLAUDE.md accurately documents all 14 MCP tools with correct parameter signatures, format options, and projectFilter behavior, enabling agents to call tools correctly on first attempt
-**Depends on**: Phase 26
-**Requirements**: OPS-01
-**Success Criteria** (what must be TRUE):
-  1. CLAUDE.md lists all 14 MCP tools (12 existing + find_implementations + get_doc_coverage) with their parameters, return shapes, and format options
-  2. Each tool entry is verified against the actual `[McpServerTool]`-decorated method signatures in the codebase — no provisional or stale signatures
-  3. The projectFilter parameter is documented for all tools that accept it
-**Plans:** 1/1 plans complete
-
-Plans:
-- [x] 27-01-PLAN.md — Update CLAUDE.md with complete 14-tool MCP reference (completed 2026-03-08)
+</details>
 
 ## Progress
 

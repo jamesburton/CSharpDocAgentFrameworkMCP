@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.5 Robustness (Shipped: 2026-03-08)
+
+**Phases completed:** 5 phases, 7 plans, 13 tasks
+
+**Timeline:** 4 days (2026-03-04 → 2026-03-08) | 34 commits | 86 files changed, +7,960/-279 LOC | 20,358 LOC total
+
+**Key accomplishments:**
+- Roslyn 4.14.0 unified across all projects with centralized NuGetAudit and zero VersionOverride hacks
+- O(1) symbol lookup, edge traversal, and metadata caching via private SnapshotLookup dictionaries replacing three linear scans
+- Startup configuration validation with fail-fast IHostedLifecycleService before MCP transport accepts connections
+- Token-bucket rate limiting with separate query/ingestion buckets, structured error responses with retryAfterMs
+- Three new MCP tools: paginated get_references (offset/limit with backward compat), find_implementations (interface/base-class hierarchy), get_doc_coverage (project/namespace/kind grouping)
+- CLAUDE.md updated to complete 14-tool MCP reference with parameter signatures verified against source
+
+---
+
 ## v1.0 MVP (Shipped: 2026-02-28)
 
 **Phases completed:** 8 phases, 24 plans, 8 tasks

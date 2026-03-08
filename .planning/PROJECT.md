@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A .NET 10 / C# framework that turns code documentation (XML docs) and code structure (Roslyn symbols) into agent-consumable memory, exposed via a securable MCP server. Agents reason over compiler truth — not approximations — through a versioned, diffable symbol graph with solution-wide scope and narrow tool surface.
+A .NET 10 / C# framework that turns code documentation (XML docs) and code structure (Roslyn symbols) into agent-consumable memory, exposed via a securable MCP server. Agents reason over compiler truth — not approximations — through a versioned, diffable symbol graph with solution-wide scope, 14-tool MCP surface, and production-grade operational infrastructure.
 
 ## Core Value
 
@@ -36,49 +36,50 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 - ✓ `explain_solution` MCP tool for solution-level architecture overview — v1.2
 - ✓ `diff_solution_snapshots` MCP tool for solution-level diff — v1.2
 - ✓ PathAllowlist security on all SolutionTools methods — v1.2
-
 - ✓ Per-project incremental solution re-ingestion with dependency cascade and byte-identity guarantee — v1.3
 - ✓ BenchmarkDotNet performance baselines and regression guard for MSBuild workspace and solution ingestion — v1.3
 - ✓ Stale code cleanup (dead TODOs, audit artifact frontmatter, benchmark wiring, OTel meter registration) — v1.3
 - ✓ Documentation refresh (Architecture.md, Plan.md, Testing.md aligned to shipped reality) — v1.3
+- ✓ Roslyn 4.14.0 unified across all projects with centralized NuGetAudit and zero VersionOverride — v1.5
+- ✓ O(1) symbol lookup, edge traversal, and metadata caching via SnapshotLookup dictionaries — v1.5
+- ✓ Startup configuration validation with fail-fast before MCP transport accepts connections — v1.5
+- ✓ Token-bucket rate limiting with separate query/ingestion buckets — v1.5
+- ✓ Paginated `get_references` with backward-compatible offset/limit defaults — v1.5
+- ✓ `find_implementations` tool for interface/base-class hierarchy navigation — v1.5
+- ✓ `get_doc_coverage` tool for documentation coverage metrics by project/namespace/kind — v1.5
+- ✓ CLAUDE.md complete 14-tool MCP reference with parameter signatures verified against source — v1.5
 
 ### Active
 
-## Current Milestone: v1.5 Robustness
-
-**Goal:** Harden the query pipeline, extend the tool surface, upgrade dependencies, and polish operational readiness — making DocAgentFramework production-grade.
-
-**Target features:**
-- CLAUDE.md refresh with all 12 tools, startup config validation, rate limiting
-- Roslyn 4.14 upgrade, full package audit
-- Pagination for large result sets, find_implementations tool, doc coverage metrics tool
-- O(1) symbol lookup, batched project resolution, search metadata caching
+(No active requirements — planning next milestone)
 
 ### Out of Scope
-- Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to V1.5
+- Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to v2.0
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
-- Non-stdio MCP transports (HTTP, SSE) — deferred to later
-- Polyglot support (Tree-sitter, LSP bridge) — future tier
+- Non-stdio MCP transports (HTTP, SSE) — no demand yet; security model not designed
+- Polyglot support (Tree-sitter, LSP bridge) — future tier; .NET-only for now
 - Source generators — V3
 - Query DSL over symbol graph — speculative/long-term
-- Structural code rewrite engine — speculative/long-term
+- Streaming MCP responses — MCP spec doesn't support streaming tool responses
+- Per-client identity/auth — Stdio is single-client; auth not meaningful
+- Live Roslyn SymbolFinder queries — v1.5 uses snapshot edges; live queries deferred
 
 ## Context
 
-Shipped v1.3 with ~8,500 LOC C#. 330 tests (309 passing, 21 environment-dependent).
+Shipped v1.5 with ~20,400 LOC C#. 335+ tests. 5 milestones shipped over 12 days (2026-02-25 → 2026-03-08).
 
-Tech stack: .NET 10, Roslyn 4.12.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing.
+Tech stack: .NET 10, Roslyn 4.14.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing, System.Threading.RateLimiting (TokenBucket).
 
 Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers + Benchmarks project).
 
-Full pipeline operational: 12 MCP tools (`search_symbols`, `get_symbol`, `get_references`, `diff_snapshots`, `explain_project`, `review_changes`, `find_breaking_changes`, `explain_change`, `ingest_project`, `ingest_solution`, `explain_solution`, `diff_solution_snapshots`). Incremental ingestion at both file and solution levels — unchanged projects skipped via SHA-256 manifest comparison with dependency cascade. All tools secured with PathAllowlist enforcement. Performance baselined with BenchmarkDotNet regression guards.
+Full pipeline operational: 14 MCP tools across 4 tool classes (DocTools: 7, ChangeTools: 3, IngestionTools: 2, SolutionTools: 2). Incremental ingestion at both file and solution levels. All tools secured with PathAllowlist enforcement. Performance baselined with BenchmarkDotNet regression guards. O(1) query path via SnapshotLookup dictionaries. Startup validation and rate limiting for operational safety.
 
 ## Constraints
 
 - **Target framework**: .NET 10 (`net10.0`), `LangVersion=preview`, nullable enabled, warnings-as-errors
 - **Central packages**: managed via `src/Directory.Packages.props`
 - **MCP SDK**: `ModelContextProtocol` preview package
-- **Roslyn**: `Microsoft.CodeAnalysis.CSharp` 4.12.0
+- **Roslyn**: `Microsoft.CodeAnalysis.CSharp` 4.14.0
 - **Testing**: xUnit + FluentAssertions
 - **Determinism**: Same input must produce identical `SymbolGraphSnapshot` output
 - **Security**: Default-deny toolset, path allowlists, audit logging, defense against prompt injection
@@ -106,13 +107,22 @@ Full pipeline operational: 12 MCP tools (`search_symbols`, `get_symbol`, `get_re
 | Stub nodes capped to direct PackageReference assemblies | Prevents index bloat from transitive closure | ✓ Good — manageable stub count |
 | EdgeScope classified at construction time | No post-classification pass; locked design constraint | ✓ Good — clean single-pass pipeline |
 | explain_solution derives DAG from CrossProject edges at query time | No pre-computed adjacency stored | ✓ Good — always fresh, no stale cache |
-| diff_solution_snapshots wire name (not diff_snapshots) | Avoids tool name collision with DocTools | ✓ Good — 12 unique MCP tool names |
+| diff_solution_snapshots wire name (not diff_snapshots) | Avoids tool name collision with DocTools | ✓ Good — 12→14 unique MCP tool names |
 | DependencyCascade extracted from SolutionIngestionService | Reusable topological sort + dirty set computation | ✓ Good — clean separation |
 | Solution-relative path keys with __ separator for manifests | Prevents filename collision for same-name projects in different directories | ✓ Good — unique keys guaranteed |
 | IncrementalSolutionIngestionService as decorator | Wraps SolutionIngestionService; skip path returns cached snapshot | ✓ Good — single-responsibility |
 | Pointer file pattern (latest-{sln}.ptr) | Reference previous snapshot for incremental comparison | ✓ Good — simple file-based state |
-| BenchmarkDotNet in separate project with relaxed warnings | BDN transitive Roslyn deps conflict with pinned 4.12.0; measurement ≠ production | ✓ Good — isolation prevents version conflicts |
+| BenchmarkDotNet in separate project with relaxed warnings | BDN transitive Roslyn deps conflict with pinned version; measurement ≠ production | ✓ Good — isolation prevents version conflicts |
 | Dict-keyed BaselineModels for baselines.json | Matches actual BDN output schema | ✓ Good — no schema mismatch |
+| SnapshotLookup as private nested class | No new public API surface for O(1) cache | ✓ Good — internal optimization, invisible to consumers |
+| Cache keyed on ContentHash string equality | Simple and correct for immutable snapshot invalidation | ✓ Good — rebuild only when snapshot changes |
+| AllowedPaths empty is warning not error | PathAllowlist defaults to cwd safely | ✓ Good — pragmatic default for development |
+| IHostedLifecycleService.StartingAsync for startup validation | Earliest possible hook before MCP transport | ✓ Good — fail-fast before accepting connections |
+| Separate query/ingestion rate limit buckets | Heavy querying cannot block ingestion and vice versa | ✓ Good — independent throughput control |
+| RateLimitFilter before AuditFilter in pipeline | Early rejection saves computation | ✓ Good — less work wasted on rate-limited calls |
+| limit=0 means return all in get_references | Backward compatibility with existing callers | ✓ Good — no silent truncation |
+| find_implementations via existing GetReferencesAsync | Reuses edge traversal; no new query method needed | ✓ Good — minimal code surface |
+| Tool docs organized by source file category in CLAUDE.md | Easy cross-reference between docs and source | ✓ Good — 4 categories match 4 tool classes |
 
 ---
-*Last updated: 2026-03-04 after v1.5 Robustness milestone start*
+*Last updated: 2026-03-08 after v1.5 Robustness milestone*

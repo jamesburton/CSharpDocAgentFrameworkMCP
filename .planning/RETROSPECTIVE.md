@@ -173,6 +173,54 @@
 
 ---
 
+## Milestone: v1.5 — Robustness
+
+**Shipped:** 2026-03-08
+**Phases:** 5 | **Plans:** 7 | **Commits:** 34
+
+### What Was Built
+- Roslyn 4.14.0 unified across all projects with centralized NuGetAudit and zero VersionOverride hacks
+- O(1) symbol lookup, edge traversal, and metadata caching via private SnapshotLookup dictionaries
+- Startup configuration validation with fail-fast IHostedLifecycleService before MCP transport accepts connections
+- Token-bucket rate limiting with separate query/ingestion buckets and structured error responses
+- Three new MCP tools: paginated get_references, find_implementations, get_doc_coverage
+- CLAUDE.md updated to complete 14-tool MCP reference with parameter signatures verified against source
+- 335+ tests, 20,400 LOC total
+
+### What Worked
+- Parallel worktree execution of Phase 24 (Indexing) and Phase 25 (McpServer) — different file sets, no conflicts
+- Build order research (PKG → PERF/OPS parallel → API → docs) correctly reflected technical dependencies
+- Private nested class pattern for SnapshotLookup avoided public API surface expansion while delivering O(1) performance
+- Existing test suite (335 tests) served as implicit verification for Phase 24's internal optimization — no new tests needed
+- Backward-compatible pagination (limit=0 returns all) avoided breaking existing callers
+
+### What Was Inefficient
+- No VERIFICATION.md files created during execution — all 5 phases required retroactive Nyquist validation
+- Milestone audit initially classified as tech_debt due to missing VERIFICATION.md files, then upgraded to passed after validation
+- s_docKinds/s_docAccessibilities constants duplicated between DocTools and SolutionTools — no shared base class to avoid duplication
+
+### Patterns Established
+- Private nested SnapshotLookup class with pre-built dictionaries for O(1) hot-path access
+- Content-hash-based cache invalidation for snapshot-derived state
+- IHostedLifecycleService.StartingAsync as earliest validation hook pattern
+- MCP filter chain ordering: rate limit → audit (early rejection saves work)
+- Separate rate limit buckets per tool category (query vs ingestion)
+- Pagination envelope: total (returned) + totalCount (available) + offset + limit
+
+### Key Lessons
+1. Internal optimizations (private classes) don't need new tests when existing tests implicitly cover the behavior
+2. VERIFICATION.md should be created during phase execution, not retroactively — process gap persisted across all 5 phases
+3. Parallel worktree execution works well when file ownership is clearly separated (different projects)
+4. Rate limiting filter ordering matters — placing it before audit filter saves computation on rejected requests
+5. Backward-compatible pagination (limit=0 = return all) is the right default when adding pagination to existing APIs
+
+### Cost Observations
+- Model mix: primarily sonnet for execution, opus for planning/verification
+- Timeline: 4 days (2026-03-04 → 2026-03-08) for 5 phases, 7 plans
+- Notable: Smallest plan count (7) but highest impact — production-grade operational infrastructure
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -183,6 +231,7 @@
 | v1.1 | 44 | 4 | Smaller scope, audit-driven gap closure pattern repeated |
 | v1.2 | 67 | 6 | Gap closure phases (14.1, 18) as first-class workflow; deferred stretch goal |
 | v1.3 | 28 | 4 | Research-first docs; audit-driven gap closure phases fully mature |
+| v1.5 | 34 | 5 | Parallel worktree execution; production-grade infra (rate limiting, startup validation) |
 
 ### Cumulative Quality
 
@@ -192,6 +241,7 @@
 | v1.1 | ~220 | ~8,900 | ~9,250 |
 | v1.2 | 303 | ~8,170 | — |
 | v1.3 | 330 | ~8,500 | — |
+| v1.5 | 335+ | ~20,400 | — |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -200,3 +250,5 @@
 3. Pure static services are the right default for algorithmic code — verified across SymbolGraphDiffer, ChangeReviewer, FileHasher
 4. Seam-based test isolation (PipelineOverride, BuildOverride) enables comprehensive testing of expensive-dependency services — verified across v1.1, v1.2, and v1.3
 5. Research phases before documentation prevent hallucination — verified in v1.3 (ground truth data produced accurate docs)
+6. VERIFICATION.md should be created during phase execution, not retroactively — v1.5 had to validate all 5 phases post-hoc
+7. Parallel worktree execution is effective when file ownership is clearly separated — verified in v1.5 (Phase 24 Indexing ∥ Phase 25 McpServer)
