@@ -58,7 +58,7 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Feature | Reason |
 |---------|--------|
-| Cross-language edges (C# ↔ TypeScript) | Separate snapshots per language for v2.0; no integration needed |
+| Cross-language edges (C# <-> TypeScript) | Separate snapshots per language for v2.0; no integration needed |
 | TypeScript-specific model extensions | Natural mappings first; union/mapped/conditional types stored as strings |
 | Tree-sitter grammar approach | TypeScript Compiler API provides full type info; Tree-sitter is shallower |
 | Warm sidecar process pooling | Cold-start per ingestion is simpler and avoids memory leak risk |
@@ -71,32 +71,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | — | Pending |
-| SIDE-02 | — | Pending |
-| SIDE-03 | — | Pending |
-| SIDE-04 | — | Pending |
-| EXTR-01 | — | Pending |
-| EXTR-02 | — | Pending |
-| EXTR-03 | — | Pending |
-| EXTR-04 | — | Pending |
-| EXTR-05 | — | Pending |
-| EXTR-06 | — | Pending |
-| EXTR-07 | — | Pending |
-| EXTR-08 | — | Pending |
-| MCPI-01 | — | Pending |
-| MCPI-02 | — | Pending |
-| MCPI-03 | — | Pending |
-| MCPI-04 | — | Pending |
-| VERF-01 | — | Pending |
-| VERF-02 | — | Pending |
-| VERF-03 | — | Pending |
-| VERF-04 | — | Pending |
+| SIDE-01 | Phase 28 | Pending |
+| SIDE-02 | Phase 28 | Pending |
+| SIDE-03 | Phase 28 | Pending |
+| SIDE-04 | Phase 28 | Pending |
+| EXTR-01 | Phase 29 | Pending |
+| EXTR-02 | Phase 29 | Pending |
+| EXTR-03 | Phase 29 | Pending |
+| EXTR-04 | Phase 29 | Pending |
+| EXTR-05 | Phase 29 | Pending |
+| EXTR-06 | Phase 29 | Pending |
+| EXTR-07 | Phase 29 | Pending |
+| EXTR-08 | Phase 29 | Pending |
+| MCPI-01 | Phase 30 | Pending |
+| MCPI-02 | Phase 30 | Pending |
+| MCPI-03 | Phase 30 | Pending |
+| MCPI-04 | Phase 30 | Pending |
+| VERF-01 | Phase 31 | Pending |
+| VERF-02 | Phase 31 | Pending |
+| VERF-03 | Phase 31 | Pending |
+| VERF-04 | Phase 31 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-08 after roadmap creation*
