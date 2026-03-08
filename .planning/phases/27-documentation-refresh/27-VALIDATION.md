@@ -1,14 +1,14 @@
 ---
-phase: 23
-slug: dependency-foundation
+phase: 27
+slug: documentation-refresh
 status: approved
 nyquist_compliant: true
 wave_0_complete: true
-created: 2026-03-06
+created: 2026-03-08
 validated: 2026-03-08
 ---
 
-# Phase 23 — Validation Strategy
+# Phase 27 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 
@@ -19,8 +19,8 @@ validated: 2026-03-08
 | Property | Value |
 |----------|-------|
 | **Framework** | xUnit 2.9.3 + FluentAssertions 6.12.1 |
-| **Config file** | src/Directory.Build.props (shared build props) |
-| **Quick run command** | `dotnet restore src/DocAgentFramework.sln && dotnet build src/DocAgentFramework.sln` |
+| **Config file** | tests/DocAgent.Tests/DocAgent.Tests.csproj |
+| **Quick run command** | `dotnet build src/DocAgentFramework.sln` |
 | **Full suite command** | `dotnet test` |
 | **Estimated runtime** | ~60 seconds |
 
@@ -28,7 +28,7 @@ validated: 2026-03-08
 
 ## Sampling Rate
 
-- **After every task commit:** Run `dotnet restore src/DocAgentFramework.sln && dotnet build src/DocAgentFramework.sln`
+- **After every task commit:** Run `dotnet build src/DocAgentFramework.sln`
 - **After every plan wave:** Run `dotnet test`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 60 seconds
@@ -39,11 +39,7 @@ validated: 2026-03-08
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 23-01-01 | 01 | 1 | PKG-01 | smoke | `dotnet restore src/DocAgentFramework.sln 2>&1 \| grep -c NU1107` (expect 0) | N/A (restore) | ✅ green |
-| 23-01-02 | 01 | 1 | PKG-01 | smoke | `dotnet build src/DocAgentFramework.sln` | N/A (build) | ✅ green |
-| 23-01-03 | 01 | 1 | PKG-01 | regression | `dotnet test` | Existing suite | ✅ green |
-| 23-02-01 | 01 | 2 | PKG-02 | smoke | `dotnet restore src/DocAgentFramework.sln` (no NU190x errors) | N/A (restore) | ✅ green |
-| 23-02-02 | 01 | 2 | PKG-02 | regression | `dotnet test` | Existing suite | ✅ green |
+| 27-01-01 | 01 | 1 | OPS-01 | smoke | `dotnet build src/DocAgentFramework.sln` (build still passes) | N/A (docs) | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,7 +47,7 @@ validated: 2026-03-08
 
 ## Wave 0 Requirements
 
-Existing infrastructure covers all phase requirements. This phase is build configuration, not feature code. Validation is via restore/build/test commands, not new test files.
+Existing infrastructure covers all phase requirements. This phase is documentation only — no new code to test.
 
 ---
 
@@ -59,7 +55,11 @@ Existing infrastructure covers all phase requirements. This phase is build confi
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Package audit baseline recorded | PKG-02 | Baseline is a documentation artifact | Verify audit-baseline.txt exists after phase completion |
+| CLAUDE.md lists all 14 MCP tools | OPS-01 | Documentation content, not code behavior | Count `[McpServerTool]` attributes in source (expect 14), count tool entries in CLAUDE.md (expect 14), compare parameter signatures |
+| Parameter signatures match source | OPS-01 | Cross-reference exercise | For each tool entry in CLAUDE.md, verify parameter names/types/defaults match the `[McpServerTool]`-decorated method in source |
+| projectFilter documented | OPS-01 | Documentation completeness | Verify search_symbols and get_doc_coverage entries mention `project` parameter |
+
+**Note:** Phase 27 SUMMARY.md includes a verification checklist confirming all 14 tools documented, parameter signatures verified against source, and projectFilter documented. Manual verification was performed during execution.
 
 ---
 
