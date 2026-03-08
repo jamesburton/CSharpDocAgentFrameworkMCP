@@ -20,6 +20,34 @@ public sealed class DocAgentServerOptions
 
     /// <summary>Audit logging configuration.</summary>
     public AuditOptions Audit { get; set; } = new();
+
+    /// <summary>Rate limiting configuration for tool calls.</summary>
+    public RateLimitOptions RateLimit { get; set; } = new();
+}
+
+/// <summary>Token-bucket rate limiting configuration for MCP tool calls.</summary>
+public sealed class RateLimitOptions
+{
+    /// <summary>When false, rate limiting is disabled entirely.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Maximum tokens in the query bucket.</summary>
+    public int QueryTokenLimit { get; set; } = 100;
+
+    /// <summary>Tokens added to the query bucket per replenishment period.</summary>
+    public int QueryTokensPerPeriod { get; set; } = 100;
+
+    /// <summary>Replenishment period in seconds for the query bucket.</summary>
+    public int QueryReplenishmentPeriodSeconds { get; set; } = 60;
+
+    /// <summary>Maximum tokens in the ingestion bucket.</summary>
+    public int IngestionTokenLimit { get; set; } = 10;
+
+    /// <summary>Tokens added to the ingestion bucket per replenishment period.</summary>
+    public int IngestionTokensPerPeriod { get; set; } = 10;
+
+    /// <summary>Replenishment period in seconds for the ingestion bucket.</summary>
+    public int IngestionReplenishmentPeriodSeconds { get; set; } = 60;
 }
 
 /// <summary>Audit logging configuration options.</summary>

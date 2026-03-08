@@ -6,6 +6,7 @@ using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Filters;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Telemetry;
+using DocAgent.McpServer.RateLimiting;
 using DocAgent.McpServer.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,6 +37,9 @@ builder.Services.AddHostedService<StartupValidator>();
 // Security services
 builder.Services.AddSingleton<PathAllowlist>();
 builder.Services.AddSingleton<AuditLogger>();
+
+// Rate limiting — separate token buckets for query and ingestion tools
+builder.Services.AddSingleton<ToolRateLimiter>();
 
 // Health checks for Aspire probing
 builder.Services.AddHealthChecks();
@@ -73,7 +77,8 @@ builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
     .WithToolsFromAssembly()    // Discovers [McpServerToolType] classes in this assembly
-    .AddAuditFilter();          // From Filters/AuditFilter.cs — wraps every tool call
+    .AddRateLimitFilter()       // Rate limit first — reject early before work
+    .AddAuditFilter();          // Audit second — logs all calls including rate-limited
 
 var app = builder.Build();
 
