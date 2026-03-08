@@ -6,7 +6,7 @@
 - ✅ **v1.1 Semantic Diff & Change Intelligence** — Phases 9-12 (shipped 2026-03-01)
 - ✅ **v1.2 Multi-Project & Solution-Level Graphs** — Phases 13-18 (shipped 2026-03-02)
 - ✅ **v1.3 Housekeeping** — Phases 19-22 (shipped 2026-03-04)
-- 🚧 **v1.5 Robustness** — Phases 23-27 (in progress)
+- ✅ **v1.5 Robustness** — Phases 23-27 (shipped 2026-03-08)
 
 ## Phases
 
@@ -66,7 +66,7 @@ Full details: milestones/v1.3-ROADMAP.md
 
 </details>
 
-### 🚧 v1.5 Robustness (In Progress)
+### ✅ v1.5 Robustness (Shipped 2026-03-08)
 
 **Milestone Goal:** Harden the query pipeline, extend the tool surface, upgrade dependencies, and polish operational readiness — making DocAgentFramework production-grade.
 
@@ -76,7 +76,7 @@ Full details: milestones/v1.3-ROADMAP.md
 - [x] **Phase 24: Query Performance** — O(1) symbol lookup, edge index, metadata caching (completed 2026-03-08)
 - [x] **Phase 25: Server Infrastructure** — Startup validation and rate limiting (completed 2026-03-08)
 - [x] **Phase 26: API Extensions** — Pagination, find_implementations, get_doc_coverage tools (completed 2026-03-08)
-- [ ] **Phase 27: Documentation Refresh** — CLAUDE.md updated to 14-tool surface
+- [x] **Phase 27: Documentation Refresh** — CLAUDE.md updated to 14-tool surface (completed 2026-03-08)
 
 ## Phase Details
 
@@ -147,10 +147,10 @@ Plans:
   1. CLAUDE.md lists all 14 MCP tools (12 existing + find_implementations + get_doc_coverage) with their parameters, return shapes, and format options
   2. Each tool entry is verified against the actual `[McpServerTool]`-decorated method signatures in the codebase — no provisional or stale signatures
   3. The projectFilter parameter is documented for all tools that accept it
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 27-01-PLAN.md — Update CLAUDE.md with complete 14-tool MCP reference
+- [x] 27-01-PLAN.md — Update CLAUDE.md with complete 14-tool MCP reference (completed 2026-03-08)
 
 ## Progress
 
@@ -182,4 +182,4 @@ Plans:
 | 24. Query Performance | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 25. Server Infrastructure | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 26. API Extensions | v1.5 | 2/2 | Complete | 2026-03-08 |
-| 27. Documentation Refresh | v1.5 | 0/1 | Not started | - |
+| 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
