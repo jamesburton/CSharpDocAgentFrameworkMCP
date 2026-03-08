@@ -45,13 +45,14 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
             return QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>.Fail(QueryErrorKind.SnapshotMissing);
 
         var isStale = snapshot.ContentHash != latestHash;
+        var lookup = GetOrBuildLookup(snapshot);
 
         // Collect raw hits from the index, filtered and paginated
         var filtered = new List<SearchResultItem>();
         await foreach (var hit in _index.SearchAsync(query, ct).ConfigureAwait(false))
         {
             ct.ThrowIfCancellationRequested();
-            var node = await _index.GetAsync(hit.Id, ct).ConfigureAwait(false);
+            lookup.NodeById.TryGetValue(hit.Id, out var node);
             if (node is null)
                 continue;
             if (kindFilter.HasValue && node.Kind != kindFilter.Value)
@@ -95,26 +96,34 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
         if (node is null)
             return QueryResult<ResponseEnvelope<SymbolDetail>>.Fail(QueryErrorKind.NotFound, $"Symbol '{id.Value}' not found.");
 
-        // Build navigation hints from snapshot edges
+        var lookup = GetOrBuildLookup(snapshot);
+
+        // Build navigation hints from indexed edges
         SymbolId? parentId = null;
         var childIds = new List<SymbolId>();
         var relatedIds = new HashSet<SymbolId>();
 
-        foreach (var edge in snapshot.Edges)
+        // Edges where this symbol is the target (someone points TO us)
+        if (lookup.EdgesByTo.TryGetValue(id, out var incomingEdges))
         {
-            if (edge.Kind == SymbolEdgeKind.Contains)
+            foreach (var edge in incomingEdges)
             {
-                if (edge.To == id)
+                if (edge.Kind == SymbolEdgeKind.Contains)
                     parentId = edge.From;
-                else if (edge.From == id)
-                    childIds.Add(edge.To);
-            }
-            else
-            {
-                if (edge.From == id)
-                    relatedIds.Add(edge.To);
-                else if (edge.To == id)
+                else
                     relatedIds.Add(edge.From);
+            }
+        }
+
+        // Edges where this symbol is the source (we point FROM)
+        if (lookup.EdgesByFrom.TryGetValue(id, out var outgoingEdges))
+        {
+            foreach (var edge in outgoingEdges)
+            {
+                if (edge.Kind == SymbolEdgeKind.Contains)
+                    childIds.Add(edge.To);
+                else
+                    relatedIds.Add(edge.To);
             }
         }
 
@@ -226,17 +235,30 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
         if (error is not null || snapshot is null)
             yield break;
 
+        var lookup = GetOrBuildLookup(snapshot);
+
         // Verify symbol exists in the graph — throw if not found
-        bool symbolExists = snapshot.Nodes.Any(n => n.Id == id);
+        bool symbolExists = lookup.NodeById.ContainsKey(id);
         if (!symbolExists)
             throw new SymbolNotFoundException(id);
 
         // Bidirectional: return edges where symbol appears at either end
-        foreach (var edge in snapshot.Edges)
+        if (lookup.EdgesByFrom.TryGetValue(id, out var fromEdges))
         {
-            ct.ThrowIfCancellationRequested();
-            if (edge.From == id || edge.To == id)
+            foreach (var edge in fromEdges)
             {
+                ct.ThrowIfCancellationRequested();
+                if (crossProjectOnly && edge.Scope != EdgeScope.CrossProject)
+                    continue;
+                yield return edge;
+            }
+        }
+
+        if (lookup.EdgesByTo.TryGetValue(id, out var toEdges))
+        {
+            foreach (var edge in toEdges)
+            {
+                ct.ThrowIfCancellationRequested();
                 if (crossProjectOnly && edge.Scope != EdgeScope.CrossProject)
                     continue;
                 yield return edge;
