@@ -3,6 +3,7 @@ using DocAgent.Indexing;
 using DocAgent.Ingestion;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
+using DocAgent.McpServer.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -33,6 +34,8 @@ public static class DocAgentServiceCollectionExtensions
         services.AddSingleton<ISearchIndex>(sp => new BM25SearchIndex(GetDir(sp)));
         services.AddScoped<IKnowledgeQueryService, KnowledgeQueryService>();
         services.AddSingleton<IIngestionService, IngestionService>();
+        services.AddSingleton<TypeScriptIngestionService>();
+        services.AddHostedService<NodeAvailabilityValidator>();
         services.AddSingleton<SolutionIngestionService>();
         services.AddSingleton<ISolutionIngestionService, IncrementalSolutionIngestionService>();
 

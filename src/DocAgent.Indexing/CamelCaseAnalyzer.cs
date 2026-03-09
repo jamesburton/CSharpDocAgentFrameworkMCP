@@ -26,8 +26,8 @@ public sealed class CamelCaseAnalyzer : Analyzer
     internal sealed class CamelCaseTokenizer : Tokenizer
     {
         // Splits on:
-        //   - boundary between an uppercase run and a new uppercase+lowercase sequence (XML|Parser)
         //   - boundary between lowercase and uppercase (get|Ref)
+        //   - boundary between an uppercase run and a new uppercase+lowercase sequence (XML|Parser)
         private static readonly Regex SplitRegex = new(
             @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
             RegexOptions.Compiled);

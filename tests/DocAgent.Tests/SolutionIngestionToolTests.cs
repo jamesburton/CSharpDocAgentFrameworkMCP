@@ -1,4 +1,6 @@
 using System.Text.Json;
+using DocAgent.Indexing;
+using DocAgent.Ingestion;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
 using DocAgent.McpServer.Security;
@@ -6,6 +8,7 @@ using DocAgent.McpServer.Tools;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace DocAgent.Tests;
@@ -69,9 +72,17 @@ public sealed class SolutionIngestionToolTests
             allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
         }
 
+        var tsSvc = new TypeScriptIngestionService(
+            new SnapshotStore(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString())),
+            new Mock<DocAgent.Core.ISearchIndex>().Object,
+            allowlist,
+            Options.Create(new DocAgentServerOptions()),
+            NullLogger<TypeScriptIngestionService>.Instance);
+
         return new IngestionTools(
             new StubIngestionService(),
             solutionSvc ?? new StubSolutionIngestionService(DefaultResult),
+            tsSvc,
             allowlist,
             NullLogger<IngestionTools>.Instance);
     }

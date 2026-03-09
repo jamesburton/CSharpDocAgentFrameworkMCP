@@ -13,8 +13,8 @@ using ModelContextProtocol.Server;
 namespace DocAgent.McpServer.Tools;
 
 /// <summary>
-/// MCP tool handler for runtime ingestion of .NET projects and solutions.
-/// Validates path against the PathAllowlist before delegating to <see cref="IIngestionService"/>.
+/// MCP tool handler for runtime ingestion of .NET and TypeScript projects.
+/// Validates path against the PathAllowlist before delegating to ingestion services.
 /// </summary>
 [McpServerToolType]
 public sealed class IngestionTools
@@ -27,17 +27,20 @@ public sealed class IngestionTools
 
     private readonly IIngestionService _ingestionService;
     private readonly ISolutionIngestionService _solutionIngestionService;
+    private readonly TypeScriptIngestionService _typeScriptIngestionService;
     private readonly PathAllowlist _allowlist;
     private readonly ILogger<IngestionTools> _logger;
 
     public IngestionTools(
         IIngestionService ingestionService,
         ISolutionIngestionService solutionIngestionService,
+        TypeScriptIngestionService typeScriptIngestionService,
         PathAllowlist allowlist,
         ILogger<IngestionTools> logger)
     {
         _ingestionService = ingestionService;
         _solutionIngestionService = solutionIngestionService;
+        _typeScriptIngestionService = typeScriptIngestionService;
         _allowlist = allowlist;
         _logger = logger;
     }
@@ -75,7 +78,6 @@ public sealed class IngestionTools
         }
 
         // 3. Extract progress token — may be null if client did not supply one.
-        // Meta is a JsonObject; progressToken is stored under the "progressToken" key.
         var progressTokenNode = requestContext?.Params?.Meta?["progressToken"];
         var progressToken = progressTokenNode?.GetValue<string>();
 
@@ -233,6 +235,63 @@ public sealed class IngestionTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Solution ingestion failed for {Path}", absolutePath);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return ErrorJson("ingestion_failed", ex.Message);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tool: ingest_typescript
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "ingest_typescript")]
+    [Description("Ingest a TypeScript project (tsconfig.json), building a queryable symbol graph.")]
+    public async Task<string> IngestTypeScript(
+        ModelContextProtocol.Server.McpServer mcpServer,
+        RequestContext<CallToolRequestParams> requestContext,
+        [Description("Absolute path to tsconfig.json file")] string path,
+        CancellationToken cancellationToken = default)
+    {
+        using var activity = DocAgentTelemetry.Source.StartActivity(
+            "tool.ingest_typescript", ActivityKind.Internal);
+        activity?.SetTag("tool.name", "ingest_typescript");
+
+        if (string.IsNullOrWhiteSpace(path))
+            return ErrorJson("invalid_input", "path is required.");
+
+        var absolutePath = Path.GetFullPath(path);
+        if (!_allowlist.IsAllowed(absolutePath))
+        {
+            _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
+            activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+            return ErrorJson("access_denied", "Path is not in the configured allow list.");
+        }
+
+        try
+        {
+            var result = await _typeScriptIngestionService.IngestTypeScriptAsync(
+                absolutePath, cancellationToken).ConfigureAwait(false);
+
+            activity?.SetTag("tool.result.symbolCount", result.SymbolCount);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            return JsonSerializer.Serialize(new
+            {
+                snapshotId = result.SnapshotId,
+                symbolCount = result.SymbolCount,
+                durationMs = result.Duration.TotalMilliseconds,
+                warnings = result.Warnings,
+                indexError = result.IndexError,
+            }, s_jsonOptions);
+        }
+        catch (OperationCanceledException)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TypeScript ingestion failed for {Path}", absolutePath);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             return ErrorJson("ingestion_failed", ex.Message);
         }

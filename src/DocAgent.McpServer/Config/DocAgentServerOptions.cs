@@ -18,6 +18,15 @@ public sealed class DocAgentServerOptions
     /// <summary>Maximum seconds allowed for the ingestion pipeline. Default 300 (5 minutes).</summary>
     public int IngestionTimeoutSeconds { get; set; } = 300;
 
+    /// <summary>Path to the TypeScript sidecar directory (contains dist/index.js). Default: ./src/ts-symbol-extractor</summary>
+    public string? SidecarDir { get; set; }
+
+    /// <summary>Path to the Node.js executable. Default: node</summary>
+    public string NodeExecutable { get; set; } = "node";
+
+    /// <summary>File extensions to scan for TypeScript incremental hashing. Default: .ts,.tsx</summary>
+    public string[] TypeScriptFileExtensions { get; set; } = [".ts", ".tsx"];
+
     /// <summary>Audit logging configuration.</summary>
     public AuditOptions Audit { get; set; } = new();
 

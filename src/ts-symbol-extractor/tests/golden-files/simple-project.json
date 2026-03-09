@@ -1,0 +1,299 @@
+{
+  "schemaVersion": "1.0",
+  "projectName": "simple-project",
+  "sourceFingerprint": "ts-compiler",
+  "contentHash": null,
+  "createdAt": "2026-03-08T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "N:simple-project:src/index.ts:file",
+      "kind": 0,
+      "name": "src/index.ts",
+      "fullyQualifiedName": "src/index.ts",
+      "accessibility": 0,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 6,
+        "startColumn": 1,
+        "endLine": 40,
+        "endColumn": 1
+      },
+      "docComment": null,
+      "parameters": [],
+      "genericConstraints": [],
+      "nodeKind": 0
+    },
+    {
+      "id": "M:simple-project:src/index.ts:hello",
+      "kind": 2,
+      "name": "hello",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".hello",
+      "accessibility": 0,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 6,
+        "startColumn": 1,
+        "endLine": 8,
+        "endColumn": 2
+      },
+      "docComment": {
+        "summary": "This is a sample function.",
+        "remarks": null,
+        "params": {
+          "name": "The name to greet."
+        },
+        "typeParams": {},
+        "returns": "A greeting string.",
+        "example": null,
+        "throws": {},
+        "see": []
+      },
+      "parameters": [
+        {
+          "name": "name",
+          "typeName": "string",
+          "isOptional": false,
+          "defaultValue": null
+        }
+      ],
+      "genericConstraints": [],
+      "returnType": "string",
+      "nodeKind": 0
+    },
+    {
+      "id": "T:simple-project:src/index.ts:IGreeter",
+      "kind": 1,
+      "name": "IGreeter",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".IGreeter",
+      "accessibility": 0,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 10,
+        "startColumn": 1,
+        "endLine": 15,
+        "endColumn": 2
+      },
+      "docComment": null,
+      "parameters": [],
+      "genericConstraints": [],
+      "nodeKind": 0
+    },
+    {
+      "id": "M:simple-project:src/index.ts:IGreeter.greet",
+      "kind": 2,
+      "name": "greet",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".IGreeter.greet",
+      "accessibility": 1,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 14,
+        "startColumn": 3,
+        "endLine": 14,
+        "endColumn": 31
+      },
+      "docComment": {
+        "summary": "Greets someone.",
+        "remarks": null,
+        "params": {},
+        "typeParams": {},
+        "returns": null,
+        "example": null,
+        "throws": {},
+        "see": []
+      },
+      "parameters": [
+        {
+          "name": "name",
+          "typeName": "string",
+          "isOptional": false,
+          "defaultValue": null
+        }
+      ],
+      "genericConstraints": [],
+      "returnType": "string",
+      "nodeKind": 0
+    },
+    {
+      "id": "T:simple-project:src/index.ts:Greeter",
+      "kind": 1,
+      "name": "Greeter",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeter",
+      "accessibility": 0,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 20,
+        "startColumn": 1,
+        "endLine": 27,
+        "endColumn": 2
+      },
+      "docComment": {
+        "summary": "A class that greets people.",
+        "remarks": null,
+        "params": {},
+        "typeParams": {},
+        "returns": null,
+        "example": null,
+        "throws": {},
+        "see": []
+      },
+      "parameters": [],
+      "genericConstraints": [],
+      "nodeKind": 0
+    },
+    {
+      "id": "M:simple-project:src/index.ts:Greeter.greet",
+      "kind": 2,
+      "name": "greet",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeter.greet",
+      "accessibility": 1,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 24,
+        "startColumn": 3,
+        "endLine": 26,
+        "endColumn": 4
+      },
+      "docComment": {
+        "summary": "Greets someone.",
+        "remarks": null,
+        "params": {},
+        "typeParams": {},
+        "returns": null,
+        "example": null,
+        "throws": {},
+        "see": []
+      },
+      "parameters": [
+        {
+          "name": "name",
+          "typeName": "string",
+          "isOptional": false,
+          "defaultValue": null
+        }
+      ],
+      "genericConstraints": [],
+      "returnType": "string",
+      "nodeKind": 0
+    },
+    {
+      "id": "T:simple-project:src/index.ts:SpecialGreeter",
+      "kind": 1,
+      "name": "SpecialGreeter",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".SpecialGreeter",
+      "accessibility": 0,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 32,
+        "startColumn": 1,
+        "endLine": 39,
+        "endColumn": 2
+      },
+      "docComment": {
+        "summary": "A specialized greeter.",
+        "remarks": null,
+        "params": {},
+        "typeParams": {},
+        "returns": null,
+        "example": null,
+        "throws": {},
+        "see": []
+      },
+      "parameters": [],
+      "genericConstraints": [],
+      "nodeKind": 0
+    },
+    {
+      "id": "M:simple-project:src/index.ts:SpecialGreeter.greetSpecially",
+      "kind": 2,
+      "name": "greetSpecially",
+      "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".SpecialGreeter.greetSpecially",
+      "accessibility": 1,
+      "span": {
+        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "startLine": 36,
+        "startColumn": 3,
+        "endLine": 38,
+        "endColumn": 4
+      },
+      "docComment": {
+        "summary": "Greets someone specially.",
+        "remarks": null,
+        "params": {},
+        "typeParams": {},
+        "returns": null,
+        "example": null,
+        "throws": {},
+        "see": []
+      },
+      "parameters": [
+        {
+          "name": "name",
+          "typeName": "string",
+          "isOptional": false,
+          "defaultValue": null
+        }
+      ],
+      "genericConstraints": [],
+      "returnType": "string",
+      "nodeKind": 0
+    }
+  ],
+  "edges": [
+    {
+      "sourceId": "N:simple-project:src/index.ts:file",
+      "targetId": "M:simple-project:src/index.ts:hello",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "N:simple-project:src/index.ts:file",
+      "targetId": "T:simple-project:src/index.ts:IGreeter",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "T:simple-project:src/index.ts:IGreeter",
+      "targetId": "M:simple-project:src/index.ts:IGreeter.greet",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "N:simple-project:src/index.ts:file",
+      "targetId": "T:simple-project:src/index.ts:Greeter",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "T:simple-project:src/index.ts:Greeter",
+      "targetId": "M:simple-project:src/index.ts:Greeter.greet",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "T:simple-project:src/index.ts:Greeter",
+      "targetId": "T:simple-project:src/index.ts:IGreeter",
+      "kind": 2,
+      "scope": 0
+    },
+    {
+      "sourceId": "N:simple-project:src/index.ts:file",
+      "targetId": "T:simple-project:src/index.ts:SpecialGreeter",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "T:simple-project:src/index.ts:SpecialGreeter",
+      "targetId": "M:simple-project:src/index.ts:SpecialGreeter.greetSpecially",
+      "kind": 0,
+      "scope": 0
+    },
+    {
+      "sourceId": "T:simple-project:src/index.ts:SpecialGreeter",
+      "targetId": "T:simple-project:src/index.ts:Greeter",
+      "kind": 6,
+      "scope": 0
+    }
+  ],
+  "ingestionMetadata": null,
+  "solutionName": null
+}
