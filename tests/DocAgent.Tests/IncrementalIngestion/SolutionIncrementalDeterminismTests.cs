@@ -1,11 +1,13 @@
 using DocAgent.Core;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
+using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
 using FluentAssertions;
 using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace DocAgent.Tests.IncrementalIngestion;
 
@@ -47,7 +49,8 @@ public sealed class SolutionIncrementalDeterminismTests : IDisposable
         var fullService = new SolutionIngestionService(
             _store,
             new InMemorySearchIndex(),
-            NullLogger<SolutionIngestionService>.Instance);
+            NullLogger<SolutionIngestionService>.Instance,
+            Options.Create(new DocAgentServerOptions()));
 
         var incrementalService = new IncrementalSolutionIngestionService(
             _store,
@@ -108,10 +111,12 @@ public sealed class SolutionIncrementalDeterminismTests : IDisposable
                 .ToList();
 
             var perProjectSnapshots = projects.Select(p =>
-                new SymbolGraphSnapshot("1.2", p.Name, $"fp-{p.Name}", null, DateTimeOffset.UtcNow,
-                    nodes.Where(n => n.ProjectOrigin == p.Name).ToList(),
-                    edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList(),
-                    null, solutionName)).ToList();
+                new ProjectSnapshotSummary(
+                    ProjectName: p.Name,
+                    FilePath: null,
+                    NodeCount: nodes.Count(n => n.ProjectOrigin == p.Name),
+                    EdgeCount: edges.Count(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)),
+                    ContentHash: null)).ToList();
 
             var snapshot = new SolutionSnapshot(solutionName, projects, [], perProjectSnapshots, DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", solutionName, $"fp-{Guid.NewGuid():N}", null,
@@ -141,10 +146,12 @@ public sealed class SolutionIncrementalDeterminismTests : IDisposable
                 .ToList();
 
             var perProjectSnapshots = projects.Select(p =>
-                new SymbolGraphSnapshot("1.2", p.Name, $"fp-{p.Name}", null, DateTimeOffset.UtcNow,
-                    nodes.Where(n => n.ProjectOrigin == p.Name).ToList(),
-                    edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList(),
-                    null, solutionName)).ToList();
+                new ProjectSnapshotSummary(
+                    ProjectName: p.Name,
+                    FilePath: null,
+                    NodeCount: nodes.Count(n => n.ProjectOrigin == p.Name),
+                    EdgeCount: edges.Count(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)),
+                    ContentHash: null)).ToList();
 
             var snapshot = new SolutionSnapshot(solutionName, projects, [], perProjectSnapshots, DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", solutionName, $"fp-{Guid.NewGuid():N}", null,
@@ -267,8 +274,12 @@ public sealed class SolutionIncrementalDeterminismTests : IDisposable
             };
 
             var perProjectSnapshots = projects.Select(p =>
-                new SymbolGraphSnapshot("1.2", p.Name, $"fp-{p.Name}", null, DateTimeOffset.UtcNow,
-                    changedNodes.Where(n => n.ProjectOrigin == p.Name).ToList(), [], null, solutionName)).ToList();
+                new ProjectSnapshotSummary(
+                    ProjectName: p.Name,
+                    FilePath: null,
+                    NodeCount: changedNodes.Count(n => n.ProjectOrigin == p.Name),
+                    EdgeCount: 0,
+                    ContentHash: null)).ToList();
 
             var snapshot = new SolutionSnapshot(solutionName, projects, [], perProjectSnapshots, DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", solutionName, $"fp-changed", null,

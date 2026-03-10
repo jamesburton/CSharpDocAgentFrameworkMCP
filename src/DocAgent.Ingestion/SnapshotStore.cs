@@ -50,7 +50,7 @@ public sealed class SnapshotStore
 
         // 2. Compute XxHash128 over the stable bytes
         var hashBytes = XxHash128.Hash(bytesForHashing);
-        var hashHex = Convert.ToHexString(hashBytes).ToLowerInvariant();
+        var hashHex = Convert.ToHexStringLower(hashBytes);
 
         // 3. Create snapshot with ContentHash set
         var finalSnapshot = snapshot with { ContentHash = hashHex };

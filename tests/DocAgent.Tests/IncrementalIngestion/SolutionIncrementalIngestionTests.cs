@@ -2,9 +2,11 @@ using System.Text.Json;
 using DocAgent.Core;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
+using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace DocAgent.Tests.IncrementalIngestion;
@@ -38,7 +40,8 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         var fullService = new SolutionIngestionService(
             _store,
             new InMemorySearchIndex(),
-            NullLogger<SolutionIngestionService>.Instance);
+            NullLogger<SolutionIngestionService>.Instance,
+            Options.Create(new DocAgentServerOptions()));
 
         return new IncrementalSolutionIngestionService(
             _store,
@@ -114,16 +117,13 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
                     projectNodes.AddRange(nodes.Where(n => n.NodeKind == NodeKind.Stub));
                     stubsAssigned = true;
                 }
-                return new SymbolGraphSnapshot(
-                    SchemaVersion: "1.2",
+                var projectEdges = edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList();
+                return new ProjectSnapshotSummary(
                     ProjectName: p.Name,
-                    SourceFingerprint: $"fp-{p.Name}",
-                    ContentHash: null,
-                    CreatedAt: DateTimeOffset.UtcNow,
-                    Nodes: projectNodes,
-                    Edges: edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList(),
-                    IngestionMetadata: null,
-                    SolutionName: scenario.SolutionName);
+                    FilePath: null,
+                    NodeCount: projectNodes.Count,
+                    EdgeCount: projectEdges.Count,
+                    ContentHash: null);
             }).ToList();
 
             var snapshot = new SolutionSnapshot(
@@ -275,15 +275,12 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         var (first, second) = await RunTwoPassAsync(scenario);
 
         // Assert - INGEST-04 preservation: stubs present in both runs
-        var firstStubs = first.Snapshot!.ProjectSnapshots
-            .SelectMany(s => s.Nodes)
-            .Count(n => n.NodeKind == NodeKind.Stub);
-        var secondStubs = second.Snapshot!.ProjectSnapshots
-            .SelectMany(s => s.Nodes)
-            .Count(n => n.NodeKind == NodeKind.Stub);
+        // NodeCount includes both real nodes and stubs; verify ProjA summary has 2 (real + stub)
+        var firstTotalNodes = first.Snapshot!.ProjectSnapshots.Sum(s => s.NodeCount);
+        var secondTotalNodes = second.Snapshot!.ProjectSnapshots.Sum(s => s.NodeCount);
 
-        firstStubs.Should().Be(1);
-        secondStubs.Should().Be(firstStubs, "stubs should be preserved for skipped projects");
+        firstTotalNodes.Should().Be(2, "first run should have real node + stub node");
+        secondTotalNodes.Should().Be(firstTotalNodes, "stubs should be preserved for skipped projects");
     }
 
     [Fact]
@@ -336,16 +333,15 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
             }
 
             var perProjectSnapshots = projects.Select(p =>
-                new SymbolGraphSnapshot(
-                    SchemaVersion: "1.2",
+            {
+                var projectNodes = nodes.Where(n => n.ProjectOrigin == p.Name || n.NodeKind == NodeKind.Stub).ToList();
+                return new ProjectSnapshotSummary(
                     ProjectName: p.Name,
-                    SourceFingerprint: $"fp-{p.Name}",
-                    ContentHash: null,
-                    CreatedAt: DateTimeOffset.UtcNow,
-                    Nodes: nodes.Where(n => n.ProjectOrigin == p.Name || n.NodeKind == NodeKind.Stub).ToList(),
-                    Edges: [],
-                    IngestionMetadata: null,
-                    SolutionName: "TestSln")).ToList();
+                    FilePath: null,
+                    NodeCount: projectNodes.Count,
+                    EdgeCount: 0,
+                    ContentHash: null);
+            }).ToList();
 
             var snapshot = new SolutionSnapshot("TestSln", projects, [], perProjectSnapshots, DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", "TestSln", $"fp-{callCount}", null, DateTimeOffset.UtcNow,
@@ -362,15 +358,15 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         var second = await svc.IngestAsync("/path/TestSln.sln", null, CancellationToken.None);
 
         // Assert - INGEST-04 pruning: stub gone after ProjB removed
-        var firstStubs = first.Snapshot!.ProjectSnapshots
-            .SelectMany(s => s.Nodes)
-            .Count(n => n.NodeKind == NodeKind.Stub);
-        var secondStubs = second.Snapshot!.ProjectSnapshots
-            .SelectMany(s => s.Nodes)
-            .Count(n => n.NodeKind == NodeKind.Stub);
+        // First run: ProjA has 1 real node, ProjB has 1 real node + 1 stub = 2. Total = 3.
+        // Second run: only ProjA with 1 real node (no stubs). Total = 1.
+        var firstTotalNodes = first.Snapshot!.ProjectSnapshots.Sum(s => s.NodeCount);
+        var secondTotalNodes = second.Snapshot!.ProjectSnapshots.Sum(s => s.NodeCount);
 
-        firstStubs.Should().BeGreaterThan(0, "first run should have stubs");
-        secondStubs.Should().Be(0, "stubs should be pruned after referencing project removed");
+        firstTotalNodes.Should().BeGreaterThan(secondTotalNodes,
+            "first run should include stub nodes that are pruned after ProjB is removed");
+        second.Snapshot!.ProjectSnapshots.Sum(s => s.NodeCount).Should().Be(1,
+            "after ProjB removed, only ProjA's real node remains");
     }
 
     [Fact]
@@ -436,8 +432,12 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
             var nodes = projects.Select(p => MakeNode($"T:{p.Name}.Type", p.Name)).ToList();
 
             var perProjectSnapshots = projects.Select(p =>
-                new SymbolGraphSnapshot("1.2", p.Name, $"fp-{p.Name}", null, DateTimeOffset.UtcNow,
-                    nodes.Where(n => n.ProjectOrigin == p.Name).ToList(), [], null, "TestSln")).ToList();
+                new ProjectSnapshotSummary(
+                    ProjectName: p.Name,
+                    FilePath: null,
+                    NodeCount: nodes.Count(n => n.ProjectOrigin == p.Name),
+                    EdgeCount: 0,
+                    ContentHash: null)).ToList();
 
             var snapshot = new SolutionSnapshot("TestSln", projects, [], perProjectSnapshots, DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", "TestSln", $"fp-{callCount}", null, DateTimeOffset.UtcNow,
@@ -494,7 +494,7 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
             await File.WriteAllTextAsync(csFile, $"namespace {project.Name} {{ public class Type1 {{ }} }}");
         }
 
-        // Build per-project snapshots
+        // Build per-project snapshot summaries
         var stubsAssigned = false;
         var perProjectSnapshots = projects.Select(p =>
         {
@@ -504,10 +504,13 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
                 projectNodes.AddRange(nodes.Where(n => n.NodeKind == NodeKind.Stub));
                 stubsAssigned = true;
             }
-            return new SymbolGraphSnapshot("1.2", p.Name, $"fp-{p.Name}", null, DateTimeOffset.UtcNow,
-                projectNodes,
-                edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList(),
-                null, "Test");
+            var projectEdgesList = edges.Where(e => nodes.Any(n => n.Id == e.From && n.ProjectOrigin == p.Name)).ToList();
+            return new ProjectSnapshotSummary(
+                ProjectName: p.Name,
+                FilePath: null,
+                NodeCount: projectNodes.Count,
+                EdgeCount: projectEdgesList.Count,
+                ContentHash: null);
         }).ToList();
 
         // Save solution snapshot
@@ -540,7 +543,8 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
 
         // Create services
         var fullSvc = new SolutionIngestionService(
-            _store, new InMemorySearchIndex(), NullLogger<SolutionIngestionService>.Instance);
+            _store, new InMemorySearchIndex(), NullLogger<SolutionIngestionService>.Instance,
+            Options.Create(new DocAgentServerOptions()));
         var incrSvc = new IncrementalSolutionIngestionService(
             _store, fullSvc, NullLogger<IncrementalSolutionIngestionService>.Instance);
 
@@ -604,7 +608,7 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         {
             fullIngestCalled = true;
             var snapshot = new SolutionSnapshot("Test", projects, [], [
-                new SymbolGraphSnapshot("1.2", "ProjA", "fp-ProjA", null, DateTimeOffset.UtcNow, nodes, [], null, "Test")
+                new ProjectSnapshotSummary("ProjA", null, nodes.Count, 0, null)
             ], DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", "Test", "fp-new", null, DateTimeOffset.UtcNow, nodes, [], null, "Test");
             var saved = _store.SaveAsync(merged, ct: ct).GetAwaiter().GetResult();
@@ -644,9 +648,9 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         var result = await incrSvc.IngestAsync(slnPath, null, CancellationToken.None);
 
         // Assert: stubs preserved in the returned snapshot
+        // ProjA summary should count both the real node and the stub node (NodeCount = 2)
         result.Snapshot.Should().NotBeNull();
-        var allNodes = result.Snapshot!.ProjectSnapshots.SelectMany(s => s.Nodes).ToList();
-        allNodes.Should().Contain(n => n.NodeKind == NodeKind.Stub,
+        result.Snapshot!.ProjectSnapshots.Sum(s => s.NodeCount).Should().BeGreaterThan(1,
             "stubs from skipped projects must be preserved in production skip path");
         result.ProjectsSkippedCount.Should().Be(1);
     }
@@ -659,7 +663,8 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
         await File.WriteAllTextAsync(slnPath, "# fake sln");
 
         var fullSvc = new SolutionIngestionService(
-            _store, new InMemorySearchIndex(), NullLogger<SolutionIngestionService>.Instance);
+            _store, new InMemorySearchIndex(), NullLogger<SolutionIngestionService>.Instance,
+            Options.Create(new DocAgentServerOptions()));
         var incrSvc = new IncrementalSolutionIngestionService(
             _store, fullSvc, NullLogger<IncrementalSolutionIngestionService>.Instance);
 
@@ -677,7 +682,7 @@ public sealed class SolutionIncrementalIngestionTests : IDisposable
             fullIngestCalled = true;
             var nodes = new List<SymbolNode> { MakeNode("T:ProjA.TypeA", "ProjA") };
             var snapshot = new SolutionSnapshot("Test", projects, [],
-                [new SymbolGraphSnapshot("1.2", "ProjA", "fp", null, DateTimeOffset.UtcNow, nodes, [], null, "Test")],
+                [new ProjectSnapshotSummary("ProjA", null, nodes.Count, 0, null)],
                 DateTimeOffset.UtcNow);
             var merged = new SymbolGraphSnapshot("1.2", "Test", "fp", null, DateTimeOffset.UtcNow, nodes, [], null, "Test");
             var saved = _store.SaveAsync(merged, ct: ct).GetAwaiter().GetResult();

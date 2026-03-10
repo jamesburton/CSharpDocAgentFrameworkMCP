@@ -1,8 +1,28 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>docagent</ToolCommandName>
+    <PackageId>DocAgent.McpServer</PackageId>
+    <Version>2.1.0</Version>
+    <Authors>James</Authors>
+    <Description>Polyglot Documentation Agent MCP Server for .NET and TypeScript.</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Include the built sidecar in the package -->
+    <Content Include="..\ts-symbol-extractor\dist\**\*.*">
+      <Pack>true</Pack>
+      <PackagePath>tools\net10.0\any\ts-symbol-extractor\dist</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\ts-symbol-extractor\package.json">
+      <Pack>true</Pack>
+      <PackagePath>tools\net10.0\any\ts-symbol-extractor</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DocAgent.Core\DocAgent.Core.csproj" />
     <ProjectReference Include="..\DocAgent.Ingestion\DocAgent.Ingestion.csproj" />
@@ -15,6 +35,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Build.Locator" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />

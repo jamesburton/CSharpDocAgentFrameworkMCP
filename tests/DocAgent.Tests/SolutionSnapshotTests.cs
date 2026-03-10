@@ -89,11 +89,24 @@ public class SolutionSnapshotTests
         var snapshotA = BuildMinimalSnapshot("ProjectA");
         var snapshotB = BuildMinimalSnapshot("ProjectB");
 
+        var summaryA = new ProjectSnapshotSummary(
+            ProjectName: snapshotA.ProjectName,
+            FilePath: null,
+            NodeCount: snapshotA.Nodes.Count,
+            EdgeCount: snapshotA.Edges.Count,
+            ContentHash: snapshotA.ContentHash);
+        var summaryB = new ProjectSnapshotSummary(
+            ProjectName: snapshotB.ProjectName,
+            FilePath: null,
+            NodeCount: snapshotB.Nodes.Count,
+            EdgeCount: snapshotB.Edges.Count,
+            ContentHash: snapshotB.ContentHash);
+
         var solution = new SolutionSnapshot(
             SolutionName: "MySolution",
             Projects: [projectA, projectB],
             ProjectDependencies: [edge],
-            ProjectSnapshots: [snapshotA, snapshotB],
+            ProjectSnapshots: [summaryA, summaryB],
             CreatedAt: DateTimeOffset.UtcNow);
 
         solution.Projects.Count.Should().Be(2);
@@ -111,11 +124,24 @@ public class SolutionSnapshotTests
         var snapshotA = BuildMinimalSnapshot("ProjectA");
         var snapshotB = BuildMinimalSnapshot("ProjectB");
 
+        var summaryA2 = new ProjectSnapshotSummary(
+            ProjectName: snapshotA.ProjectName,
+            FilePath: null,
+            NodeCount: snapshotA.Nodes.Count,
+            EdgeCount: snapshotA.Edges.Count,
+            ContentHash: snapshotA.ContentHash);
+        var summaryB2 = new ProjectSnapshotSummary(
+            ProjectName: snapshotB.ProjectName,
+            FilePath: null,
+            NodeCount: snapshotB.Nodes.Count,
+            EdgeCount: snapshotB.Edges.Count,
+            ContentHash: snapshotB.ContentHash);
+
         var solution = new SolutionSnapshot(
             SolutionName: "MySolution",
             Projects: [projectA, projectB],
             ProjectDependencies: [edge],
-            ProjectSnapshots: [snapshotA, snapshotB],
+            ProjectSnapshots: [summaryA2, summaryB2],
             CreatedAt: new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero));
 
         byte[] bytes = MessagePackSerializer.Serialize(solution, Options);

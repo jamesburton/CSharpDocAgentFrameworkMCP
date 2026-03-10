@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using DocAgent.Core;
@@ -27,15 +28,18 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
     private readonly XmlDocParser _parser;
     private readonly InheritDocResolver _inheritDocResolver;
     private readonly Action<string>? _logWarning;
+    private readonly Func<string, bool>? _shouldSkipSourceFile;
 
     public RoslynSymbolGraphBuilder(
         XmlDocParser parser,
         InheritDocResolver inheritDocResolver,
-        Action<string>? logWarning = null)
+        Action<string>? logWarning = null,
+        Func<string, bool>? shouldSkipSourceFile = null)
     {
         _parser = parser;
         _inheritDocResolver = inheritDocResolver;
         _logWarning = logWarning;
+        _shouldSkipSourceFile = shouldSkipSourceFile;
     }
 
     /// <inheritdoc />
@@ -108,7 +112,8 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
             // Build a lookup table of doc-comment-id → raw XML for InheritDoc resolution
             var docXmlById = BuildDocXmlLookup(compilation);
 
-            WalkNamespace(compilation.GlobalNamespace, allNodes, allEdges, docXmlById);
+            var knownIds = new HashSet<SymbolId>();
+            WalkNamespace(compilation.GlobalNamespace, allNodes, knownIds, allEdges, docXmlById);
         }
         finally
         {
@@ -122,6 +127,7 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
     private void WalkNamespace(
         INamespaceSymbol ns,
         List<SymbolNode> nodes,
+        HashSet<SymbolId> knownIds,
         List<SymbolEdge> edges,
         IReadOnlyDictionary<string, string> docXmlById)
     {
@@ -139,22 +145,32 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
                 {
                     var parentId = GetSymbolId(ns);
                     // Only add Contains edge if parent is a non-global namespace
-                    if (!ns.IsGlobalNamespace && IsKnownNode(nodes, parentId))
+                    if (!ns.IsGlobalNamespace && knownIds.Contains(parentId))
                     {
                         edges.Add(new SymbolEdge(parentId, nsNode.Id, SymbolEdgeKind.Contains));
                     }
                     nodes.Add(nsNode);
+                    knownIds.Add(nsNode.Id);
                 }
 
-                WalkNamespace(childNs, nodes, edges, docXmlById);
+                WalkNamespace(childNs, nodes, knownIds, edges, docXmlById);
             }
             else if (member is INamedTypeSymbol typeSymbol)
             {
                 if (!IsIncluded(typeSymbol.DeclaredAccessibility))
                     continue;
 
+                // Test file filter: skip types declared in test source files
+                if (_shouldSkipSourceFile is not null)
+                {
+                    var loc = typeSymbol.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree?.FilePath;
+                    if (loc is not null && _shouldSkipSourceFile(loc))
+                        continue;
+                }
+
                 var typeNode = CreateSymbolNode(typeSymbol, docXmlById);
                 nodes.Add(typeNode);
+                knownIds.Add(typeNode.Id);
 
                 // Contains edge from namespace (skip global namespace)
                 if (!ns.IsGlobalNamespace)
@@ -163,7 +179,7 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
                     edges.Add(new SymbolEdge(nsId, typeNode.Id, SymbolEdgeKind.Contains));
                 }
 
-                WalkType(typeSymbol, typeNode.Id, nodes, edges, docXmlById);
+                WalkType(typeSymbol, typeNode.Id, nodes, knownIds, edges, docXmlById);
             }
         }
     }
@@ -174,6 +190,7 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
         INamedTypeSymbol type,
         SymbolId typeId,
         List<SymbolNode> nodes,
+        HashSet<SymbolId> knownIds,
         List<SymbolEdge> edges,
         IReadOnlyDictionary<string, string> docXmlById)
     {
@@ -207,8 +224,9 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
 
             var nestedNode = CreateSymbolNode(nested, docXmlById);
             nodes.Add(nestedNode);
+            knownIds.Add(nestedNode.Id);
             edges.Add(new SymbolEdge(typeId, nestedNode.Id, SymbolEdgeKind.Contains));
-            WalkType(nested, nestedNode.Id, nodes, edges, docXmlById);
+            WalkType(nested, nestedNode.Id, nodes, knownIds, edges, docXmlById);
         }
 
         // Members: methods, properties, fields, events, constructors, operators, indexers
@@ -227,6 +245,7 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
 
             var memberNode = CreateSymbolNode(member, docXmlById);
             nodes.Add(memberNode);
+            knownIds.Add(memberNode.Id);
             edges.Add(new SymbolEdge(typeId, memberNode.Id, SymbolEdgeKind.Contains));
 
             // Additional semantic edges per member kind
@@ -637,11 +656,6 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
             dict[id] = xml;
     }
 
-    // ── Helper: check if node already tracked ────────────────────────────────
-
-    private static bool IsKnownNode(List<SymbolNode> nodes, SymbolId id)
-        => nodes.Any(n => n.Id == id);
-
     // ── Source fingerprint ───────────────────────────────────────────────────
 
     private static string ComputeSourceFingerprint(IReadOnlyList<string> projectFiles)
@@ -663,7 +677,14 @@ public sealed class RoslynSymbolGraphBuilder : ISymbolGraphBuilder
             sb.Append('|');
         }
 
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
+        var str = sb.ToString();
+        var maxBytes = Encoding.UTF8.GetMaxByteCount(str.Length);
+        byte[]? rented = maxBytes > 512 ? ArrayPool<byte>.Shared.Rent(maxBytes) : null;
+        Span<byte> inputBuf = rented is not null ? rented.AsSpan(0, maxBytes) : stackalloc byte[maxBytes];
+        var written = Encoding.UTF8.GetBytes(str.AsSpan(), inputBuf);
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.TryHashData(inputBuf[..written], hash, out _);
+        if (rented is not null) ArrayPool<byte>.Shared.Return(rented);
+        return Convert.ToHexStringLower(hash);
     }
 }

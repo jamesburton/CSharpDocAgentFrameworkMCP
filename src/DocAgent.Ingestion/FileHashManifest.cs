@@ -16,8 +16,7 @@ public sealed record ManifestDiff(
 {
     public bool HasChanges => AddedFiles.Count > 0 || ModifiedFiles.Count > 0 || RemovedFiles.Count > 0;
 
-    public IReadOnlyList<string> ChangedFiles =>
-        AddedFiles.Concat(ModifiedFiles).ToList();
+    public IReadOnlyList<string> ChangedFiles { get; } = AddedFiles.Concat(ModifiedFiles).ToList();
 }
 
 public static class FileHasher
@@ -32,7 +31,7 @@ public static class FileHasher
     {
         await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
         var hashBytes = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+        return Convert.ToHexStringLower(hashBytes);
     }
 
     public static async Task<FileHashManifest> ComputeManifestAsync(

@@ -1,9 +1,11 @@
 using BenchmarkDotNet.Attributes;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
+using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DocAgent.Benchmarks;
 
@@ -36,7 +38,7 @@ public class SolutionIngestionBenchmarks
         var index = new InMemorySearchIndex();
         var fullLogger = LoggerFactory.Create(b => b.AddConsole())
             .CreateLogger<SolutionIngestionService>();
-        var fullService = new SolutionIngestionService(store, index, fullLogger);
+        var fullService = new SolutionIngestionService(store, index, fullLogger, Options.Create(new DocAgentServerOptions()));
         var incrLogger = LoggerFactory.Create(b => b.AddConsole())
             .CreateLogger<IncrementalSolutionIngestionService>();
         _service = new IncrementalSolutionIngestionService(store, fullService, incrLogger);

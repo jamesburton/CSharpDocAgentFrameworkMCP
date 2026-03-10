@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using DocAgent.Core;
 
@@ -9,6 +10,8 @@ namespace DocAgent.Ingestion;
 /// </summary>
 public sealed class XmlDocParser
 {
+    private static readonly Regex s_whitespace =
+        new(@"\s+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     /// <summary>
     /// Parse a single symbol's XML doc comment into a DocComment.
     /// <paramref name="xmlContent"/> is the raw XML from ISymbol.GetDocumentationCommentXml().
@@ -116,7 +119,7 @@ public sealed class XmlDocParser
             .Select(t => t.Value));
 
         // Normalize whitespace: collapse runs of whitespace to single space, trim ends
-        var normalized = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        var normalized = s_whitespace.Replace(text, " ").Trim();
         return normalized.Length == 0 ? null : normalized;
     }
 }

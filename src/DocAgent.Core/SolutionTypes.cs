@@ -12,12 +12,24 @@ public sealed record ProjectEdge(
     string To);
 
 /// <summary>
-/// Top-level aggregate that holds per-project symbol graph snapshots and the project dependency DAG.
+/// Lightweight metadata-only summary of a per-project snapshot.
+/// Replaces storing the full <see cref="SymbolGraphSnapshot"/> in the solution snapshot,
+/// avoiding triple in-memory accumulation for large solutions.
+/// </summary>
+public sealed record ProjectSnapshotSummary(
+    string ProjectName,
+    string? FilePath,
+    int NodeCount,
+    int EdgeCount,
+    string? ContentHash);
+
+/// <summary>
+/// Top-level aggregate that holds per-project snapshot summaries and the project dependency DAG.
 /// Enables solution-level MCP tools and cross-project analysis.
 /// </summary>
 public sealed record SolutionSnapshot(
     string? SolutionName,
     IReadOnlyList<ProjectEntry> Projects,
     IReadOnlyList<ProjectEdge> ProjectDependencies,
-    IReadOnlyList<SymbolGraphSnapshot> ProjectSnapshots,
+    IReadOnlyList<ProjectSnapshotSummary> ProjectSnapshots,
     DateTimeOffset CreatedAt);

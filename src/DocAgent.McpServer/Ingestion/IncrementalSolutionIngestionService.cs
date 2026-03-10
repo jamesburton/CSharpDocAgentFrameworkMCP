@@ -167,7 +167,7 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
             {
                 var proj = previousSnapshot.Projects.First(p => p.Name == name);
                 var nodeCount = previousSnapshot.ProjectSnapshots
-                    .FirstOrDefault(s => s.ProjectName == name)?.Nodes.Count;
+                    .FirstOrDefault(s => s.ProjectName == name)?.NodeCount;
                 return new ProjectIngestionStatus(
                     Name: name,
                     FilePath: proj.Path,
@@ -182,8 +182,8 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
                 SolutionName: solutionName,
                 TotalProjectCount: previousSnapshot.Projects.Count,
                 IngestedProjectCount: 0,
-                TotalNodeCount: previousSnapshot.ProjectSnapshots.Sum(s => s.Nodes.Count),
-                TotalEdgeCount: previousSnapshot.ProjectSnapshots.Sum(s => s.Edges.Count),
+                TotalNodeCount: previousSnapshot.ProjectSnapshots.Sum(s => s.NodeCount),
+                TotalEdgeCount: previousSnapshot.ProjectSnapshots.Sum(s => s.EdgeCount),
                 Duration: sw.Elapsed,
                 Projects: projectStatuses,
                 Warnings: warnings.AsReadOnly(),
@@ -309,8 +309,6 @@ public sealed class IncrementalSolutionIngestionService : ISolutionIngestionServ
                 .Where(p => !string.IsNullOrEmpty(p))
                 .ToList();
 
-            var projectSnapshot = snapshot.ProjectSnapshots
-                .FirstOrDefault(s => s.ProjectName == project.Name);
             string? chosenTfm = null; // TFM info not available in SolutionSnapshot
 
             var manifest = await SolutionManifestStore.ComputeProjectManifestAsync(

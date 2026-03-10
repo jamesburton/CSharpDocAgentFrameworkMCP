@@ -5,9 +5,11 @@ using System.Text.RegularExpressions;
 using DocAgent.Core;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
+using DocAgent.McpServer.Config;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using CoreSymbolKind = DocAgent.Core.SymbolKind;
 
 namespace DocAgent.McpServer.Ingestion;
@@ -24,6 +26,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
     private readonly SnapshotStore _store;
     private readonly ISearchIndex _index;
     private readonly ILogger<SolutionIngestionService> _logger;
+    private readonly DocAgentServerOptions _options;
 
     // Optional injectable pipeline for testing. When set, bypasses real MSBuild entirely.
     // Receives (slnPath, warnings, ct) and returns the final SolutionIngestionResult.
@@ -69,11 +72,13 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
     public SolutionIngestionService(
         SnapshotStore store,
         ISearchIndex index,
-        ILogger<SolutionIngestionService> logger)
+        ILogger<SolutionIngestionService> logger,
+        IOptions<DocAgentServerOptions> options)
     {
         _store = store;
         _index = index;
         _logger = logger;
+        _options = options.Value;
     }
 
     /// <inheritdoc />
@@ -97,14 +102,20 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         var allNodes = new List<SymbolNode>();
         var allEdges = new List<SymbolEdge>();
 
-        // SolutionSnapshot accumulators
+        // SolutionSnapshot accumulators — use lightweight summaries instead of full snapshots
         var projectEntries = new List<ProjectEntry>();
         var projectEdges = new List<ProjectEdge>();
-        var perProjectSnapshots = new List<SymbolGraphSnapshot>();
+        var projectMetas = new List<ProjectSnapshotSummary>();
 
         // Stub node accumulators — shared across all projects to deduplicate across project boundaries
         var stubNodes = new List<SymbolNode>();
         var seenStubIds = new HashSet<string>(StringComparer.Ordinal);
+
+        // Build test file filter from options
+        var testSuffixes = _options.TestFileSuffixes ?? TestFileFilter.DefaultTestSuffixes;
+        Func<string, bool>? skipFile = _options.ExcludeTestFiles
+            ? f => TestFileFilter.ShouldSkipSourceFile(f, testSuffixes)
+            : null;
 
         // Stage 1 — Open solution
         if (reportProgress is not null)
@@ -136,6 +147,12 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
                 Projects: Array.Empty<ProjectIngestionStatus>(),
                 Warnings: warnings.AsReadOnly());
         }
+
+        // Timeout guard: wrap all project processing under a linked cancellation token
+        var timeoutSecs = _options.IngestionTimeoutSeconds > 0 ? _options.IngestionTimeoutSeconds : 1800;
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSecs));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var ct = linkedCts.Token;
 
         // Stage 2 — Deduplicate multi-targeted projects and process
         if (reportProgress is not null)
@@ -190,11 +207,13 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
         var parser = new XmlDocParser();
         var resolver = new InheritDocResolver();
-        var builder = new RoslynSymbolGraphBuilder(parser, resolver, logWarning: w => warnings.Add(w));
+        var builder = new RoslynSymbolGraphBuilder(parser, resolver,
+            logWarning: w => warnings.Add(w),
+            shouldSkipSourceFile: skipFile);
 
         foreach (var project in chosenProjects)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            ct.ThrowIfCancellationRequested();
 
             var filePath = project.FilePath ?? string.Empty;
             var projectName = string.IsNullOrEmpty(filePath)
@@ -232,7 +251,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             Compilation? compilation;
             try
             {
-                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+                compilation = await project.GetCompilationAsync(ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -262,14 +281,39 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             // Walk the namespace tree via the shared builder
             var projectNodes = new List<SymbolNode>();
             var projectEdgesLocal = new List<SymbolEdge>();
-            var ctx = new ProjectWalkContext(projectName, solutionProjectNames, stubNodes, seenStubIds);
-            await WalkCompilationAsync(builder, compilation, projectNodes, projectEdgesLocal, in ctx, cancellationToken)
+            var ctx = new ProjectWalkContext(projectName, solutionProjectNames, stubNodes, seenStubIds, skipFile);
+            await WalkCompilationAsync(builder, compilation, projectNodes, projectEdgesLocal, in ctx, ct)
                 .ConfigureAwait(false);
+
+            // Release compilation reference to allow GC to reclaim memory before next project
+            compilation = null;
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: false);
 
             // Stamp ProjectOrigin on every node
             var stampedNodes = projectNodes
                 .Select(n => n with { ProjectOrigin = projectName })
                 .ToList();
+
+            // Per-project checkpoint save — ensures partial recovery if OOM occurs mid-loop
+            var projectSnapshot = new SymbolGraphSnapshot(
+                SchemaVersion: "1.2",
+                ProjectName: projectName,
+                SourceFingerprint: ComputeFingerprint(filePath),
+                ContentHash: null,
+                CreatedAt: DateTimeOffset.UtcNow,
+                Nodes: SymbolSorter.SortNodes(stampedNodes),
+                Edges: SymbolSorter.SortEdges(projectEdgesLocal),
+                IngestionMetadata: null,
+                SolutionName: solutionName);
+            var savedProject = await _store.SaveAsync(projectSnapshot, ct: ct).ConfigureAwait(false);
+
+            // Record lightweight summary instead of keeping the full snapshot in memory
+            projectMetas.Add(new ProjectSnapshotSummary(
+                ProjectName: projectName,
+                FilePath: filePath,
+                NodeCount: stampedNodes.Count,
+                EdgeCount: projectEdgesLocal.Count,
+                ContentHash: savedProject.ContentHash));
 
             allNodes.AddRange(stampedNodes);
             allEdges.AddRange(projectEdgesLocal);
@@ -286,19 +330,6 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             }
 
             projectEntries.Add(new ProjectEntry(projectName, filePath, directDeps.AsReadOnly()));
-
-            // Build per-project SymbolGraphSnapshot
-            var perProjectSnapshot = new SymbolGraphSnapshot(
-                SchemaVersion: "1.2",
-                ProjectName: projectName,
-                SourceFingerprint: ComputeFingerprint(filePath),
-                ContentHash: null,
-                CreatedAt: DateTimeOffset.UtcNow,
-                Nodes: SymbolSorter.SortNodes(stampedNodes),
-                Edges: SymbolSorter.SortEdges(projectEdgesLocal),
-                IngestionMetadata: null,
-                SolutionName: solutionName);
-            perProjectSnapshots.Add(perProjectSnapshot);
 
             statuses.Add(new ProjectIngestionStatus(
                 Name: projectName,
@@ -337,7 +368,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             IngestionMetadata: null,
             SolutionName: solutionName);
 
-        var saved = await _store.SaveAsync(snapshot, ct: cancellationToken).ConfigureAwait(false);
+        var saved = await _store.SaveAsync(snapshot, ct: ct).ConfigureAwait(false);
 
         // Stage 4 — Index (soft failure — snapshot already saved)
         if (reportProgress is not null)
@@ -345,7 +376,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
         try
         {
-            await _index.IndexAsync(saved, cancellationToken, forceReindex: false).ConfigureAwait(false);
+            await _index.IndexAsync(saved, ct, forceReindex: false).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -358,12 +389,12 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
         var ingestedCount = statuses.Count(s => s.Status == "ok");
 
-        // Build SolutionSnapshot
+        // Build SolutionSnapshot with lightweight per-project summaries
         var solutionSnapshot = new SolutionSnapshot(
             SolutionName: solutionName,
             Projects: projectEntries.AsReadOnly(),
             ProjectDependencies: projectEdges.AsReadOnly(),
-            ProjectSnapshots: perProjectSnapshots.AsReadOnly(),
+            ProjectSnapshots: projectMetas.AsReadOnly(),
             CreatedAt: DateTimeOffset.UtcNow);
 
         return new SolutionIngestionResult(
@@ -421,6 +452,14 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
             {
                 if (!IsIncluded(typeSymbol.DeclaredAccessibility))
                     continue;
+
+                // Test file filter: skip types declared in test source files
+                if (ctx.SkipFile is not null)
+                {
+                    var loc = typeSymbol.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree?.FilePath;
+                    if (loc is not null && ctx.SkipFile(loc))
+                        continue;
+                }
 
                 var typeNode = CreateSimpleNode(typeSymbol);
                 nodes.Add(typeNode);
@@ -641,7 +680,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         sb.Append(':');
         sb.Append(DateTimeOffset.UtcNow.Ticks);
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
+        return Convert.ToHexStringLower(bytes);
     }
 
     // ── Inner types ──────────────────────────────────────────────────────────
@@ -655,5 +694,6 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
         string ProjectName,
         HashSet<string> SolutionProjectNames,
         List<SymbolNode> StubNodes,
-        HashSet<string> SeenStubIds);
+        HashSet<string> SeenStubIds,
+        Func<string, bool>? SkipFile = null);
 }

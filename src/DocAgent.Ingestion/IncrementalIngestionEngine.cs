@@ -121,8 +121,10 @@ public sealed class IncrementalIngestionEngine
                 .Where(n => !IsNodeInProjectDirs(n, changedProjectDirs))
                 .ToList();
 
+            var nodeById = previousSnapshot.Nodes.ToDictionary(n => n.Id);
+
             var preservedEdges = previousSnapshot.Edges
-                .Where(e => !IsEdgeInProjectDirs(e, previousSnapshot.Nodes, changedProjectDirs))
+                .Where(e => !IsEdgeInProjectDirs(e, nodeById, changedProjectDirs))
                 .ToList();
 
             // Combine and deduplicate by SymbolId (new wins over old)
@@ -251,12 +253,11 @@ public sealed class IncrementalIngestionEngine
 
     private static bool IsEdgeInProjectDirs(
         SymbolEdge edge,
-        IReadOnlyList<SymbolNode> nodes,
+        Dictionary<SymbolId, SymbolNode> nodeById,
         HashSet<string> projectDirs)
     {
-        // An edge is considered "from changed project" if either endpoint node is in a changed project dir
-        var fromNode = nodes.FirstOrDefault(n => n.Id == edge.From);
-        if (fromNode is not null && IsNodeInProjectDirs(fromNode, projectDirs))
+        // An edge is considered "from changed project" if the source endpoint node is in a changed project dir
+        if (nodeById.TryGetValue(edge.From, out var fromNode) && IsNodeInProjectDirs(fromNode, projectDirs))
             return true;
 
         return false;

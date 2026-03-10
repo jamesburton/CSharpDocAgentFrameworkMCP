@@ -15,8 +15,14 @@ public sealed class DocAgentServerOptions
     /// <summary>Root directory for snapshot and index artifacts. Default: ./artifacts</summary>
     public string? ArtifactsDir { get; set; }
 
-    /// <summary>Maximum seconds allowed for the ingestion pipeline. Default 300 (5 minutes).</summary>
-    public int IngestionTimeoutSeconds { get; set; } = 300;
+    /// <summary>Maximum seconds allowed for the ingestion pipeline. Default 1800 (30 minutes).</summary>
+    public int IngestionTimeoutSeconds { get; set; } = 1800;
+
+    /// <summary>When true, skip test class files during ingestion. Base* files are always included.</summary>
+    public bool ExcludeTestFiles { get; set; } = true;
+
+    /// <summary>File name suffixes (no extension) treated as test files. Null = use defaults.</summary>
+    public string[]? TestFileSuffixes { get; set; }
 
     /// <summary>Path to the TypeScript sidecar directory (contains dist/index.js). Default: ./src/ts-symbol-extractor</summary>
     public string? SidecarDir { get; set; }
