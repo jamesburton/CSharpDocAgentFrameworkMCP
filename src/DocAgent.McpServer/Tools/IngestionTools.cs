@@ -1,10 +1,12 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Telemetry;
+using Microsoft.Build.Locator;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Protocol;
@@ -60,53 +62,48 @@ public sealed class IngestionTools
         [Description("Force re-index even if snapshot is current")] bool forceReindex = false,
         CancellationToken cancellationToken = default)
     {
-        using var activity = DocAgentTelemetry.Source.StartActivity(
-            "tool.ingest_project", ActivityKind.Internal);
-        activity?.SetTag("tool.name", "ingest_project");
-
-        // 1. Validate path is not null/empty.
-        if (string.IsNullOrWhiteSpace(path))
-            return ErrorJson("invalid_input", "path is required.");
-
-        // 2. PathAllowlist check — fail fast before any pipeline work.
-        var absolutePath = Path.GetFullPath(path);
-        if (!_allowlist.IsAllowed(absolutePath))
-        {
-            _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
-            activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
-            return ErrorJson("access_denied", "Path is not in the configured allow list.");
-        }
-
-        // 3. Extract progress token — may be null if client did not supply one.
-        var progressTokenNode = requestContext?.Params?.Meta?["progressToken"];
-        var progressToken = progressTokenNode?.GetValue<string>();
-
-        // 4. Build progress callback — only invoked when progressToken is non-null (MCP spec requirement).
-        Func<int, int, string, Task>? progressCallback = progressToken is not null
-            ? async (current, total, message) =>
-            {
-                try
-                {
-                    await mcpServer.SendNotificationAsync(
-                        "notifications/progress",
-                        new
-                        {
-                            progressToken,
-                            progress = current,
-                            total,
-                            message,
-                        }).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
-                }
-            }
-            : null;
-
         try
         {
-            // 5. Delegate to the orchestrating service.
+            using var activity = DocAgentTelemetry.Source.StartActivity(
+                "tool.ingest_project", ActivityKind.Internal);
+            activity?.SetTag("tool.name", "ingest_project");
+
+            if (string.IsNullOrWhiteSpace(path))
+                return ErrorJson("invalid_input", "path is required.");
+
+            var absolutePath = Path.GetFullPath(path);
+            if (!_allowlist.IsAllowed(absolutePath))
+            {
+                _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorJson("access_denied", "Path is not in the configured allow list.");
+            }
+
+            // Extract progress token — may be null, string, or number.
+            var progressToken = requestContext?.Params?.Meta?["progressToken"];
+
+            Func<int, int, string, Task>? progressCallback = progressToken is not null
+                ? async (current, total, message) =>
+                {
+                    try
+                    {
+                        await mcpServer.SendNotificationAsync(
+                            "notifications/progress",
+                            new
+                            {
+                                progressToken,
+                                progress = (double)current,
+                                total = (double)total,
+                                message,
+                            }).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
+                    }
+                }
+                : null;
+
             var result = await _ingestionService.IngestAsync(
                 absolutePath, include, exclude, forceReindex,
                 progressCallback, cancellationToken).ConfigureAwait(false);
@@ -115,7 +112,6 @@ public sealed class IngestionTools
             activity?.SetTag("tool.result.projectCount", result.ProjectCount);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            // 6. Return success JSON.
             return JsonSerializer.Serialize(new
             {
                 snapshotId = result.SnapshotId,
@@ -128,14 +124,12 @@ public sealed class IngestionTools
         }
         catch (OperationCanceledException)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Ingestion failed for {Path}", absolutePath);
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            return ErrorJson("ingestion_failed", ex.Message);
+            _logger.LogError(ex, "Ingestion failed for {Path}", path);
+            return ErrorJson("ingestion_failed", $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -151,53 +145,48 @@ public sealed class IngestionTools
         [Description("Absolute path to .sln file")] string path,
         CancellationToken cancellationToken = default)
     {
-        using var activity = DocAgentTelemetry.Source.StartActivity(
-            "tool.ingest_solution", ActivityKind.Internal);
-        activity?.SetTag("tool.name", "ingest_solution");
-
-        // 1. Validate path is not null/empty.
-        if (string.IsNullOrWhiteSpace(path))
-            return ErrorJson("invalid_input", "path is required.");
-
-        // 2. PathAllowlist check — fail fast before any pipeline work.
-        var absolutePath = Path.GetFullPath(path);
-        if (!_allowlist.IsAllowed(absolutePath))
-        {
-            _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
-            activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
-            return ErrorJson("access_denied", "Path is not in the configured allow list.");
-        }
-
-        // 3. Extract progress token — may be null if client did not supply one.
-        var progressTokenNode = requestContext?.Params?.Meta?["progressToken"];
-        var progressToken = progressTokenNode?.GetValue<string>();
-
-        // 4. Build progress callback — only invoked when progressToken is non-null (MCP spec requirement).
-        Func<int, int, string, Task>? progressCallback = progressToken is not null
-            ? async (current, total, message) =>
-            {
-                try
-                {
-                    await mcpServer.SendNotificationAsync(
-                        "notifications/progress",
-                        new
-                        {
-                            progressToken,
-                            progress = current,
-                            total,
-                            message,
-                        }).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
-                }
-            }
-            : null;
-
         try
         {
-            // 5. Delegate to the solution ingestion service.
+            using var activity = DocAgentTelemetry.Source.StartActivity(
+                "tool.ingest_solution", ActivityKind.Internal);
+            activity?.SetTag("tool.name", "ingest_solution");
+
+            if (string.IsNullOrWhiteSpace(path))
+                return ErrorJson("invalid_input", "path is required.");
+
+            var absolutePath = Path.GetFullPath(path);
+            if (!_allowlist.IsAllowed(absolutePath))
+            {
+                _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorJson("access_denied", "Path is not in the configured allow list.");
+            }
+
+            // Extract progress token — may be null, string, or number.
+            var progressToken = requestContext?.Params?.Meta?["progressToken"];
+
+            Func<int, int, string, Task>? progressCallback = progressToken is not null
+                ? async (current, total, message) =>
+                {
+                    try
+                    {
+                        await mcpServer.SendNotificationAsync(
+                            "notifications/progress",
+                            new
+                            {
+                                progressToken,
+                                progress = (double)current,
+                                total = (double)total,
+                                message,
+                            }).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
+                    }
+                }
+                : null;
+
             var result = await _solutionIngestionService.IngestAsync(
                 absolutePath, progressCallback, cancellationToken).ConfigureAwait(false);
 
@@ -205,7 +194,6 @@ public sealed class IngestionTools
             activity?.SetTag("tool.result.ingestedProjectCount", result.IngestedProjectCount);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            // 6. Return success JSON.
             return JsonSerializer.Serialize(new
             {
                 snapshotId = result.SnapshotId,
@@ -229,14 +217,12 @@ public sealed class IngestionTools
         }
         catch (OperationCanceledException)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Solution ingestion failed for {Path}", absolutePath);
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            return ErrorJson("ingestion_failed", ex.Message);
+            _logger.LogError(ex, "Solution ingestion failed for {Path}", path);
+            return ErrorJson("ingestion_failed", $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -252,23 +238,23 @@ public sealed class IngestionTools
         [Description("Absolute path to tsconfig.json file")] string path,
         CancellationToken cancellationToken = default)
     {
-        using var activity = DocAgentTelemetry.Source.StartActivity(
-            "tool.ingest_typescript", ActivityKind.Internal);
-        activity?.SetTag("tool.name", "ingest_typescript");
-
-        if (string.IsNullOrWhiteSpace(path))
-            return ErrorJson("invalid_input", "path is required.");
-
-        var absolutePath = Path.GetFullPath(path);
-        if (!_allowlist.IsAllowed(absolutePath))
-        {
-            _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
-            activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
-            return ErrorJson("access_denied", "Path is not in the configured allow list.");
-        }
-
         try
         {
+            using var activity = DocAgentTelemetry.Source.StartActivity(
+                "tool.ingest_typescript", ActivityKind.Internal);
+            activity?.SetTag("tool.name", "ingest_typescript");
+
+            if (string.IsNullOrWhiteSpace(path))
+                return ErrorJson("invalid_input", "path is required.");
+
+            var absolutePath = Path.GetFullPath(path);
+            if (!_allowlist.IsAllowed(absolutePath))
+            {
+                _logger.LogWarning("Ingestion denied: path {Path} outside allowlist", absolutePath);
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorJson("access_denied", "Path is not in the configured allow list.");
+            }
+
             var result = await _typeScriptIngestionService.IngestTypeScriptAsync(
                 absolutePath, cancellationToken).ConfigureAwait(false);
 
@@ -286,14 +272,54 @@ public sealed class IngestionTools
         }
         catch (OperationCanceledException)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "TypeScript ingestion failed for {Path}", absolutePath);
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            return ErrorJson("ingestion_failed", ex.Message);
+            _logger.LogError(ex, "TypeScript ingestion failed for {Path}", path);
+            return ErrorJson("ingestion_failed", $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tool: get_diagnostic_info
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "get_diagnostic_info")]
+    [Description("Get diagnostic information about the server environment, MSBuild registration, and Node.js availability.")]
+    public Task<string> GetDiagnosticInfo(
+        ModelContextProtocol.Server.McpServer mcpServer,
+        RequestContext<CallToolRequestParams> requestContext,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var msbuildInstances = MSBuildLocator.QueryVisualStudioInstances().Select(i => new
+            {
+                i.Name,
+                i.Version,
+                i.MSBuildPath,
+                i.DiscoveryType
+            }).ToList();
+
+            var info = new
+            {
+                os = Environment.OSVersion.ToString(),
+                runtime = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+                processArchitecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+                isMSBuildRegistered = MSBuildLocator.IsRegistered,
+                msbuildInstances = msbuildInstances,
+                appBaseDir = AppContext.BaseDirectory,
+                currentDir = Directory.GetCurrentDirectory(),
+                envAllowedPaths = Environment.GetEnvironmentVariable("DOCAGENT_ALLOWED_PATHS"),
+                serverVersion = "2.0.2"
+            };
+
+            return Task.FromResult(JsonSerializer.Serialize(info, s_jsonOptions));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(ErrorJson("diagnostic_failed", $"{ex.GetType().Name}: {ex.Message}"));
         }
     }
 

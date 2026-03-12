@@ -8,6 +8,7 @@ using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Telemetry;
 using DocAgent.McpServer.RateLimiting;
 using DocAgent.McpServer.Validation;
+using Microsoft.Build.Locator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -69,6 +70,9 @@ builder.Logging.AddOpenTelemetry(logging =>
 DocAgentTelemetry.VerboseMode =
     builder.Environment.IsDevelopment() ||
     Environment.GetEnvironmentVariable("DOCAGENT_TELEMETRY_VERBOSE") == "true";
+
+// Register MSBuild components before any Workspaces are created
+MSBuildLocator.RegisterDefaults();
 
 // Core DI: SnapshotStore (singleton), BM25SearchIndex as ISearchIndex (singleton), KnowledgeQueryService (scoped)
 builder.Services.AddDocAgent();

@@ -164,12 +164,29 @@ public sealed class TypeScriptIngestionService
 
     private async Task<SymbolGraphSnapshot> RunSidecarExtractionAsync(string tsconfigPath, ICollection<string> warnings, CancellationToken ct)
     {
-        var sidecarDir = _options.SidecarDir ?? Path.Combine(AppContext.BaseDirectory, "src", "ts-symbol-extractor");
-        if (!Directory.Exists(sidecarDir))
+        var sidecarDir = _options.SidecarDir;
+        if (sidecarDir == null)
         {
-            var devPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "src", "ts-symbol-extractor"));
-            if (Directory.Exists(devPath)) sidecarDir = devPath;
+            // Fallback chain for different deployment models
+            var pathsToTry = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "ts-symbol-extractor"),
+                Path.Combine(AppContext.BaseDirectory, "src", "ts-symbol-extractor"),
+                Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "src", "ts-symbol-extractor"))
+            };
+
+            foreach (var path in pathsToTry)
+            {
+                if (Directory.Exists(path))
+                {
+                    sidecarDir = path;
+                    break;
+                }
+            }
         }
+
+        if (sidecarDir == null || !Directory.Exists(sidecarDir))
+            throw new TypeScriptIngestionException($"Sidecar directory not found. Please configure DocAgent:SidecarDir or ensure the 'ts-symbol-extractor' folder is present in the application directory.");
 
         var entryPoint = Path.Combine(sidecarDir, "dist", "index.js");
         if (!File.Exists(entryPoint))

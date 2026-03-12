@@ -1,4 +1,5 @@
 using DocAgent.McpServer.Config;
+using Microsoft.Build.Locator;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -37,7 +38,6 @@ public sealed class StartupValidator : IHostedLifecycleService
 
     /// <summary>
     /// Pure validation function. No DI, no host — just options in, result out.
-    /// The only side effect is a file-system probe for ArtifactsDir writability.
     /// </summary>
     public static ValidationResult Validate(DocAgentServerOptions options)
     {
@@ -52,7 +52,16 @@ public sealed class StartupValidator : IHostedLifecycleService
                 "AllowedPaths is empty and DOCAGENT_ALLOWED_PATHS is not set. PathAllowlist will default to cwd only.");
         }
 
-        // 2. ArtifactsDir null/empty check — fatal error
+        // 2. MSBuild check — fatal error if no instances found
+        if (!MSBuildLocator.IsRegistered)
+        {
+            if (!MSBuildLocator.QueryVisualStudioInstances().Any())
+            {
+                errors.Add("No MSBuild instances found. Please install the .NET SDK or Visual Studio with build tools.");
+            }
+        }
+
+        // 3. ArtifactsDir null/empty check — fatal error
         if (string.IsNullOrWhiteSpace(options.ArtifactsDir))
         {
             errors.Add(
@@ -60,7 +69,7 @@ public sealed class StartupValidator : IHostedLifecycleService
         }
         else
         {
-            // 3. ArtifactsDir writability probe — fatal error if not writable
+            // 4. ArtifactsDir writability probe — fatal error if not writable
             try
             {
                 var artifactsDir = options.ArtifactsDir;
