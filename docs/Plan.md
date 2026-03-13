@@ -86,9 +86,45 @@ Incremental solution re-ingestion, performance benchmarks, code cleanup, and doc
 
 ---
 
+### v2.0 — TypeScript Language Support (shipped 2026-03-10)
+
+Polyglot ingestion via a Node.js sidecar using the TypeScript Compiler API, connected to the MCP server over NDJSON IPC.
+
+**Key capabilities:**
+- `ts-symbol-extractor` Node.js sidecar: extracts symbols, types, and cross-file references using the TypeScript Compiler API
+- `TypeScriptIngestionService`: spawns the Node.js process, exchanges NDJSON messages over stdin/stdout, maps results to `SymbolNode`/`SymbolEdge`
+- `TypeScriptIngestionException` for typed error propagation from sidecar failures
+- `NodeAvailabilityValidator`: startup validator that checks `node` is available on PATH; prevents silent runtime failures
+- Full security: Node.js process is sandboxed, NDJSON IPC over stdin/stdout, strict timeout and resource guards
+
+**MCP tools delivered:**
+| Tool | Description |
+|------|-------------|
+| `ingest_typescript` | Ingest a TypeScript project via tsconfig.json path |
+
+---
+
+### v2.1 — Large Solution Ingestion Optimisations (shipped 2026-03-13)
+
+Addresses out-of-memory and timeout failures observed when ingesting large solutions (e.g., M&G PruFund).
+
+**Key capabilities:**
+- `ProjectSnapshotSummary` record (`SolutionTypes.cs`): lightweight metadata (name, path, `NodeCount`, `EdgeCount`, `ContentHash`) replaces full `SymbolGraphSnapshot` in `SolutionSnapshot.ProjectSnapshots`, dramatically reducing peak memory
+- `SolutionIngestionService`: injects `IOptions<DocAgentServerOptions>`, adds a 30-minute timeout guard, releases compilation objects and calls `GC.Collect` between projects, writes per-project checkpoint snapshots via `SnapshotStore` immediately after each project completes
+- `DocAgentServerOptions`: `IngestionTimeoutSeconds` raised 300 → 1800; new `ExcludeTestFiles` (default: `true`) and `TestFileSuffixes` properties
+- `TestFileFilter`: new helper — skips `*Tests.cs`, `*Fixture.cs`, `*Spec.cs`, `*Steps.cs` etc.; always includes `Base*` files
+- `SymbolSorter`: `List<T>` overloads using `CollectionsMarshal.AsSpan` + `MemoryExtensions.Sort` (zero-allocation in-place sort)
+- `FileHashManifest`: `ChangedFiles` computed once at construction; `Convert.ToHexStringLower` throughout
+- `XmlDocParser`: compiled static `Regex` field (avoids per-call regex compilation overhead)
+- `RoslynSymbolGraphBuilder`: O(1) `HashSet<SymbolId>` replaces O(n²) `IsKnownNode` scan; `ArrayPool`/`stackalloc` for fingerprint computation; `shouldSkipSourceFile` delegate wired to `TestFileFilter`
+- `IncrementalIngestionEngine`: `Dictionary<SymbolId,SymbolNode>` for O(1) edge filtering
+- `SnapshotStore`: `Convert.ToHexStringLower` throughout
+
+---
+
 ## Future Milestones
 
-### v1.5 — Package Mapping
+### v1.5 — Package Mapping (pending)
 
 - Parse `*.csproj`, `Directory.Packages.props`, `packages.lock.json`, `*.nuspec`
 - Produce `PackageRefGraph` (project → package → version)
@@ -99,7 +135,11 @@ Incremental solution re-ingestion, performance benchmarks, code cleanup, and doc
 
 | Area | Description | Status |
 |------|-------------|--------|
-| Polyglot support | Tree-sitter and LSP-based ingestion for non-.NET languages | Speculative |
+| TypeScript polyglot | TypeScript Compiler API via Node.js sidecar | **Delivered — v2.0** |
+| Python adapter | Tree-sitter + pyright/pylance + import graph | Future |
+| Go adapter | Tree-sitter + `go/packages` + `gopls` | Future |
+| Rust adapter | Tree-sitter + rust-analyzer | Future |
+| LSP bridge | Read-only workspace intelligence via LSP protocol | Speculative |
 | Embeddings / vector index | `IVectorIndex` interface exists; no implementation | Deferred (provider TBD) |
 | Query DSL | Structured query language over the symbol graph | Speculative |
 | Remote git sources | Clone/fetch to read-only cache, branch/tag pinning | Deferred |

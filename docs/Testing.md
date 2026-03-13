@@ -2,7 +2,7 @@
 
 xUnit + FluentAssertions test suite covering the full ingestion-to-query pipeline. See `CLAUDE.md` for the canonical build and test commands.
 
-**330 total tests | 309 passing | 21 environment-dependent**
+**381 total tests | 380 passing in standard `dotnet test` runs | 1 pre-existing environment-dependent failure**
 
 ---
 
@@ -74,12 +74,14 @@ Some tests exercise `MSBuildWorkspace.OpenSolutionAsync` to load real Roslyn wor
 
 In environments where these conditions are not met (Docker images without SDK, CI runners without pre-build step), these tests fail with MEF composition errors. They are not code bugs — they are infrastructure constraints.
 
-**Count:** Approximately 17 of the 21 environment-dependent failures.
+**Count:** Approximately 17 MSBuildWorkspace-dependent tests. These pass on a standard developer machine with .NET 10 SDK installed.
 
 ### RegressionGuardTests
 
-`RegressionGuardTests` uses BenchmarkDotNet to compare performance against a stored baseline. BenchmarkDotNet's `ResultStatistics` is `null` when executed outside a proper release-mode benchmark run context (e.g., when run via `dotnet test` in debug mode or without the BDN harness).
+`RegressionGuardTests` uses BenchmarkDotNet to compare performance against a stored baseline. BenchmarkDotNet's `ResultStatistics` is `null` when executed outside a proper release-mode benchmark run context (e.g., when run via `dotnet test` in debug mode or without the BDN harness). This is the **1 pre-existing failure** reported in the headline count above — it is not a code defect.
 
-**Count:** Approximately 4 of the 21 environment-dependent failures.
+**Neither category represents defects in the codebase.** All 380 tests (excluding the BDN harness limitation) run clean on a standard developer machine with .NET 10 SDK installed.
 
-**Neither category represents defects in the codebase.** All 309 passing tests run clean on a standard developer machine with .NET 10 SDK installed.
+### v2.1 Optimised Code Paths
+
+`SolutionIncrementalDeterminismTests` and `IncrementalIngestionEngineTests` now also exercise the v2.1 optimised code paths (`HashSet<SymbolId>` dedup, `ArrayPool`/`stackalloc` fingerprinting, O(1) edge filtering) and pass cleanly as part of the standard test run.

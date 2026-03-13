@@ -114,6 +114,11 @@ References
 ---
 
 ## Tier 3 — Polyglot expansion (Medium RoI, high leverage)
+
+**Status summary:**
+- TypeScript — **DONE** (v2.0, shipped 2026-03-10). TypeScript Compiler API via Node.js sidecar with NDJSON IPC; `ingest_typescript` MCP tool available.
+- Python, Go, Rust — future work (Tree-sitter on-ramp or dedicated language server adapters as described below).
+
 ### 3.1 Tree-sitter AST ingestion (syntax-level, fast, uniform)
 Use Tree-sitter to produce:
 - syntax symbol stubs (functions/types/modules)
@@ -134,10 +139,10 @@ References
 
 ### 3.2 Per-language “semantic” adapters (later)
 Once you have RoI, add deeper semantics for select languages:
-- TypeScript: TypeScript compiler API
-- Python: pylance/pyright + AST + import graph
-- Go: `go/packages` + `gopls`
-- Rust: rust-analyzer
+- TypeScript: TypeScript compiler API — **DELIVERED (v2.0)**. Node.js sidecar (`ts-symbol-extractor`) uses the TypeScript Compiler API over NDJSON IPC. Full symbol/edge extraction, `ingest_typescript` MCP tool, `NodeAvailabilityValidator` startup check.
+- Python: pylance/pyright + AST + import graph — future
+- Go: `go/packages` + `gopls` — future
+- Rust: rust-analyzer — future
 
 Principle: syntax-first, semantics-where-worth-it.
 
@@ -220,6 +225,7 @@ Reference for file-based C# apps (.NET 10)
 ### Bundle B (Polyglot starter): Tree-sitter + MCP
 - Tree-sitter AST snapshot for many languages
 - limited but useful search + navigation
+- **Note:** TypeScript is already available beyond Tree-sitter syntax level — the TypeScript Compiler API sidecar (v2.0) provides full semantic symbol extraction via `ingest_typescript`.
 
 ### Bundle C (Live intelligence): LSP bridge
 - agents can interrogate “what the IDE knows” in real time

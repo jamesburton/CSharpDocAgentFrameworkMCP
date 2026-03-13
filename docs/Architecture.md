@@ -65,7 +65,7 @@ Incremental path: SHA-256 based file hashing ensures that only changed files (or
 
 ## MCP Tools
 
-All 15 tools exposed by `DocAgent.McpServer`, grouped by class:
+All 14 tools exposed by `DocAgent.McpServer`, grouped by class:
 
 ### DocTools (6)
 
@@ -93,14 +93,13 @@ All 15 tools exposed by `DocAgent.McpServer`, grouped by class:
 | `explain_solution` | Solution-level architecture overview |
 | `diff_solution_snapshots` | Solution-level diff across all projects |
 
-### IngestionTools (4)
+### IngestionTools (3)
 
 | Tool Name | Description |
 |-----------|-------------|
 | `ingest_project` | Runtime ingestion trigger for a single .NET project |
 | `ingest_solution` | Ingest an entire .sln solution |
 | `ingest_typescript` | Ingest a TypeScript project via tsconfig.json |
-| `find_breaking_changes` | (Redundant listing, moved to ChangeTools) |
 
 ---
 
@@ -113,3 +112,13 @@ MCP tool calls are gated by a default-deny `PathAllowlist` that restricts file s
 ## Storage
 
 Snapshots are written to the `artifacts/` directory using MessagePack or JSON serialization. Each project snapshot is immutable and addressed by a content-based hash (SHA-256).
+
+During solution ingestion, each project snapshot is written to `SnapshotStore` as `{hash}.msgpack` immediately after that project finishes processing, before the merged solution snapshot is assembled. This per-project checkpoint behaviour means partial results are preserved even if ingestion is interrupted mid-solution.
+
+`SolutionSnapshot.ProjectSnapshots` holds `ProjectSnapshotSummary` records (name, path, `NodeCount`, `EdgeCount`, `ContentHash`) rather than full `SymbolGraphSnapshot` objects. Full per-project snapshots are still persisted on disk and can be loaded on demand; the summary avoids keeping all projects in memory simultaneously.
+
+---
+
+## Ingestion Filtering
+
+By default, test source files are excluded from symbol extraction to reduce graph size for large solutions. The `TestFileFilter` helper skips files matching common test suffixes (`*Tests.cs`, `*Fixture.cs`, `*Spec.cs`, `*Steps.cs`, etc.) while always including `Base*` files. This behaviour is controlled by `DocAgentServerOptions.ExcludeTestFiles` (default: `true`) and can be overridden per ingestion call.
