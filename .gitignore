@@ -62,3 +62,4 @@ scratch/
 *.secrets.json
 .env
 .env.*
+wt/
