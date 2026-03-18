@@ -15,6 +15,13 @@ using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
+// CLI subcommand routing — must happen before WebApplication.CreateBuilder
+if (DocAgent.McpServer.Cli.CliRunner.IsCliCommand(args))
+{
+    var exitCode = await DocAgent.McpServer.Cli.CliRunner.RunAsync(args);
+    return exitCode;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ALL logs must go to stderr — never stdout (stdout is reserved for MCP JSON-RPC framing)
@@ -102,3 +109,4 @@ if (snapshots.Count > 0)
 }
 
 await app.RunAsync();
+return 0;
