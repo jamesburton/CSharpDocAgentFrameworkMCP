@@ -6,6 +6,7 @@ using Xunit;
 
 namespace DocAgent.Tests;
 
+[Collection("EnvVarMutating")]
 public sealed class PathAllowlistTests
 {
     private static PathAllowlist Create(string[]? allow = null, string[]? deny = null)

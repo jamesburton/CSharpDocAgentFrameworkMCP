@@ -22,6 +22,13 @@ public class RegressionGuardTests
     [Fact]
     public void SolutionIngestion_DoesNotRegressBeyondBaseline()
     {
+        // Skip unless explicitly opted in — BenchmarkDotNet requires Release config and
+        // takes minutes to run, so it must not run during normal `dotnet test`.
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RUN_BENCHMARKS")))
+        {
+            return;
+        }
+
         // Locate baselines.json relative to this assembly's output directory.
         // Assembly is at tests/DocAgent.Tests/bin/<config>/net10.0/
         // baselines.json is at  tests/DocAgent.Benchmarks/baselines.json

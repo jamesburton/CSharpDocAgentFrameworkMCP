@@ -65,7 +65,7 @@ Incremental path: SHA-256 based file hashing ensures that only changed files (or
 
 ## MCP Tools
 
-All 14 tools exposed by `DocAgent.McpServer`, grouped by class:
+All 15 tools exposed by `DocAgent.McpServer`, grouped by class:
 
 ### DocTools (6)
 
@@ -111,7 +111,7 @@ MCP tool calls are gated by a default-deny `PathAllowlist` that restricts file s
 
 ## Storage
 
-Snapshots are written to the `artifacts/` directory using MessagePack or JSON serialization. Each project snapshot is immutable and addressed by a content-based hash (SHA-256).
+Snapshots are written to the `artifacts/` directory using MessagePack serialization via streaming (`MessagePackSerializer.SerializeAsync` / `DeserializeAsync`). Each project snapshot is immutable and addressed by a content-based hash (XxHash128). Streaming serialization avoids the 2 GB `byte[]` limit, enabling ingestion of large solutions that produce multi-gigabyte snapshots.
 
 During solution ingestion, each project snapshot is written to `SnapshotStore` as `{hash}.msgpack` immediately after that project finishes processing, before the merged solution snapshot is assembled. This per-project checkpoint behaviour means partial results are preserved even if ingestion is interrupted mid-solution.
 

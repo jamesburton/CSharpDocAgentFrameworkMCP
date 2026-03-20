@@ -53,7 +53,7 @@ Six layers with strict boundaries:
 - **`SymbolNode`** — a code symbol (type, method, property, etc.) with `DocComment` and `SourceSpan`
 - **Core interfaces:** `IProjectSource` → `IDocSource` → `ISymbolGraphBuilder` → `ISearchIndex` → `IKnowledgeQueryService`
 
-### MCP Tools (14 tools)
+### MCP Tools (15 tools)
 
 #### Query Tools (DocTools.cs)
 
@@ -152,6 +152,11 @@ Six layers with strict boundaries:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | path | string | (required) | Absolute path to .sln file |
+
+**`ingest_typescript`** — Ingest a TypeScript project (tsconfig.json), building a queryable symbol graph.
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| path | string | (required) | Absolute path to tsconfig.json file |
 
 #### Solution Tools (SolutionTools.cs)
 

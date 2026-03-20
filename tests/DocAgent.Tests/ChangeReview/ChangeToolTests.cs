@@ -48,6 +48,17 @@ public sealed class ChangeToolTests : IDisposable
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
+    /// <summary>
+    /// Creates a PathAllowlist that only allows a non-existent directory, ensuring the temp-dir
+    /// snapshot store is always denied. Immune to DOCAGENT_ALLOWED_PATHS env var leaking from
+    /// parallel tests because explicit AllowedPaths bypasses the CWD fallback.
+    /// </summary>
+    private static PathAllowlist CreateDenyAllowlist() =>
+        new(Options.Create(new DocAgentServerOptions
+        {
+            AllowedPaths = [Path.Combine(Path.GetTempPath(), "deny-test-nonexistent", "**")]
+        }));
+
     private async Task<(string hashA, string hashB)> SaveBreakingPairAsync()
     {
         // Before: method exists with string return
@@ -311,8 +322,9 @@ public sealed class ChangeToolTests : IDisposable
     public async Task ReviewChanges_PathDenied_ReturnsAccessDenied()
     {
         var (hashA, hashB) = await SaveBreakingPairAsync();
-        // Default DocAgentServerOptions has no AllowedPaths — only CWD allowed — _tempDir denied
-        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        // Explicit non-matching AllowedPaths ensures _tempDir is denied,
+        // even if DOCAGENT_ALLOWED_PATHS env var leaks from parallel tests.
+        var allowlist = CreateDenyAllowlist();
         var tools = CreateTools(allowlist: allowlist);
 
         var json = await tools.ReviewChanges(hashA, hashB);
@@ -326,7 +338,7 @@ public sealed class ChangeToolTests : IDisposable
     public async Task FindBreakingChanges_PathDenied_ReturnsAccessDenied()
     {
         var (hashA, hashB) = await SaveBreakingPairAsync();
-        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        var allowlist = CreateDenyAllowlist();
         var tools = CreateTools(allowlist: allowlist);
 
         var json = await tools.FindBreakingChanges(hashA, hashB);
@@ -340,7 +352,7 @@ public sealed class ChangeToolTests : IDisposable
     public async Task ExplainChange_PathDenied_ReturnsAccessDenied()
     {
         var (hashA, hashB) = await SaveBreakingPairAsync();
-        var allowlist = new PathAllowlist(Options.Create(new DocAgentServerOptions()));
+        var allowlist = CreateDenyAllowlist();
         var tools = CreateTools(allowlist: allowlist);
 
         var json = await tools.ExplainChange(hashA, hashB, "TestProject.TestClass.MyMethod");

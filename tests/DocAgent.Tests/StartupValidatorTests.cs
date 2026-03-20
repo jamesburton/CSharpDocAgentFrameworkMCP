@@ -5,6 +5,7 @@ using Xunit;
 
 namespace DocAgent.Tests;
 
+[Collection("EnvVarMutating")]
 public sealed class StartupValidatorTests
 {
     private static DocAgentServerOptions CreateOptions(
