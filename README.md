@@ -40,9 +40,26 @@ DocAgentFramework ingests XML documentation + Roslyn symbol info for .NET, and u
 
 ---
 
-## Installation
+## Installation & Usage
 
-### Option A: NuGet global tool (recommended)
+### Option A: No install — `dnx` (recommended)
+
+.NET 10 includes `dnx`, which runs NuGet tools on-demand without installing them (like `npx` for Node.js). **No install step required** — just configure your MCP host and go:
+
+```bash
+# Run DocAgent directly from NuGet — downloads on first use, cached thereafter
+dnx DocAgent.McpServer
+```
+
+Pin to a specific version:
+
+```bash
+dnx DocAgent.McpServer@2.1.1
+```
+
+### Option B: Global tool install
+
+If you prefer a permanent install:
 
 ```bash
 dotnet tool install -g DocAgent.McpServer
@@ -54,29 +71,15 @@ This puts `docagent` on your PATH. Update with:
 dotnet tool update -g DocAgent.McpServer
 ```
 
-### Option B: No-install / run from source (`dnx`-style)
+### Option C: Run from source
 
-No global install required — run directly from a cloned repo:
+For contributors, CI, or pinning to a specific commit:
 
 ```bash
 git clone https://github.com/jamesburton/CSharpDocAgentFrameworkMCP.git
 cd CSharpDocAgentFrameworkMCP
-
-# Run the MCP server directly
 dotnet run --project src/DocAgent.McpServer
 ```
-
-This is useful for contributors, CI environments, or when you want to pin to a specific commit.
-
-### Option C: Self-contained binary
-
-For air-gapped or locked-down environments:
-
-```bash
-dotnet publish src/DocAgent.McpServer -c Release --self-contained -o ~/.docagent/bin
-```
-
-Then add `~/.docagent/bin` to your PATH.
 
 ---
 
@@ -84,9 +87,30 @@ Then add `~/.docagent/bin` to your PATH.
 
 DocAgent is an MCP server using **stdio transport**. Configure it in your AI agent host so the agent can call all 15 tools.
 
+All examples below show the **`dnx` configuration first** (no install required), then alternatives for global tool and source-based setups.
+
 ### Claude Code CLI
 
 Add to `~/.claude/settings.json` (or project-level `.claude/settings.json`):
+
+**Using `dnx` (no install):**
+
+```json
+{
+  "mcpServers": {
+    "docagent": {
+      "command": "dnx",
+      "args": ["DocAgent.McpServer"],
+      "env": {
+        "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
+        "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
+      }
+    }
+  }
+}
+```
+
+**Using global tool** (after `dotnet tool install -g DocAgent.McpServer`):
 
 ```json
 {
@@ -103,7 +127,7 @@ Add to `~/.claude/settings.json` (or project-level `.claude/settings.json`):
 }
 ```
 
-**No-install alternative** — point directly at the source:
+**Using source** (no install, requires cloned repo):
 
 ```json
 {
@@ -134,8 +158,8 @@ Edit `claude_desktop_config.json`:
 {
   "mcpServers": {
     "docagent": {
-      "command": "docagent",
-      "args": [],
+      "command": "dnx",
+      "args": ["DocAgent.McpServer"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/Users/<user>/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/Users/<user>/projects/**"
@@ -145,7 +169,7 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop after editing.
+Restart Claude Desktop after editing. Replace `dnx` with `docagent` (and remove `args`) if using the global tool instead.
 
 ### VS Code / GitHub Copilot
 
@@ -155,8 +179,8 @@ Add to `.vscode/settings.json` (workspace) or user settings:
 {
   "github.copilot.chat.mcpServers": {
     "docagent": {
-      "command": "docagent",
-      "args": [],
+      "command": "dnx",
+      "args": ["DocAgent.McpServer"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "${userHome}/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "${workspaceFolder}/**"
@@ -174,8 +198,8 @@ Add to global config or per-project `.cursor/mcp.json`:
 {
   "mcpServers": {
     "docagent": {
-      "command": "docagent",
-      "args": [],
+      "command": "dnx",
+      "args": ["DocAgent.McpServer"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
