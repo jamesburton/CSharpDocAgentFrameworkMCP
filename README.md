@@ -4,7 +4,7 @@ A polyglot .NET 10 / C# solution for turning **code documentation + code structu
 
 DocAgentFramework ingests XML documentation + Roslyn symbol info for .NET, and utilizes a Node.js sidecar with the TypeScript Compiler API for TS/TSX. It normalizes this data into a stable "symbol graph" and a searchable BM25 index, serving it as a suite of 15 tools over the Model Context Protocol (MCP).
 
-## 🚀 Key Features
+## Key Features
 
 - **Polyglot Support**: Full compiler-grade symbol extraction for .NET and TypeScript projects.
 - **Stable Symbol IDs**: Deterministic IDs that remain consistent across refactors and re-ingestions.
@@ -13,66 +13,267 @@ DocAgentFramework ingests XML documentation + Roslyn symbol info for .NET, and u
 - **15 MCP Tools**: Comprehensive suite for searching, retrieving, referencing, and reviewing code changes.
 - **Security First**: Strict `PathAllowlist` enforcement, comprehensive audit logging, and process isolation.
 
-## 🛠️ MCP Tools
+## MCP Tools
 
-1.  `search_symbols`: Search the symbol index using natural language or keywords.
-2.  `get_symbol`: Get full details (members, docs, span) for a specific symbol ID.
-3.  `get_references`: Find all usages of a symbol across projects.
-4.  `find_implementations`: Locate implementations of interfaces or derived classes.
-5.  `get_doc_coverage`: Audit documentation completion for a project or namespace.
-6.  `diff_snapshots`: Compare two symbol graph versions to identify semantic changes.
-7.  `review_changes`: High-level change analysis for PRs or local edits.
-8.  `explain_project`: Generate a structural and functional overview of a project.
-9.  `ingest_project`: Ingest a .NET project or solution.
-10. `ingest_typescript`: Ingest a TypeScript project (via `tsconfig.json`).
-11. `ingest_solution`: Ingest an entire .NET solution.
-12. `explain_solution`: High-level overview of a full solution structure.
-13. `diff_solution_snapshots`: Semantic diffing at the solution level.
-14. `find_breaking_changes`: Detect API-breaking changes between versions.
-15. `explain_change`: Targeted explanation of specific code modifications.
+| # | Tool | Description |
+|---|------|-------------|
+| 1 | `search_symbols` | Search the symbol index using natural language or keywords |
+| 2 | `get_symbol` | Get full details (members, docs, span) for a specific symbol ID |
+| 3 | `get_references` | Find all usages of a symbol across projects |
+| 4 | `find_implementations` | Locate implementations of interfaces or derived classes |
+| 5 | `get_doc_coverage` | Audit documentation completion for a project or namespace |
+| 6 | `diff_snapshots` | Compare two symbol graph versions to identify semantic changes |
+| 7 | `review_changes` | High-level change analysis for PRs or local edits |
+| 8 | `explain_project` | Generate a structural and functional overview of a project |
+| 9 | `ingest_project` | Ingest a .NET project or solution |
+| 10 | `ingest_typescript` | Ingest a TypeScript project (via `tsconfig.json`) |
+| 11 | `ingest_solution` | Ingest an entire .NET solution |
+| 12 | `explain_solution` | High-level overview of a full solution structure |
+| 13 | `diff_solution_snapshots` | Semantic diffing at the solution level |
+| 14 | `find_breaking_changes` | Detect API-breaking changes between versions |
+| 15 | `explain_change` | Targeted explanation of specific code modifications |
 
-## 📋 Quick Start
+## Prerequisites
 
-### Prerequisites
-- .NET 10 SDK
-- Node.js >= 22.0.0 (for TypeScript support)
+- **.NET 10 SDK** — [download](https://dotnet.microsoft.com/download)
+- **Node.js >= 22.0.0** — required only for TypeScript support
 
-### Installation
+---
+
+## Installation
+
+### Option A: NuGet global tool (recommended)
+
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/DocAgentFramework.git
-cd DocAgentFramework
-
-# Build the project
-dotnet build
-
-# Running tests
-dotnet test
+dotnet tool install -g DocAgent.McpServer
 ```
 
-### Running the Server
+This puts `docagent` on your PATH. Update with:
+
 ```bash
-# Start MCP server locally (stdio transport)
+dotnet tool update -g DocAgent.McpServer
+```
+
+### Option B: No-install / run from source (`dnx`-style)
+
+No global install required — run directly from a cloned repo:
+
+```bash
+git clone https://github.com/jamesburton/CSharpDocAgentFrameworkMCP.git
+cd CSharpDocAgentFrameworkMCP
+
+# Run the MCP server directly
 dotnet run --project src/DocAgent.McpServer
 ```
 
-## ⚙️ Configuration
+This is useful for contributors, CI environments, or when you want to pin to a specific commit.
 
-DocAgent uses standard .NET configuration (`appsettings.json` or environment variables).
+### Option C: Self-contained binary
 
-Key options in `DocAgentServerOptions`:
-- `AllowedPaths`: List of directory patterns allowed for ingestion (default: repo root).
-- `ArtifactsDir`: Path to store snapshots and search indices.
-- `SidecarDir`: Path to the `ts-symbol-extractor` directory.
-- `NodeExecutable`: Path to the Node.js binary (default: `node`).
+For air-gapped or locked-down environments:
 
-## 🔒 Security
+```bash
+dotnet publish src/DocAgent.McpServer -c Release --self-contained -o ~/.docagent/bin
+```
 
-DocAgent is designed for secure agentic workflows:
-- **Path Allowlist**: Tools only interact with files in configured directories.
-- **Audit Logging**: Every tool execution is logged with parameters and outcomes.
-- **Standard-compliant**: Follows MCP security best practices.
+Then add `~/.docagent/bin` to your PATH.
 
-## 📄 License
+---
+
+## MCP Configuration
+
+DocAgent is an MCP server using **stdio transport**. Configure it in your AI agent host so the agent can call all 15 tools.
+
+### Claude Code CLI
+
+Add to `~/.claude/settings.json` (or project-level `.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "docagent": {
+      "command": "docagent",
+      "args": [],
+      "env": {
+        "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
+        "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
+      }
+    }
+  }
+}
+```
+
+**No-install alternative** — point directly at the source:
+
+```json
+{
+  "mcpServers": {
+    "docagent": {
+      "command": "dotnet",
+      "args": ["run", "--project", "/path/to/CSharpDocAgentFrameworkMCP/src/DocAgent.McpServer"],
+      "env": {
+        "DOCAGENT_ARTIFACTS_DIR": "/tmp/docagent-artifacts",
+        "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json`:
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+```json
+{
+  "mcpServers": {
+    "docagent": {
+      "command": "docagent",
+      "args": [],
+      "env": {
+        "DOCAGENT_ARTIFACTS_DIR": "/Users/<user>/.docagent/artifacts",
+        "DOCAGENT_ALLOWED_PATHS": "/Users/<user>/projects/**"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after editing.
+
+### VS Code / GitHub Copilot
+
+Add to `.vscode/settings.json` (workspace) or user settings:
+
+```json
+{
+  "github.copilot.chat.mcpServers": {
+    "docagent": {
+      "command": "docagent",
+      "args": [],
+      "env": {
+        "DOCAGENT_ARTIFACTS_DIR": "${userHome}/.docagent/artifacts",
+        "DOCAGENT_ALLOWED_PATHS": "${workspaceFolder}/**"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to global config or per-project `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "docagent": {
+      "command": "docagent",
+      "args": [],
+      "env": {
+        "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
+        "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
+      }
+    }
+  }
+}
+```
+
+### Other Agents
+
+See [`docs/Agents.md`](docs/Agents.md) for Windsurf, OpenCode, and Zed configuration, plus instructions for adding support for new agent hosts.
+
+---
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCAGENT_ARTIFACTS_DIR` | Directory for snapshot storage and search indices | `./artifacts` |
+| `DOCAGENT_ALLOWED_PATHS` | Comma-separated glob patterns for permitted file access | Current working directory only |
+| `DOCAGENT_INGESTION_TIMEOUT_SECONDS` | Max time for solution ingestion | `1800` (30 min) |
+| `DOCAGENT_TELEMETRY_VERBOSE` | Enable verbose OpenTelemetry tracing (`true`/`false`) | `false` |
+
+---
+
+## Quick Usage
+
+Once configured, use the tools from any connected AI agent:
+
+```
+# Ingest a .NET solution
+ingest_solution path=/absolute/path/to/YourSolution.sln
+
+# Search for symbols
+search_symbols query="HttpClient" kindFilter="Type"
+
+# Get full symbol details
+get_symbol symbolId="MyApp.Services.AuthService"
+
+# Find who implements an interface
+find_implementations symbolId="MyApp.Core.IRepository"
+
+# Check documentation coverage
+get_doc_coverage project="MyApp.Core"
+
+# Review changes between snapshots
+review_changes versionA="abc123" versionB="def456"
+
+# Solution-level overview
+explain_solution snapshotHash="abc123"
+```
+
+---
+
+## Security
+
+DocAgent enforces a **default-deny** security model:
+
+- **Path Allowlist**: Tools can only access files within `DOCAGENT_ALLOWED_PATHS` patterns. Everything else is denied with an opaque `not_found` response (no information leakage).
+- **Audit Logging**: Every tool call is logged with parameters, outcome, and duration.
+- **Process Isolation**: The TypeScript sidecar runs as a sandboxed child process with strict timeout and resource limits.
+- **No Network in Tests**: All test fixtures are local — no implicit network calls.
+
+---
+
+## Building from Source
+
+```bash
+# Build
+dotnet build src/DocAgentFramework.sln
+
+# Run all tests (490 tests)
+dotnet test src/DocAgentFramework.sln
+
+# Run benchmarks (optional, requires Release config)
+RUN_BENCHMARKS=1 dotnet test --filter "Category=Benchmark" -c Release
+
+# Pack as NuGet tool
+dotnet pack src/DocAgent.McpServer -c Release -o ./nupkg
+```
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`docs/Architecture.md`](docs/Architecture.md) | Layer contracts, project dependencies, pipeline design |
+| [`docs/Plan.md`](docs/Plan.md) | Implementation history (v1.0–v2.1) and future roadmap |
+| [`docs/Testing.md`](docs/Testing.md) | Test strategy, categories, fixture patterns |
+| [`docs/Security.md`](docs/Security.md) | MCP security model, threat mitigations |
+| [`docs/Setup.md`](docs/Setup.md) | Detailed setup guide with hosting modes |
+| [`docs/Agents.md`](docs/Agents.md) | Per-agent-host MCP configuration reference |
+| [`docs/GitHooks.md`](docs/GitHooks.md) | Automatic re-ingestion via git hooks |
+
+---
+
+## License
 
 MIT
