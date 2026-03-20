@@ -86,8 +86,12 @@ public sealed class StartupValidatorTests
     [Fact]
     public void Validate_NonWritableArtifactsDir_ReturnsError()
     {
-        // Use a path with an invalid drive letter on Windows
-        var invalidPath = "Z:\\nonexistent\\deeply\\nested\\path";
+        // Use a path that is unwritable on both Windows and Linux:
+        // - Windows: Z:\ drive doesn't exist → DirectoryNotFoundException (IOException)
+        // - Linux: /proc is read-only → IOException or UnauthorizedAccessException
+        var invalidPath = OperatingSystem.IsWindows()
+            ? @"Z:\nonexistent\deeply\nested\path"
+            : "/proc/nonexistent/deeply/nested/path";
 
         var opts = CreateOptions(
             allowedPaths: [Path.Combine(Path.GetTempPath(), "**")],
