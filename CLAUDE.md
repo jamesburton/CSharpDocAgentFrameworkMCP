@@ -18,8 +18,14 @@ dotnet build src/DocAgentFramework.sln
 # Run a single test class
 dotnet test --filter "FullyQualifiedName~XmlDocParserTests"
 
-# Run MCP server (stdio transport)
+# Run MCP server (HTTP on default port 11877)
 dotnet run --project src/DocAgent.McpServer
+
+# Run MCP server on custom port
+dotnet run --project src/DocAgent.McpServer -- --port 3001
+
+# Run MCP server (stdio transport for CLI agent hosts)
+dotnet run --project src/DocAgent.McpServer -- --stdio
 
 # Run under Aspire app host
 dotnet run --project src/DocAgent.AppHost

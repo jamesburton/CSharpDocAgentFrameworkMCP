@@ -50,11 +50,11 @@ DocAgent supports three modes for how the MCP server binary is delivered to agen
 
 Installed via `dotnet tool install -g DocAgent.McpServer`. The `docagent` binary is on PATH and agent hosts invoke it directly.
 
-**Agent host entry:**
+**Agent host entry (stdio):**
 ```json
 {
   "command": "docagent",
-  "args": [],
+  "args": ["--stdio"],
   "env": { "DOCAGENT_ARTIFACTS_DIR": "~/.docagent/artifacts" }
 }
 ```
@@ -75,11 +75,11 @@ dotnet run scripts/install-user.cs --mode B --yes
 
 Add `~/.docagent/bin` to your PATH, then run `docagent install`.
 
-**Agent host entry:**
+**Agent host entry (stdio):**
 ```json
 {
   "command": "/home/<user>/.docagent/bin/docagent",
-  "args": [],
+  "args": ["--stdio"],
   "env": { "DOCAGENT_ARTIFACTS_DIR": "~/.docagent/artifacts" }
 }
 ```
@@ -88,11 +88,11 @@ Add `~/.docagent/bin` to your PATH, then run `docagent install`.
 
 The agent host launches the server directly from the repository. No global tool needed. Suitable for CI or contributors working from source.
 
-**Agent host entry:**
+**Agent host entry (stdio):**
 ```json
 {
   "command": "dotnet",
-  "args": ["run", "--project", "/path/to/DocAgent.McpServer"],
+  "args": ["run", "--project", "/path/to/DocAgent.McpServer", "--", "--stdio"],
   "env": { "DOCAGENT_ARTIFACTS_DIR": "/tmp/docagent-artifacts" }
 }
 ```

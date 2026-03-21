@@ -47,14 +47,20 @@ DocAgentFramework ingests XML documentation + Roslyn symbol info for .NET, and u
 .NET 10 includes `dnx`, which runs NuGet tools on-demand without installing them (like `npx` for Node.js). **No install step required** — just configure your MCP host and go:
 
 ```bash
-# Run DocAgent directly from NuGet — downloads on first use, cached thereafter
+# Run DocAgent as HTTP server (default port 11877)
 dnx DocAgent.McpServer
+
+# Run on a custom port
+dnx DocAgent.McpServer --port 3001
+
+# Run in stdio mode (for CLI agent hosts)
+dnx DocAgent.McpServer --stdio
 ```
 
 Pin to a specific version:
 
 ```bash
-dnx DocAgent.McpServer@2.1.1
+dnx DocAgent.McpServer@2.2.0
 ```
 
 ### Option B: Global tool install
@@ -78,14 +84,29 @@ For contributors, CI, or pinning to a specific commit:
 ```bash
 git clone https://github.com/jamesburton/CSharpDocAgentFrameworkMCP.git
 cd CSharpDocAgentFrameworkMCP
+
+# HTTP mode (default port 11877)
 dotnet run --project src/DocAgent.McpServer
+
+# HTTP on custom port
+dotnet run --project src/DocAgent.McpServer -- --port 3001
+
+# stdio mode
+dotnet run --project src/DocAgent.McpServer -- --stdio
 ```
 
 ---
 
 ## MCP Configuration
 
-DocAgent is an MCP server using **stdio transport**. Configure it in your AI agent host so the agent can call all 15 tools.
+DocAgent supports two transports:
+
+| Transport | Flag | When to use |
+|-----------|------|-------------|
+| **HTTP** (default) | `--port N` | Remote clients, browser-based agents, multi-client setups |
+| **stdio** | `--stdio` | CLI agents (Claude Code, Cursor, VS Code), single-client |
+
+The default HTTP port is **11877**. Override with `--port N` or `DOCAGENT_PORT` env var.
 
 All examples below show the **`dnx` configuration first** (no install required), then alternatives for global tool and source-based setups.
 
@@ -100,7 +121,7 @@ Add to `~/.claude/settings.json` (or project-level `.claude/settings.json`):
   "mcpServers": {
     "docagent": {
       "command": "dnx",
-      "args": ["DocAgent.McpServer"],
+      "args": ["DocAgent.McpServer", "--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
@@ -117,7 +138,7 @@ Add to `~/.claude/settings.json` (or project-level `.claude/settings.json`):
   "mcpServers": {
     "docagent": {
       "command": "docagent",
-      "args": [],
+      "args": ["--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
@@ -134,7 +155,7 @@ Add to `~/.claude/settings.json` (or project-level `.claude/settings.json`):
   "mcpServers": {
     "docagent": {
       "command": "dotnet",
-      "args": ["run", "--project", "/path/to/CSharpDocAgentFrameworkMCP/src/DocAgent.McpServer"],
+      "args": ["run", "--project", "/path/to/CSharpDocAgentFrameworkMCP/src/DocAgent.McpServer", "--", "--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/tmp/docagent-artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
@@ -159,7 +180,7 @@ Edit `claude_desktop_config.json`:
   "mcpServers": {
     "docagent": {
       "command": "dnx",
-      "args": ["DocAgent.McpServer"],
+      "args": ["DocAgent.McpServer", "--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/Users/<user>/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/Users/<user>/projects/**"
@@ -169,7 +190,7 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop after editing. Replace `dnx` with `docagent` (and remove `args`) if using the global tool instead.
+Restart Claude Desktop after editing. Replace `dnx` with `docagent` (and adjust `args` to `["--stdio"]`) if using the global tool instead.
 
 ### VS Code / GitHub Copilot
 
@@ -180,7 +201,7 @@ Add to `.vscode/settings.json` (workspace) or user settings:
   "github.copilot.chat.mcpServers": {
     "docagent": {
       "command": "dnx",
-      "args": ["DocAgent.McpServer"],
+      "args": ["DocAgent.McpServer", "--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "${userHome}/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "${workspaceFolder}/**"
@@ -199,7 +220,7 @@ Add to global config or per-project `.cursor/mcp.json`:
   "mcpServers": {
     "docagent": {
       "command": "dnx",
-      "args": ["DocAgent.McpServer"],
+      "args": ["DocAgent.McpServer", "--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts",
         "DOCAGENT_ALLOWED_PATHS": "/path/to/your/projects/**"
@@ -221,6 +242,7 @@ See [`docs/Agents.md`](docs/Agents.md) for Windsurf, OpenCode, and Zed configura
 |----------|-------------|---------|
 | `DOCAGENT_ARTIFACTS_DIR` | Directory for snapshot storage and search indices | `./artifacts` |
 | `DOCAGENT_ALLOWED_PATHS` | Comma-separated glob patterns for permitted file access | Current working directory only |
+| `DOCAGENT_PORT` | HTTP port for the MCP server (HTTP mode only) | `11877` |
 | `DOCAGENT_INGESTION_TIMEOUT_SECONDS` | Max time for solution ingestion | `1800` (30 min) |
 | `DOCAGENT_TELEMETRY_VERBOSE` | Enable verbose OpenTelemetry tracing (`true`/`false`) | `false` |
 

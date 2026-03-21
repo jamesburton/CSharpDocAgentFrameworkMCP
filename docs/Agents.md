@@ -2,19 +2,24 @@
 
 How to register the DocAgent MCP server with each supported AI agent host.
 
-The canonical MCP server entry is:
+DocAgent supports two transports:
+
+- **stdio** (`--stdio`) — for CLI agent hosts that manage the server process (Claude Code, Cursor, VS Code, etc.)
+- **HTTP** (default) — Streamable HTTP + legacy SSE on port 11877 (override with `--port N` or `DOCAGENT_PORT` env var)
+
+The canonical MCP server entry for **stdio** mode is:
 
 ```json
 {
   "command": "docagent",
-  "args": [],
+  "args": ["--stdio"],
   "env": {
     "DOCAGENT_ARTIFACTS_DIR": "<path>"
   }
 }
 ```
 
-Replace `<path>` with a writable directory for snapshot storage (e.g. `~/.docagent/artifacts` or an absolute path). For Mode B, replace `"docagent"` with the full path to the binary. For Mode C, replace `"docagent"` with `"dotnet"` and add `["run", "--project", "<path/to/DocAgent.McpServer>"]` to `"args"`.
+Replace `<path>` with a writable directory for snapshot storage (e.g. `~/.docagent/artifacts` or an absolute path). For Mode B, replace `"docagent"` with the full path to the binary. For Mode C, replace `"docagent"` with `"dotnet"` and add `["run", "--project", "<path/to/DocAgent.McpServer>", "--", "--stdio"]` to `"args"`.
 
 `docagent install` writes these entries automatically. This file documents the locations for manual edits or team onboarding.
 
@@ -37,7 +42,7 @@ Replace `<path>` with a writable directory for snapshot storage (e.g. `~/.docage
   "mcpServers": {
     "docagent": {
       "command": "docagent",
-      "args": [],
+      "args": ["--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/Users/<user>/.docagent/artifacts"
       }
@@ -65,7 +70,7 @@ Replace `<path>` with a writable directory for snapshot storage (e.g. `~/.docage
   "mcpServers": {
     "docagent": {
       "command": "docagent",
-      "args": [],
+      "args": ["--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts"
       }
@@ -94,7 +99,7 @@ Replace `<path>` with a writable directory for snapshot storage (e.g. `~/.docage
   "github.copilot.chat.mcpServers": {
     "docagent": {
       "command": "docagent",
-      "args": [],
+      "args": ["--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "${userHome}/.docagent/artifacts"
       }
@@ -128,7 +133,7 @@ Cursor also supports a per-project `.cursor/mcp.json` file in the workspace root
   "mcpServers": {
     "docagent": {
       "command": "docagent",
-      "args": [],
+      "args": ["--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts"
       }
@@ -158,7 +163,7 @@ Cursor also supports a per-project `.cursor/mcp.json` file in the workspace root
   "mcpServers": {
     "docagent": {
       "command": "docagent",
-      "args": [],
+      "args": ["--stdio"],
       "env": {
         "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts"
       }
@@ -187,7 +192,7 @@ Cursor also supports a per-project `.cursor/mcp.json` file in the workspace root
     "servers": {
       "docagent": {
         "command": "docagent",
-        "args": [],
+        "args": ["--stdio"],
         "env": {
           "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts"
         }
@@ -219,7 +224,7 @@ Cursor also supports a per-project `.cursor/mcp.json` file in the workspace root
     "docagent": {
       "command": {
         "path": "docagent",
-        "args": [],
+        "args": ["--stdio"],
         "env": {
           "DOCAGENT_ARTIFACTS_DIR": "/home/<user>/.docagent/artifacts"
         }
