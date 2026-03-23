@@ -5,6 +5,7 @@ obj/
 [Dd]ebug/
 [Rr]elease/
 artifacts/
+.artifacts/
 TestResults/
 *.user
 *.suo

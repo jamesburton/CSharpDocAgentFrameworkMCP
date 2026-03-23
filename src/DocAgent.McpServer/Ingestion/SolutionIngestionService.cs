@@ -287,7 +287,7 @@ public sealed class SolutionIngestionService : ISolutionIngestionService
 
             // Release compilation reference to allow GC to reclaim memory before next project
             compilation = null;
-            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: false);
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
 
             // Stamp ProjectOrigin on every node
             var stampedNodes = projectNodes
