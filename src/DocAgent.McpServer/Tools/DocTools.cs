@@ -515,14 +515,9 @@ public sealed class DocTools
         // Load the latest snapshot directly for efficient full-graph traversal.
         // Previous approach searched via wildcard then resolved each node individually,
         // which was O(N) GetSymbolAsync calls over 252K+ nodes — prohibitively slow.
-        var manifest = await _snapshotStore.ListAsync(cancellationToken);
-        if (manifest.Count == 0)
-            return ErrorResponse(QueryErrorKind.SnapshotMissing, "No snapshots available.");
-
-        var latestEntry = manifest.OrderByDescending(e => e.IngestedAt).First();
-        var snapshot = await _snapshotStore.LoadAsync(latestEntry.ContentHash, cancellationToken);
+        var snapshot = await _snapshotStore.LoadLatestAsync(cancellationToken);
         if (snapshot is null)
-            return ErrorResponse(QueryErrorKind.SnapshotMissing, "Snapshot could not be loaded.");
+            return ErrorResponse(QueryErrorKind.SnapshotMissing, "No snapshots available.");
 
         // Filter to Real nodes, optionally by project
         var realNodes = snapshot.Nodes

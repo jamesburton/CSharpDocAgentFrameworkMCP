@@ -117,8 +117,7 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
         if (!_hasIndex || string.IsNullOrWhiteSpace(query))
             yield break;
 
-        // Wildcard "*" → return all indexed nodes without Lucene text search.
-        // Used by get_doc_coverage, explain_project, and other tools that need full enumeration.
+        // Wildcard "*" → enumerate all indexed nodes without Lucene text search.
         if (query.Trim() == "*")
         {
             foreach (var (id, node) in _nodes)

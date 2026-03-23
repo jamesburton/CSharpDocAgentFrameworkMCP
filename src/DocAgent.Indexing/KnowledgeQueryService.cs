@@ -48,9 +48,11 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
         var lookup = GetOrBuildLookup(snapshot);
 
         // Collect raw hits from the index, filtered and paginated.
-        // Pass projectFilter to the index so Lucene-level filtering scopes results
-        // before the top-N cutoff (prevents framework types from dominating).
+        // projectFilter is pushed to the index for Lucene-level scoping (prevents
+        // framework types from dominating the top-N cutoff).
         var filtered = new List<SearchResultItem>();
+        var skipRemaining = offset;
+        var taken = 0;
         await foreach (var hit in _index.SearchAsync(query, ct, projectFilter).ConfigureAwait(false))
         {
             ct.ThrowIfCancellationRequested();
@@ -59,12 +61,19 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
                 continue;
             if (kindFilter.HasValue && node.Kind != kindFilter.Value)
                 continue;
-            if (projectFilter is not null && node.ProjectOrigin != projectFilter)
+
+            // Skip items before offset, then collect up to limit.
+            if (skipRemaining > 0)
+            {
+                skipRemaining--;
                 continue;
+            }
             filtered.Add(new SearchResultItem(hit.Id, hit.Score, hit.Snippet, node.Kind, node.DisplayName, ProjectName: node.ProjectOrigin));
+            if (++taken >= limit)
+                break;
         }
 
-        var page = filtered.Skip(offset).Take(limit).ToList();
+        var page = filtered;
         sw.Stop();
 
         var envelope = new ResponseEnvelope<IReadOnlyList<SearchResultItem>>(

@@ -109,6 +109,20 @@ public sealed class SnapshotStore
     }
 
     /// <summary>
+    /// Load the most recently ingested snapshot, or null if no snapshots exist.
+    /// Centralises the common pattern: list → order by IngestedAt → load latest.
+    /// </summary>
+    public async Task<SymbolGraphSnapshot?> LoadLatestAsync(CancellationToken ct = default)
+    {
+        var manifest = await ListAsync(ct).ConfigureAwait(false);
+        if (manifest.Count == 0)
+            return null;
+
+        var latestEntry = manifest.OrderByDescending(e => e.IngestedAt).First();
+        return await LoadAsync(latestEntry.ContentHash, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// List all snapshots from manifest.
     /// </summary>
     public async Task<IReadOnlyList<SnapshotManifestEntry>> ListAsync(CancellationToken ct = default)

@@ -126,14 +126,9 @@ if (!useStdio)
 // Startup: load existing index if snapshot exists on disk
 var store = app.Services.GetRequiredService<SnapshotStore>();
 var index = app.Services.GetRequiredService<ISearchIndex>();
-var snapshots = await store.ListAsync();
-if (snapshots.Count > 0)
-{
-    var latest = snapshots.OrderByDescending(s => s.IngestedAt).First();
-    var snapshot = await store.LoadAsync(latest.ContentHash);
-    if (snapshot is not null)
-        await index.IndexAsync(snapshot, CancellationToken.None);
-}
+var latestSnapshot = await store.LoadLatestAsync();
+if (latestSnapshot is not null)
+    await index.IndexAsync(latestSnapshot, CancellationToken.None);
 
 await app.RunAsync();
 return 0;

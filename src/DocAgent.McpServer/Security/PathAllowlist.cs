@@ -37,10 +37,7 @@ public sealed class PathAllowlist
             ? opts.ArtifactsDir
             : Environment.GetEnvironmentVariable("DOCAGENT_ARTIFACTS_DIR");
         if (!string.IsNullOrWhiteSpace(artifactsRaw))
-        {
             _artifactsDir = Path.GetFullPath(artifactsRaw);
-            allowList.Add(Path.Combine(_artifactsDir, "**"));
-        }
 
         _allowPatterns = allowList.AsReadOnly();
         _denyPatterns = opts.DeniedPaths.ToList().AsReadOnly();
