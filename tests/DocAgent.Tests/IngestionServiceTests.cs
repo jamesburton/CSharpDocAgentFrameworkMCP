@@ -343,7 +343,7 @@ public sealed class IngestionServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public async IAsyncEnumerable<SearchHit> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<SearchHit> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default, string? projectFilter = null)
         {
             yield break;
         }
@@ -357,7 +357,7 @@ public sealed class IngestionServiceTests : IDisposable
         public Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false) =>
             Task.FromException(new InvalidOperationException("Index write failed."));
 
-        public async IAsyncEnumerable<SearchHit> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<SearchHit> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default, string? projectFilter = null)
         {
             yield break;
         }

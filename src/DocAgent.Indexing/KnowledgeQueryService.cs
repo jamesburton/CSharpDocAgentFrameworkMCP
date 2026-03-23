@@ -47,9 +47,11 @@ public sealed class KnowledgeQueryService : IKnowledgeQueryService
         var isStale = snapshot.ContentHash != latestHash;
         var lookup = GetOrBuildLookup(snapshot);
 
-        // Collect raw hits from the index, filtered and paginated
+        // Collect raw hits from the index, filtered and paginated.
+        // Pass projectFilter to the index so Lucene-level filtering scopes results
+        // before the top-N cutoff (prevents framework types from dominating).
         var filtered = new List<SearchResultItem>();
-        await foreach (var hit in _index.SearchAsync(query, ct).ConfigureAwait(false))
+        await foreach (var hit in _index.SearchAsync(query, ct, projectFilter).ConfigureAwait(false))
         {
             ct.ThrowIfCancellationRequested();
             lookup.NodeById.TryGetValue(hit.Id, out var node);

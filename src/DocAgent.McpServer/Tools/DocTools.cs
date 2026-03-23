@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using DocAgent.Core;
+using DocAgent.Ingestion;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Serialization;
@@ -40,17 +41,20 @@ public sealed class DocTools
     private readonly PathAllowlist _allowlist;
     private readonly ILogger<DocTools> _logger;
     private readonly DocAgentServerOptions _options;
+    private readonly SnapshotStore _snapshotStore;
 
     public DocTools(
         IKnowledgeQueryService query,
         PathAllowlist allowlist,
         ILogger<DocTools> logger,
-        IOptions<DocAgentServerOptions> options)
+        IOptions<DocAgentServerOptions> options,
+        SnapshotStore snapshotStore)
     {
         _query = query;
         _allowlist = allowlist;
         _logger = logger;
         _options = options.Value;
+        _snapshotStore = snapshotStore;
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -508,28 +512,23 @@ public sealed class DocTools
 
         try
         {
-        // Step 1: Get all symbols via wildcard search
-        var searchResult = await _query.SearchAsync("*", limit: 10000, ct: cancellationToken);
-        if (!searchResult.Success)
-            return ErrorResponse(searchResult.Error!.Value, searchResult.ErrorMessage);
+        // Load the latest snapshot directly for efficient full-graph traversal.
+        // Previous approach searched via wildcard then resolved each node individually,
+        // which was O(N) GetSymbolAsync calls over 252K+ nodes — prohibitively slow.
+        var manifest = await _snapshotStore.ListAsync(cancellationToken);
+        if (manifest.Count == 0)
+            return ErrorResponse(QueryErrorKind.SnapshotMissing, "No snapshots available.");
 
-        var searchItems = searchResult.Value!.Payload;
+        var latestEntry = manifest.OrderByDescending(e => e.IngestedAt).First();
+        var snapshot = await _snapshotStore.LoadAsync(latestEntry.ContentHash, cancellationToken);
+        if (snapshot is null)
+            return ErrorResponse(QueryErrorKind.SnapshotMissing, "Snapshot could not be loaded.");
 
-        // Step 2: Resolve full SymbolNode for each search result
-        var allNodes = new List<SymbolNode>();
-        foreach (var item in searchItems)
-        {
-            var nodeResult = await _query.GetSymbolAsync(item.Id, ct: cancellationToken);
-            if (nodeResult.Success)
-                allNodes.Add(nodeResult.Value!.Payload.Node);
-        }
-
-        // Step 3: Filter to Real nodes only
-        var realNodes = allNodes.Where(n => n.NodeKind == NodeKind.Real).ToList();
-
-        // Step 4: Apply project filter if specified
-        if (project is not null)
-            realNodes = realNodes.Where(n => n.ProjectOrigin == project).ToList();
+        // Filter to Real nodes, optionally by project
+        var realNodes = snapshot.Nodes
+            .Where(n => n.NodeKind == NodeKind.Real)
+            .Where(n => project is null || n.ProjectOrigin == project)
+            .ToList();
 
         // Step 5: Filter to doc candidates
         var candidates = realNodes

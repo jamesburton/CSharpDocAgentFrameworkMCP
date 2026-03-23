@@ -22,11 +22,16 @@ public sealed class InMemorySearchIndex : ISearchIndex
 #pragma warning disable CS1998 // Async method lacks 'await' operators
     public async IAsyncEnumerable<SearchHit> SearchAsync(
         string query,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default,
+        string? projectFilter = null)
     {
         foreach (var n in _nodes.Values)
         {
-            if ((n.DisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+            if (projectFilter is not null && n.ProjectOrigin != projectFilter)
+                continue;
+
+            if (query.Trim() == "*"
+                || (n.DisplayName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
                 || (n.Docs?.Summary?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
             {
                 yield return new SearchHit(n.Id, 1.0, n.DisplayName ?? string.Empty);

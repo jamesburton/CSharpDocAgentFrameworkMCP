@@ -30,7 +30,7 @@ public sealed record SearchHit(SymbolId Id, double Score, string Snippet);
 public interface ISearchIndex
 {
     Task IndexAsync(SymbolGraphSnapshot snapshot, CancellationToken ct, bool forceReindex = false);
-    IAsyncEnumerable<SearchHit> SearchAsync(string query, CancellationToken ct = default);
+    IAsyncEnumerable<SearchHit> SearchAsync(string query, CancellationToken ct = default, string? projectFilter = null);
     Task<SymbolNode?> GetAsync(SymbolId id, CancellationToken ct);
 }
 

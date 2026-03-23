@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using DocAgent.Core;
+using DocAgent.Ingestion;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Tools;
@@ -51,7 +52,8 @@ public sealed class McpToolTests
     private static DocTools CreateTools(
         IKnowledgeQueryService? svc = null,
         bool permissiveAllowlist = true,
-        bool verboseErrors = false)
+        bool verboseErrors = false,
+        SnapshotStore? snapshotStore = null)
     {
         var opts = new DocAgentServerOptions { VerboseErrors = verboseErrors };
         PathAllowlist allowlist;
@@ -66,11 +68,19 @@ public sealed class McpToolTests
             allowlist = new PathAllowlist(Options.Create(opts));
         }
 
+        if (snapshotStore is null)
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), $"docagent-test-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(tempDir);
+            snapshotStore = new SnapshotStore(tempDir);
+        }
+
         return new DocTools(
             svc ?? new StubKnowledgeQueryService(),
             allowlist,
             NullLogger<DocTools>.Instance,
-            Options.Create(opts));
+            Options.Create(opts),
+            snapshotStore);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -561,9 +571,27 @@ public sealed class McpToolTests
     // get_doc_coverage tests
     // ─────────────────────────────────────────────────────────────────
 
+    /// <summary>Creates a SnapshotStore pre-populated with the CoverageStub nodes for get_doc_coverage tests.</summary>
+    private static async Task<SnapshotStore> CreateCoverageStore()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"docagent-coverage-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        var store = new SnapshotStore(tempDir);
+        var snapshot = new SymbolGraphSnapshot(
+            SchemaVersion: "1.2",
+            ProjectName: "CoverageTest",
+            SourceFingerprint: "test",
+            ContentHash: null,
+            CreatedAt: DateTimeOffset.UtcNow,
+            Nodes: CoverageStub.Nodes.ToList(),
+            Edges: []);
+        await store.SaveAsync(snapshot);
+        return store;
+    }
+
     private sealed class CoverageStub : IKnowledgeQueryService
     {
-        private static readonly SymbolNode[] _nodes =
+        public static readonly SymbolNode[] Nodes =
         [
             // ProjectA, MyApp.Models namespace — 2 documented, 1 undocumented
             new(new SymbolId("ProjectA::MyApp.Models.User"), SymbolKind.Type, "User", "MyApp.Models.User",
@@ -608,13 +636,13 @@ public sealed class McpToolTests
                 null, null, Array.Empty<ParameterInfo>(), Array.Empty<GenericConstraint>(), ProjectOrigin: "External", NodeKind: NodeKind.Stub),
         ];
 
-        private static readonly Dictionary<SymbolId, SymbolNode> _nodeMap = _nodes.ToDictionary(n => n.Id);
+        private static readonly Dictionary<SymbolId, SymbolNode> _nodeMap = Nodes.ToDictionary(n => n.Id);
 
         public Task<QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>> SearchAsync(
             string query, SymbolKind? kindFilter = null, int offset = 0, int limit = 20,
             string? snapshotVersion = null, string? projectFilter = null, CancellationToken ct = default)
         {
-            IReadOnlyList<SearchResultItem> items = _nodes.Select(n =>
+            IReadOnlyList<SearchResultItem> items = Nodes.Select(n =>
                 new SearchResultItem(n.Id, 1.0, n.Docs?.Summary ?? "", n.Kind, n.DisplayName)).ToList();
             return Task.FromResult(QueryResult<ResponseEnvelope<IReadOnlyList<SearchResultItem>>>.Ok(Wrap(items)));
         }
@@ -642,7 +670,8 @@ public sealed class McpToolTests
     [Fact]
     public async Task GetDocCoverage_GroupsByProject()
     {
-        var tools = CreateTools(svc: new CoverageStub());
+        var coverageStore = await CreateCoverageStore();
+        var tools = CreateTools(svc: new CoverageStub(), snapshotStore: coverageStore);
         var json = await tools.GetDocCoverage();
         var root = Parse(json);
 
@@ -658,7 +687,8 @@ public sealed class McpToolTests
     [Fact]
     public async Task GetDocCoverage_GroupsByNamespace()
     {
-        var tools = CreateTools(svc: new CoverageStub());
+        var coverageStore = await CreateCoverageStore();
+        var tools = CreateTools(svc: new CoverageStub(), snapshotStore: coverageStore);
         var json = await tools.GetDocCoverage();
         var root = Parse(json);
 
@@ -674,7 +704,8 @@ public sealed class McpToolTests
     [Fact]
     public async Task GetDocCoverage_GroupsByKind()
     {
-        var tools = CreateTools(svc: new CoverageStub());
+        var coverageStore = await CreateCoverageStore();
+        var tools = CreateTools(svc: new CoverageStub(), snapshotStore: coverageStore);
         var json = await tools.GetDocCoverage();
         var root = Parse(json);
 
@@ -689,7 +720,8 @@ public sealed class McpToolTests
     [Fact]
     public async Task GetDocCoverage_ExcludesNonPublicSymbols()
     {
-        var tools = CreateTools(svc: new CoverageStub());
+        var coverageStore = await CreateCoverageStore();
+        var tools = CreateTools(svc: new CoverageStub(), snapshotStore: coverageStore);
         var json = await tools.GetDocCoverage();
         var root = Parse(json);
 
@@ -704,7 +736,8 @@ public sealed class McpToolTests
     [Fact]
     public async Task GetDocCoverage_ComputesCoveragePercentCorrectly()
     {
-        var tools = CreateTools(svc: new CoverageStub());
+        var coverageStore = await CreateCoverageStore();
+        var tools = CreateTools(svc: new CoverageStub(), snapshotStore: coverageStore);
         var json = await tools.GetDocCoverage();
         var root = Parse(json);
 
@@ -721,7 +754,8 @@ public sealed class McpToolTests
     [Fact]
     public async Task GetDocCoverage_WithProjectFilter_FiltersByProject()
     {
-        var tools = CreateTools(svc: new CoverageStub());
+        var coverageStore = await CreateCoverageStore();
+        var tools = CreateTools(svc: new CoverageStub(), snapshotStore: coverageStore);
         var json = await tools.GetDocCoverage(project: "ProjectA");
         var root = Parse(json);
 

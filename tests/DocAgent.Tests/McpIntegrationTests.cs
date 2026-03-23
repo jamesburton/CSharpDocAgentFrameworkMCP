@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DocAgent.Core;
+using DocAgent.Ingestion;
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Security;
 using DocAgent.McpServer.Tools;
@@ -198,7 +199,10 @@ public sealed class McpIntegrationTests
             VerboseErrors = verboseErrors,
         });
         var logger = NullLogger<DocTools>.Instance;
-        return new DocTools(service, allowlist, logger, options);
+        var tempDir = Path.Combine(Path.GetTempPath(), $"docagent-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        var store = new SnapshotStore(tempDir);
+        return new DocTools(service, allowlist, logger, options, store);
     }
 
     private static PathAllowlist MakeAllowlist(string[] allowed, string[] denied)

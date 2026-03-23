@@ -71,7 +71,7 @@ public class GetSymbolFqnDisambiguationTests : IDisposable
         var svc = new KnowledgeQueryService(index, store);
         var opts = new DocAgentServerOptions { VerboseErrors = true, AllowedPaths = ["**"] };
         var allowlist = new PathAllowlist(Options.Create(opts));
-        return new DocTools(svc, allowlist, NullLogger<DocTools>.Instance, Options.Create(opts));
+        return new DocTools(svc, allowlist, NullLogger<DocTools>.Instance, Options.Create(opts), store);
     }
 
     public void Dispose()

@@ -13,6 +13,7 @@ public sealed class PathAllowlist
 {
     private readonly IReadOnlyList<string> _allowPatterns;
     private readonly IReadOnlyList<string> _denyPatterns;
+    private readonly string? _artifactsDir;
 
     /// <summary>True when explicit allow patterns are configured (from config or env var).</summary>
     internal bool IsConfigured => _allowPatterns.Count > 0;
@@ -28,6 +29,17 @@ public sealed class PathAllowlist
         {
             allowList.AddRange(
                 envPaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+
+        // Auto-include the artifacts directory — it's internal server storage, not user-facing.
+        // Without this, tools like explain_solution fail when the artifacts dir is outside the allowed paths.
+        var artifactsRaw = !string.IsNullOrWhiteSpace(opts.ArtifactsDir)
+            ? opts.ArtifactsDir
+            : Environment.GetEnvironmentVariable("DOCAGENT_ARTIFACTS_DIR");
+        if (!string.IsNullOrWhiteSpace(artifactsRaw))
+        {
+            _artifactsDir = Path.GetFullPath(artifactsRaw);
+            allowList.Add(Path.Combine(_artifactsDir, "**"));
         }
 
         _allowPatterns = allowList.AsReadOnly();
@@ -46,6 +58,11 @@ public sealed class PathAllowlist
         // Deny patterns take precedence — check first
         if (MatchesAny(normalized, _denyPatterns))
             return false;
+
+        // The artifacts directory and its children are always allowed (internal server storage).
+        if (_artifactsDir is not null &&
+            normalized.StartsWith(_artifactsDir, StringComparison.OrdinalIgnoreCase))
+            return true;
 
         // Default when unconfigured: allow cwd only
         if (!IsConfigured)

@@ -111,10 +111,25 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
 
     public async IAsyncEnumerable<SearchHit> SearchAsync(
         string query,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default,
+        string? projectFilter = null)
     {
         if (!_hasIndex || string.IsNullOrWhiteSpace(query))
             yield break;
+
+        // Wildcard "*" → return all indexed nodes without Lucene text search.
+        // Used by get_doc_coverage, explain_project, and other tools that need full enumeration.
+        if (query.Trim() == "*")
+        {
+            foreach (var (id, node) in _nodes)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (projectFilter is not null && node.ProjectOrigin != projectFilter)
+                    continue;
+                yield return new SearchHit(id, 1.0f, node.DisplayName ?? string.Empty);
+            }
+            yield break;
+        }
 
         var directory = GetSearchDirectory();
         if (directory is null)
@@ -130,15 +145,33 @@ public sealed class BM25SearchIndex : ISearchIndex, IDisposable
             Similarity = BuildSimilarity(),
         };
 
-        var boolQuery = new BooleanQuery();
+        // Build text relevance query
+        var textQuery = new BooleanQuery();
         foreach (var token in tokens)
         {
-            boolQuery.Add(new TermQuery(new Term("symbolName",         token)), Occur.SHOULD);
-            boolQuery.Add(new TermQuery(new Term("fullyQualifiedName", token)), Occur.SHOULD);
-            boolQuery.Add(new TermQuery(new Term("docText",            token)), Occur.SHOULD);
+            textQuery.Add(new TermQuery(new Term("symbolName",         token)), Occur.SHOULD);
+            textQuery.Add(new TermQuery(new Term("fullyQualifiedName", token)), Occur.SHOULD);
+            textQuery.Add(new TermQuery(new Term("docText",            token)), Occur.SHOULD);
         }
 
-        var topDocs = searcher.Search(boolQuery, 50);
+        // When a project filter is specified, wrap the text query with a MUST project clause
+        // so the top-N results are already scoped to the target project (not dominated by framework types).
+        Query finalQuery;
+        if (projectFilter is not null)
+        {
+            var filtered = new BooleanQuery
+            {
+                { textQuery, Occur.MUST },
+                { new TermQuery(new Term("projectName", projectFilter)), Occur.MUST },
+            };
+            finalQuery = filtered;
+        }
+        else
+        {
+            finalQuery = textQuery;
+        }
+
+        var topDocs = searcher.Search(finalQuery, 50);
 
         foreach (var scoreDoc in topDocs.ScoreDocs)
         {
