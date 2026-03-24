@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Ingestion;
 using Microsoft.Build.Locator;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,10 +53,8 @@ public static class UpdateCommand
             ? ".docagent/artifacts"
             : config.ArtifactsDir;
 
-        // Resolve relative to working dir if not rooted
-        var absArtifacts = Path.IsPathRooted(rawArtifacts)
-            ? rawArtifacts
-            : Path.GetFullPath(Path.Combine(dir, rawArtifacts));
+        // Expand env vars / tilde, then resolve relative to working dir
+        var absArtifacts = PathExpander.Expand(rawArtifacts, baseDir: dir)!;
 
         try
         {
@@ -83,10 +82,8 @@ public static class UpdateCommand
         //   Secondary: only "dotnet" and "typescript" types, and only when the path exists
         var sources = new List<string>();
 
-        // Primary — resolved relative to working dir if not rooted
-        var absPrimary = Path.IsPathRooted(config.PrimarySource)
-            ? config.PrimarySource
-            : Path.GetFullPath(Path.Combine(dir, config.PrimarySource));
+        // Primary — expand env vars / tilde, then resolve relative to working dir
+        var absPrimary = PathExpander.Expand(config.PrimarySource, baseDir: dir)!;
         sources.Add(absPrimary);
 
         foreach (var secondary in config.SecondarySources)
@@ -100,9 +97,7 @@ public static class UpdateCommand
                 continue;
             }
 
-            var absSecondary = Path.IsPathRooted(secondary.Path)
-                ? secondary.Path
-                : Path.GetFullPath(Path.Combine(dir, secondary.Path));
+            var absSecondary = PathExpander.Expand(secondary.Path, baseDir: dir)!;
 
             if (!File.Exists(absSecondary) && !Directory.Exists(absSecondary))
             {

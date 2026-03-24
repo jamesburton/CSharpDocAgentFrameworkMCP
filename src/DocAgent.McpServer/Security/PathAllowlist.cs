@@ -22,13 +22,13 @@ public sealed class PathAllowlist
     {
         var opts = options.Value;
 
-        // Merge config allow patterns with env var overrides
-        var allowList = new List<string>(opts.AllowedPaths);
+        // Merge config allow patterns with env var overrides, expanding env vars and ~ in each
+        var allowList = new List<string>(PathExpander.ExpandAll(opts.AllowedPaths));
         var envPaths = Environment.GetEnvironmentVariable("DOCAGENT_ALLOWED_PATHS");
         if (!string.IsNullOrWhiteSpace(envPaths))
         {
-            allowList.AddRange(
-                envPaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            var rawEntries = envPaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            allowList.AddRange(PathExpander.ExpandAll(rawEntries));
         }
 
         // Auto-include the artifacts directory — it's internal server storage, not user-facing.
@@ -36,8 +36,7 @@ public sealed class PathAllowlist
         var artifactsRaw = !string.IsNullOrWhiteSpace(opts.ArtifactsDir)
             ? opts.ArtifactsDir
             : Environment.GetEnvironmentVariable("DOCAGENT_ARTIFACTS_DIR");
-        if (!string.IsNullOrWhiteSpace(artifactsRaw))
-            _artifactsDir = Path.GetFullPath(artifactsRaw);
+        _artifactsDir = PathExpander.Expand(artifactsRaw);
 
         _allowPatterns = allowList.AsReadOnly();
         _denyPatterns = opts.DeniedPaths.ToList().AsReadOnly();

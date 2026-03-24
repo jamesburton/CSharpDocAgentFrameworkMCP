@@ -24,7 +24,7 @@ public static class CliServiceProvider
     /// </param>
     public static IServiceProvider Build(string artifactsDir)
     {
-        var absArtifactsDir = Path.GetFullPath(artifactsDir);
+        var absArtifactsDir = Config.PathExpander.Expand(artifactsDir) ?? Path.GetFullPath(artifactsDir);
         Directory.CreateDirectory(absArtifactsDir);
 
         var host = Host.CreateDefaultBuilder()

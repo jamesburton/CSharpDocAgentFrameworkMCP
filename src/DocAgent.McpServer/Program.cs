@@ -38,8 +38,10 @@ builder.Logging.AddConsole(o =>
 });
 
 // Inject custom env var into config system (CLI > DOCAGENT_ARTIFACTS_DIR > appsettings.json)
-var artifactsDirFromEnv = Environment.GetEnvironmentVariable("DOCAGENT_ARTIFACTS_DIR");
-if (!string.IsNullOrWhiteSpace(artifactsDirFromEnv))
+// Expand env vars, tilde, and relative paths so %USERPROFILE%, $HOME, ~, and ..\relative all resolve.
+var artifactsDirFromEnv = DocAgent.McpServer.Config.PathExpander.Expand(
+    Environment.GetEnvironmentVariable("DOCAGENT_ARTIFACTS_DIR"));
+if (artifactsDirFromEnv is not null)
     builder.Configuration["DocAgent:ArtifactsDir"] = artifactsDirFromEnv;
 
 // Strongly-typed configuration from appsettings.json section "DocAgent"
