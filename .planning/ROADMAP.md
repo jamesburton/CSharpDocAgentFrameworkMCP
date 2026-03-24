@@ -116,11 +116,12 @@ Plans:
   3. TypeScript modules map to SymbolKind.Namespace nodes using relative file paths, with Contains edges linking declarations to their parent module
   4. Inheritance (extends) and implementation (implements) relationships appear as SymbolEdge entries with correct edge kinds
   5. JSDoc/TSDoc comments are extracted into DocComment fields (summary, param, returns, example, throws, see, remarks) and source files from node_modules are excluded from the snapshot
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] 29-01-PLAN.md — SymbolId Design, Source File Walker, and Golden-file Infrastructure
-- [ ] 29-02-PLAN.md — Full Symbol & Doc Extraction
+- [x] 29-01-PLAN.md — SymbolId Design, Source File Walker, and Golden-file Infrastructure
+- [x] 29-02-PLAN.md — Full Symbol & Doc Extraction
+- [ ] 29-03-PLAN.md — Gap closure: expand fixture coverage for enums, type aliases, constructors, fields
 
 ### Phase 30: MCP Integration and Incremental Ingestion
 **Goal**: Users can call `ingest_typescript` via MCP to ingest a TypeScript project, query it with all 14 existing tools, and benefit from incremental re-ingestion on subsequent calls
@@ -184,6 +185,6 @@ Plans:
 | 26. API Extensions | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
-| 29. Core Symbol Extraction | 2/2 | Complete   | 2026-03-24 | 2026-03-08 |
+| 29. Core Symbol Extraction | v2.0 | 2/3 | Gap Closure | — |
 | 30. MCP Integration and Incremental Ingestion | v2.0 | 2/2 | Complete | 2026-03-08 |
 | 31. Verification and Hardening | v2.0 | 2/2 | Complete | 2026-03-08 |
