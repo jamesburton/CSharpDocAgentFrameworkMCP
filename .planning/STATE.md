@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1+
-milestone_name: Post-v2.0 Development
-status: in_progress
-stopped_at: MCP Setup & Installation System implemented; 2 test failures to investigate
-last_updated: "2026-03-20T12:00:00.000Z"
-last_activity: 2026-03-20 — Session resumed; test run 488/490 passing
+milestone: v2.0
+milestone_name: TypeScript Language Support
+status: Between milestones — ad-hoc feature work
+stopped_at: Completed 29-core-symbol-extraction/29-01-PLAN.md
+last_updated: "2026-03-24T21:35:53.270Z"
+last_activity: 2026-03-20 — Session resumed
 progress:
-  total_phases: 31
-  completed_phases: 31
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 4
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 6
 ---
 
 # Project State
@@ -80,6 +79,6 @@ Failing tests:
 
 ## Session Continuity
 
-Last session: 2026-03-20
-Stopped at: Session resumed, test results reviewed, STATE.md updated
-Resume file: .planning/phases/31-verification-and-hardening/.continue-here.md (STALE)
+Last session: 2026-03-24T21:35:53.261Z
+Stopped at: Completed 29-core-symbol-extraction/29-01-PLAN.md
+Resume file: None

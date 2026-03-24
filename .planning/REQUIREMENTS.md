@@ -17,13 +17,13 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 ### Symbol Extraction
 
 - [ ] **EXTR-01**: Extract all declaration types (classes, interfaces, functions, enums, type aliases, constructors, methods, properties, fields) into `SymbolNode` graph
-- [ ] **EXTR-02**: Generate stable, deterministic `SymbolId` for every TypeScript symbol (source-stable, collision-free with C# IDs)
-- [ ] **EXTR-03**: Map TypeScript modules to `SymbolKind.Namespace` using relative file paths with `Contains` edges
+- [x] **EXTR-02**: Generate stable, deterministic `SymbolId` for every TypeScript symbol (source-stable, collision-free with C# IDs)
+- [x] **EXTR-03**: Map TypeScript modules to `SymbolKind.Namespace` using relative file paths with `Contains` edges
 - [ ] **EXTR-04**: Extract inheritance (`extends`) and implementation (`implements`) edges as `SymbolEdge` relationships
 - [ ] **EXTR-05**: Map export visibility to accessibility (exported = public, non-exported = internal)
 - [ ] **EXTR-06**: Extract JSDoc/TSDoc comments into `DocComment` (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
-- [ ] **EXTR-07**: Capture source spans (file path + line range) for every extracted symbol
-- [ ] **EXTR-08**: Filter source files to project sources only — exclude `.d.ts` from `node_modules` to prevent snapshot bloat
+- [x] **EXTR-07**: Capture source spans (file path + line range) for every extracted symbol
+- [x] **EXTR-08**: Filter source files to project sources only — exclude `.d.ts` from `node_modules` to prevent snapshot bloat
 
 ### MCP Integration
 
@@ -76,13 +76,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SIDE-03 | Phase 28 | Pending |
 | SIDE-04 | Phase 28 | Pending |
 | EXTR-01 | Phase 29 | Pending |
-| EXTR-02 | Phase 29 | Pending |
-| EXTR-03 | Phase 29 | Pending |
+| EXTR-02 | Phase 29 | Complete |
+| EXTR-03 | Phase 29 | Complete |
 | EXTR-04 | Phase 29 | Pending |
 | EXTR-05 | Phase 29 | Pending |
 | EXTR-06 | Phase 29 | Pending |
-| EXTR-07 | Phase 29 | Pending |
-| EXTR-08 | Phase 29 | Pending |
+| EXTR-07 | Phase 29 | Complete |
+| EXTR-08 | Phase 29 | Complete |
 | MCPI-01 | Phase 30 | Pending |
 | MCPI-02 | Phase 30 | Pending |
 | MCPI-03 | Phase 30 | Pending |

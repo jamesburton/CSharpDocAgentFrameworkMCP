@@ -85,7 +85,7 @@ Full details: milestones/v1.5-ROADMAP.md
 **Milestone Goal:** Make TypeScript codebases queryable through the same 14 MCP tools via a Node.js sidecar using the TypeScript Compiler API.
 
 - [ ] **Phase 28: Sidecar Scaffold and IPC Protocol** - Node.js project, NDJSON protocol, C# process spawning, Aspire orchestration
-- [ ] **Phase 29: Core Symbol Extraction** - TypeScript Compiler API walker producing SymbolNode/SymbolEdge graphs with stable IDs
+- [x] **Phase 29: Core Symbol Extraction** - TypeScript Compiler API walker producing SymbolNode/SymbolEdge graphs with stable IDs (completed 2026-03-24)
 - [ ] **Phase 30: MCP Integration and Incremental Ingestion** - ingest_typescript tool, incremental file hashing, BM25 tokenization
 - [ ] **Phase 31: Verification and Hardening** - Determinism, cross-tool validation, security, performance profiling
 
@@ -184,6 +184,6 @@ Plans:
 | 26. API Extensions | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
-| 29. Core Symbol Extraction | v2.0 | 2/2 | Complete | 2026-03-08 |
+| 29. Core Symbol Extraction | 2/2 | Complete   | 2026-03-24 | 2026-03-08 |
 | 30. MCP Integration and Incremental Ingestion | v2.0 | 2/2 | Complete | 2026-03-08 |
 | 31. Verification and Hardening | v2.0 | 2/2 | Complete | 2026-03-08 |
