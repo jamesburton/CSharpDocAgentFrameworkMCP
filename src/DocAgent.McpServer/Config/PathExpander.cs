@@ -32,7 +32,11 @@ public static partial class PathExpander
         if (string.IsNullOrWhiteSpace(path))
             return null;
 
-        var expanded = path;
+        // Normalize backslashes to forward slashes on non-Windows platforms
+        // so that Windows-style paths like ~\foo\bar or ..\dir\file.cs resolve correctly on Linux/macOS
+        var expanded = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? path.Replace('\\', '/')
+            : path;
 
         // 1. Expand tilde (must come before env-var expansion so ~/$HOME doesn't double-expand)
         expanded = ExpandTilde(expanded);
