@@ -99,9 +99,10 @@ function extractDeclaration(
   checker: ts.TypeChecker,
   projectRoot: string,
   projectName: string,
-  sourceFile: ts.SourceFile
+  sourceFile: ts.SourceFile,
+  knownSymbol?: ts.Symbol
 ) {
-  const symbol = (node as any).symbol as ts.Symbol | undefined;
+  const symbol = knownSymbol ?? ((node as any).symbol as ts.Symbol | undefined);
   if (!symbol) {
     // Some nodes might not have symbols but their children do (e.g. VariableStatement)
     if (ts.isVariableStatement(node)) {
@@ -142,13 +143,27 @@ function extractDeclaration(
     scope: EdgeScope.IntraProject
   });
 
-  // Extract members (for classes, interfaces, enums)
+  // Extract members (for classes and interfaces — instance members)
   if (symbol.members) {
     symbol.members.forEach((memberSymbol) => {
       const memberDecls = memberSymbol.getDeclarations();
       if (memberDecls) {
         for (const memberDecl of memberDecls) {
-          extractDeclaration(memberDecl, id, nodes, edges, checker, projectRoot, projectName, sourceFile);
+          extractDeclaration(memberDecl, id, nodes, edges, checker, projectRoot, projectName, sourceFile, memberSymbol);
+        }
+      }
+    });
+  }
+
+  // Extract exports for enums (enum members live in symbol.exports, not symbol.members)
+  if (symbol.exports && (symbol.flags & ts.SymbolFlags.Enum)) {
+    symbol.exports.forEach((exportedSymbol) => {
+      if (exportedSymbol.flags & ts.SymbolFlags.EnumMember) {
+        const memberDecls = exportedSymbol.getDeclarations();
+        if (memberDecls) {
+          for (const memberDecl of memberDecls) {
+            extractDeclaration(memberDecl, id, nodes, edges, checker, projectRoot, projectName, sourceFile, exportedSymbol);
+          }
         }
       }
     });
