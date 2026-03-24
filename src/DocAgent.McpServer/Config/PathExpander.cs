@@ -71,6 +71,39 @@ public static partial class PathExpander
         return result.ToArray();
     }
 
+    /// <summary>
+    /// Expands environment variables and tilde in a glob pattern <b>without</b> resolving
+    /// relative paths. Use this for allowlist/denylist glob patterns like <c>%USERPROFILE%\projects\**</c>
+    /// where the pattern may be relative (e.g. <c>**</c>) and should not be anchored to cwd.
+    /// </summary>
+    public static string? ExpandGlob(string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+            return null;
+
+        var expanded = ExpandTilde(pattern);
+        expanded = ExpandEnvironmentVariables(expanded);
+        return expanded;
+    }
+
+    /// <summary>
+    /// Expands each glob pattern via <see cref="ExpandGlob"/>, skipping null/empty entries.
+    /// </summary>
+    public static string[] ExpandAllGlobs(IEnumerable<string>? patterns)
+    {
+        if (patterns is null)
+            return [];
+
+        var result = new List<string>();
+        foreach (var p in patterns)
+        {
+            var expanded = ExpandGlob(p);
+            if (expanded is not null)
+                result.Add(expanded);
+        }
+        return result.ToArray();
+    }
+
     // ── Internals ────────────────────────────────────────────────────────
 
     private static string ExpandTilde(string path)

@@ -22,13 +22,15 @@ public sealed class PathAllowlist
     {
         var opts = options.Value;
 
-        // Merge config allow patterns with env var overrides, expanding env vars and ~ in each
-        var allowList = new List<string>(PathExpander.ExpandAll(opts.AllowedPaths));
+        // Merge config allow patterns with env var overrides, expanding env vars and ~ in each.
+        // Use ExpandAllGlobs (not ExpandAll) because these are glob patterns — relative globs
+        // like "**" must not be anchored to cwd.
+        var allowList = new List<string>(PathExpander.ExpandAllGlobs(opts.AllowedPaths));
         var envPaths = Environment.GetEnvironmentVariable("DOCAGENT_ALLOWED_PATHS");
         if (!string.IsNullOrWhiteSpace(envPaths))
         {
             var rawEntries = envPaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            allowList.AddRange(PathExpander.ExpandAll(rawEntries));
+            allowList.AddRange(PathExpander.ExpandAllGlobs(rawEntries));
         }
 
         // Auto-include the artifacts directory — it's internal server storage, not user-facing.
@@ -39,7 +41,7 @@ public sealed class PathAllowlist
         _artifactsDir = PathExpander.Expand(artifactsRaw);
 
         _allowPatterns = allowList.AsReadOnly();
-        _denyPatterns = opts.DeniedPaths.ToList().AsReadOnly();
+        _denyPatterns = PathExpander.ExpandAllGlobs(opts.DeniedPaths).ToList().AsReadOnly();
     }
 
     /// <summary>

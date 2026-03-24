@@ -186,4 +186,78 @@ public sealed class PathExpanderTests
             Environment.SetEnvironmentVariable("DOCAGENT_TEST_VAR", prev);
         }
     }
+
+    // ── ExpandGlob (env var + tilde only, no relative path resolution) ──
+
+    [Fact]
+    public void ExpandGlob_NullOrWhitespace_ReturnsNull()
+    {
+        PathExpander.ExpandGlob(null).Should().BeNull();
+        PathExpander.ExpandGlob("").Should().BeNull();
+        PathExpander.ExpandGlob("  ").Should().BeNull();
+    }
+
+    [Fact]
+    public void ExpandGlob_DoubleStarGlob_NotResolvedToCwd()
+    {
+        var result = PathExpander.ExpandGlob("**");
+        result.Should().Be("**", "pure glob patterns must not be resolved to cwd");
+    }
+
+    [Fact]
+    public void ExpandGlob_TildeGlob_ExpandsHome()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var result = PathExpander.ExpandGlob("~/projects/**");
+        // Tilde is replaced with home dir; the glob suffix is preserved as-is
+        result.Should().StartWith(home);
+        result.Should().EndWith("projects/**");
+    }
+
+    [Fact]
+    public void ExpandGlob_EnvVarGlob_ExpandsVarOnly()
+    {
+        var prev = Environment.GetEnvironmentVariable("DOCAGENT_TEST_VAR");
+        try
+        {
+            Environment.SetEnvironmentVariable("DOCAGENT_TEST_VAR", "/some/dir");
+            var result = PathExpander.ExpandGlob("$DOCAGENT_TEST_VAR/**");
+            result.Should().Be("/some/dir/**");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOCAGENT_TEST_VAR", prev);
+        }
+    }
+
+    [Fact]
+    public void ExpandGlob_WindowsEnvVarGlob_ExpandsVarOnly()
+    {
+        var prev = Environment.GetEnvironmentVariable("DOCAGENT_TEST_VAR");
+        try
+        {
+            Environment.SetEnvironmentVariable("DOCAGENT_TEST_VAR", @"C:\Users\test");
+            var result = PathExpander.ExpandGlob(@"%DOCAGENT_TEST_VAR%\projects\**");
+            result.Should().Be(@"C:\Users\test\projects\**");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOCAGENT_TEST_VAR", prev);
+        }
+    }
+
+    [Fact]
+    public void ExpandAllGlobs_NullInput_ReturnsEmpty()
+    {
+        PathExpander.ExpandAllGlobs(null).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ExpandAllGlobs_PreservesRelativeGlobs()
+    {
+        var result = PathExpander.ExpandAllGlobs(["**", "src/**/*.cs", ""]);
+        result.Should().HaveCount(2);
+        result[0].Should().Be("**");
+        result[1].Should().Be("src/**/*.cs");
+    }
 }
