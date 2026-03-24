@@ -36,7 +36,7 @@ dotnet run --project src/DocAgent.AppHost
 - **Target:** .NET 10 (`net10.0`) with `LangVersion=preview`
 - **Nullable:** enabled, **TreatWarningsAsErrors:** true
 - **Central package management** via `src/Directory.Packages.props`
-- **Test framework:** xUnit + FluentAssertions
+- **Test framework:** xUnit + FluentAssertions (594 tests as of v2.3.0)
 
 ## Architecture
 
@@ -49,7 +49,7 @@ Six layers with strict boundaries:
 | Core | `DocAgent.Core` | Pure domain types + interfaces (no IO) |
 | Ingestion | `DocAgent.Ingestion` | Source discovery, XML parsing, normalization |
 | Indexing | `DocAgent.Indexing` | Build/query search indexes from snapshots |
-| Serving | `DocAgent.McpServer` | MCP tools + security boundaries |
+| Serving | `DocAgent.McpServer` | MCP tools + security boundaries + script/tool parsers (v2.3.0) |
 | Host | `DocAgent.AppHost` | Aspire app host, config, telemetry wiring |
 | Tests | `DocAgent.Tests` | Unit + component tests |
 
@@ -57,6 +57,8 @@ Six layers with strict boundaries:
 
 - **`SymbolGraphSnapshot`** — versioned immutable graph of `SymbolNode`s and `SymbolEdge`s
 - **`SymbolNode`** — a code symbol (type, method, property, etc.) with `DocComment` and `SourceSpan`
+- **`SymbolKind`** — includes C# kinds (Namespace, Type, Method, Property, Field, Event, Parameter, Constructor, Delegate, Indexer, Operator, Destructor, EnumMember, TypeParameter) plus polyglot kinds added in v2.3.0: Tool, BuildTarget, BuildProperty, BuildTask, Script, ScriptFunction, ScriptParameter, CIWorkflow, CIJob, CIStep, DockerStage, DockerInstruction
+- **`SymbolEdgeKind`** — includes standard edge kinds (Contains, References, Overrides, Implements, InheritsFrom, Returns, Accepts) plus v2.3.0 additions: Invokes, Configures, DependsOn, Triggers, Imports
 - **Core interfaces:** `IProjectSource` → `IDocSource` → `ISymbolGraphBuilder` → `ISearchIndex` → `IKnowledgeQueryService`
 
 ### MCP Tools (15 tools)
@@ -67,7 +69,7 @@ Six layers with strict boundaries:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | query | string | (required) | Search query |
-| kindFilter | string? | null | Symbol kind filter: Namespace, Type, Method, Property, Field, Event, Parameter, Constructor, Delegate, Indexer, Operator, Destructor, EnumMember, TypeParameter |
+| kindFilter | string? | null | Symbol kind filter: Namespace, Type, Method, Property, Field, Event, Parameter, Constructor, Delegate, Indexer, Operator, Destructor, EnumMember, TypeParameter, Tool, BuildTarget, BuildProperty, BuildTask, Script, ScriptFunction, ScriptParameter, CIWorkflow, CIJob, CIStep, DockerStage, DockerInstruction |
 | project | string? | null | Project name filter (exact match, case-sensitive). Omit for all projects. |
 | offset | int | 0 | Result offset for pagination |
 | limit | int | 20 | Result limit (max 100) |

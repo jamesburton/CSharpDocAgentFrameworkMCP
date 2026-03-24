@@ -122,3 +122,25 @@ During solution ingestion, each project snapshot is written to `SnapshotStore` a
 ## Ingestion Filtering
 
 By default, test source files are excluded from symbol extraction to reduce graph size for large solutions. The `TestFileFilter` helper skips files matching common test suffixes (`*Tests.cs`, `*Fixture.cs`, `*Spec.cs`, `*Steps.cs`, etc.) while always including `Base*` files. This behaviour is controlled by `DocAgentServerOptions.ExcludeTestFiles` (default: `true`) and can be overridden per ingestion call.
+
+---
+
+## Tools & Scripts Ingestion (v2.3.0)
+
+Nine static parsers in `DocAgent.McpServer.Ingestion` extract symbols from non-C# artifacts:
+
+| Parser | Input | SymbolKind(s) Produced |
+|--------|-------|----------------------|
+| `DotnetToolsParser` | `.config/dotnet-tools.json` | Tool |
+| `MSBuildFileParser` | `.targets`, `.props` | BuildTarget, BuildProperty, BuildTask |
+| `ToolScriptDiscovery` | (discovery) | — |
+| `PowerShellScriptParser` | `.ps1` | Script, ScriptFunction, ScriptParameter |
+| `CIWorkflowParser` | GitHub Actions / Azure Pipelines YAML | CIWorkflow, CIJob, CIStep |
+| `ShellScriptParser` | `.sh`, `.bash` | Script, ScriptFunction |
+| `DockerfileParser` | `Dockerfile` | DockerStage, DockerInstruction |
+| `CrossLanguageEdgeDetector` | SymbolGraphSnapshot | (edges only) |
+| `SnapshotEnricher` | SymbolGraphSnapshot | (enrichment) |
+
+All parsers are pure static classes with no DI. They return `(IReadOnlyList<SymbolNode>, IReadOnlyList<SymbolEdge>)`.
+
+Edge kinds used: `Invokes`, `Configures`, `DependsOn`, `Triggers`, `Imports`, `Contains`, `References`.

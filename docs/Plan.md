@@ -137,6 +137,34 @@ Fixes overflow on large solution snapshots and eliminates flaky test failures fr
 
 ---
 
+### v2.2.0 — Cross-Platform Path Expansion (shipped 2026-03-24)
+
+Cross-platform path expansion for MCP configuration paths.
+
+**Key capabilities:**
+- `PathExpander` utility: expands `%USERPROFILE%` (Windows), `$HOME`/`${HOME}` (*nix), `~` (tilde), and relative paths
+- `ExpandGlob`/`ExpandAllGlobs` variants for glob patterns — expands env vars and tilde without resolving relative paths
+- `PathAllowlist` uses glob-aware expansion to preserve `**` patterns
+- Applied across all config entry points: `Program.cs`, `CliServiceProvider.cs`, `UpdateCommand.cs`
+- Test count: 515 passing
+
+---
+
+### v2.3.0 — Tools & Scripts Tracking (shipped 2026-03-24)
+
+Polyglot ingestion of non-C# artifacts: dotnet tools, MSBuild files, PowerShell scripts, CI/CD workflows, shell scripts, and Dockerfiles.
+
+**Key capabilities:**
+- 12 new `SymbolKind` values: Tool, BuildTarget, BuildProperty, BuildTask, Script, ScriptFunction, ScriptParameter, CIWorkflow, CIJob, CIStep, DockerStage, DockerInstruction
+- 5 new `SymbolEdgeKind` values: Invokes, Configures, DependsOn, Triggers, Imports
+- 9 static parsers in `DocAgent.McpServer.Ingestion` (no DI, pure functions)
+- `CrossLanguageEdgeDetector`: detects edges between script/tool nodes and C# symbols
+- `SnapshotEnricher`: enriches snapshots with cross-language edges
+- YamlDotNet 16.3.0 for CI/CD YAML parsing
+- Test count: 515 → 594 (79 new tests, all passing)
+
+---
+
 ## Future Milestones
 
 ### Package Mapping (pending)
@@ -154,6 +182,7 @@ Fixes overflow on large solution snapshots and eliminates flaky test failures fr
 | Python adapter | Tree-sitter + pyright/pylance + import graph | Future |
 | Go adapter | Tree-sitter + `go/packages` + `gopls` | Future |
 | Rust adapter | Tree-sitter + rust-analyzer | Future |
+| Tools/scripts tracking | Non-C# artifact ingestion (dotnet-tools, MSBuild, PowerShell, CI/CD, Docker, shell) | **Delivered — v2.3.0** |
 | LSP bridge | Read-only workspace intelligence via LSP protocol | Speculative |
 | Embeddings / vector index | `IVectorIndex` interface exists; no implementation | Deferred (provider TBD) |
 | Query DSL | Structured query language over the symbol graph | Speculative |
