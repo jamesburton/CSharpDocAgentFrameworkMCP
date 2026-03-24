@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Completed 29-core-symbol-extraction/29-01-PLAN.md
-last_updated: "2026-03-24T21:35:53.270Z"
+stopped_at: Completed 29-core-symbol-extraction/29-03-PLAN.md
+last_updated: "2026-03-24T23:39:23.093Z"
 last_activity: 2026-03-20 — Session resumed
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 6
+  total_plans: 9
+  completed_plans: 7
 ---
 
 # Project State
@@ -70,6 +70,7 @@ Failing tests:
 | `ExcludeTestFiles = true` by default | Reduces noise in symbol graphs |
 | CLI command architecture (CliRunner routing) | Clean separation of concerns for setup commands |
 | Sentinel-based git hooks | Non-destructive hook management alongside existing hooks |
+| TypeScript enum members from `symbol.exports` not `symbol.members` | TS Compiler API stores enum members in exports Map; members is always undefined for enums |
 
 ## Blockers/Concerns
 
@@ -79,6 +80,6 @@ Failing tests:
 
 ## Session Continuity
 
-Last session: 2026-03-24T21:35:53.261Z
-Stopped at: Completed 29-core-symbol-extraction/29-01-PLAN.md
+Last session: 2026-03-24T23:39:23.086Z
+Stopped at: Completed 29-core-symbol-extraction/29-03-PLAN.md
 Resume file: None
