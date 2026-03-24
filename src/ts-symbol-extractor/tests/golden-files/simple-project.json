@@ -6,9 +6,11 @@
   "createdAt": "2026-03-08T00:00:00.000Z",
   "nodes": [
     {
-      "id": "N:simple-project:src/index.ts:file",
+      "id": {
+        "value": "N:simple-project:src/index.ts:file"
+      },
       "kind": 0,
-      "name": "src/index.ts",
+      "displayName": "src/index.ts",
       "fullyQualifiedName": "src/index.ts",
       "accessibility": 0,
       "span": {
@@ -24,9 +26,11 @@
       "nodeKind": 0
     },
     {
-      "id": "M:simple-project:src/index.ts:hello",
+      "id": {
+        "value": "M:simple-project:src/index.ts:hello"
+      },
       "kind": 2,
-      "name": "hello",
+      "displayName": "hello",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".hello",
       "accessibility": 0,
       "span": {
@@ -61,9 +65,11 @@
       "nodeKind": 0
     },
     {
-      "id": "T:simple-project:src/index.ts:IGreeter",
+      "id": {
+        "value": "T:simple-project:src/index.ts:IGreeter"
+      },
       "kind": 1,
-      "name": "IGreeter",
+      "displayName": "IGreeter",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".IGreeter",
       "accessibility": 0,
       "span": {
@@ -79,9 +85,11 @@
       "nodeKind": 0
     },
     {
-      "id": "M:simple-project:src/index.ts:IGreeter.greet",
+      "id": {
+        "value": "M:simple-project:src/index.ts:IGreeter.greet"
+      },
       "kind": 2,
-      "name": "greet",
+      "displayName": "greet",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".IGreeter.greet",
       "accessibility": 1,
       "span": {
@@ -114,9 +122,11 @@
       "nodeKind": 0
     },
     {
-      "id": "T:simple-project:src/index.ts:Greeter",
+      "id": {
+        "value": "T:simple-project:src/index.ts:Greeter"
+      },
       "kind": 1,
-      "name": "Greeter",
+      "displayName": "Greeter",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeter",
       "accessibility": 0,
       "span": {
@@ -141,9 +151,11 @@
       "nodeKind": 0
     },
     {
-      "id": "M:simple-project:src/index.ts:Greeter.greet",
+      "id": {
+        "value": "M:simple-project:src/index.ts:Greeter.greet"
+      },
       "kind": 2,
-      "name": "greet",
+      "displayName": "greet",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeter.greet",
       "accessibility": 1,
       "span": {
@@ -176,9 +188,11 @@
       "nodeKind": 0
     },
     {
-      "id": "T:simple-project:src/index.ts:SpecialGreeter",
+      "id": {
+        "value": "T:simple-project:src/index.ts:SpecialGreeter"
+      },
       "kind": 1,
-      "name": "SpecialGreeter",
+      "displayName": "SpecialGreeter",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".SpecialGreeter",
       "accessibility": 0,
       "span": {
@@ -203,9 +217,11 @@
       "nodeKind": 0
     },
     {
-      "id": "M:simple-project:src/index.ts:SpecialGreeter.greetSpecially",
+      "id": {
+        "value": "M:simple-project:src/index.ts:SpecialGreeter.greetSpecially"
+      },
       "kind": 2,
-      "name": "greetSpecially",
+      "displayName": "greetSpecially",
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".SpecialGreeter.greetSpecially",
       "accessibility": 1,
       "span": {
@@ -240,56 +256,92 @@
   ],
   "edges": [
     {
-      "sourceId": "N:simple-project:src/index.ts:file",
-      "targetId": "M:simple-project:src/index.ts:hello",
+      "sourceId": {
+        "value": "N:simple-project:src/index.ts:file"
+      },
+      "targetId": {
+        "value": "M:simple-project:src/index.ts:hello"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "N:simple-project:src/index.ts:file",
-      "targetId": "T:simple-project:src/index.ts:IGreeter",
+      "sourceId": {
+        "value": "N:simple-project:src/index.ts:file"
+      },
+      "targetId": {
+        "value": "T:simple-project:src/index.ts:IGreeter"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "T:simple-project:src/index.ts:IGreeter",
-      "targetId": "M:simple-project:src/index.ts:IGreeter.greet",
+      "sourceId": {
+        "value": "T:simple-project:src/index.ts:IGreeter"
+      },
+      "targetId": {
+        "value": "M:simple-project:src/index.ts:IGreeter.greet"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "N:simple-project:src/index.ts:file",
-      "targetId": "T:simple-project:src/index.ts:Greeter",
+      "sourceId": {
+        "value": "N:simple-project:src/index.ts:file"
+      },
+      "targetId": {
+        "value": "T:simple-project:src/index.ts:Greeter"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "T:simple-project:src/index.ts:Greeter",
-      "targetId": "M:simple-project:src/index.ts:Greeter.greet",
+      "sourceId": {
+        "value": "T:simple-project:src/index.ts:Greeter"
+      },
+      "targetId": {
+        "value": "M:simple-project:src/index.ts:Greeter.greet"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "T:simple-project:src/index.ts:Greeter",
-      "targetId": "T:simple-project:src/index.ts:IGreeter",
+      "sourceId": {
+        "value": "T:simple-project:src/index.ts:Greeter"
+      },
+      "targetId": {
+        "value": "T:simple-project:src/index.ts:IGreeter"
+      },
       "kind": 2,
       "scope": 0
     },
     {
-      "sourceId": "N:simple-project:src/index.ts:file",
-      "targetId": "T:simple-project:src/index.ts:SpecialGreeter",
+      "sourceId": {
+        "value": "N:simple-project:src/index.ts:file"
+      },
+      "targetId": {
+        "value": "T:simple-project:src/index.ts:SpecialGreeter"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "T:simple-project:src/index.ts:SpecialGreeter",
-      "targetId": "M:simple-project:src/index.ts:SpecialGreeter.greetSpecially",
+      "sourceId": {
+        "value": "T:simple-project:src/index.ts:SpecialGreeter"
+      },
+      "targetId": {
+        "value": "M:simple-project:src/index.ts:SpecialGreeter.greetSpecially"
+      },
       "kind": 0,
       "scope": 0
     },
     {
-      "sourceId": "T:simple-project:src/index.ts:SpecialGreeter",
-      "targetId": "T:simple-project:src/index.ts:Greeter",
+      "sourceId": {
+        "value": "T:simple-project:src/index.ts:SpecialGreeter"
+      },
+      "targetId": {
+        "value": "T:simple-project:src/index.ts:Greeter"
+      },
       "kind": 6,
       "scope": 0
     }

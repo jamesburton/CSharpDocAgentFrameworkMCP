@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
 import { extractSymbols } from '../src/extractor.js';
+import type { SymbolGraphSnapshot } from '../src/types.js';
 import { SymbolKind } from '../src/types.js';
 
 describe('extractor', () => {
@@ -12,9 +13,13 @@ describe('extractor', () => {
     fs.mkdirSync(goldenDir, { recursive: true });
   }
 
-  it('should extract symbols from a simple project and match golden file', () => {
-    const snapshot = extractSymbols(fixturePath);
+  let snapshot: SymbolGraphSnapshot;
 
+  beforeAll(() => {
+    snapshot = extractSymbols(fixturePath);
+  });
+
+  it('should extract symbols from a simple project and match golden file', () => {
     // Normalize createdAt for comparison
     const normalizedSnapshot = {
       ...snapshot,
@@ -34,17 +39,15 @@ describe('extractor', () => {
   });
 
   it('should exclude node_modules', () => {
-    const snapshot = extractSymbols(fixturePath);
-    const nodeModulesNode = snapshot.nodes.find(n => n.id.includes('node_modules'));
+    const nodeModulesNode = snapshot.nodes.find(n => n.id.value.includes('node_modules'));
     expect(nodeModulesNode).toBeUndefined();
   });
 
   it('should map source files to Namespace nodes', () => {
-    const snapshot = extractSymbols(fixturePath);
-    const indexFileNode = snapshot.nodes.find(n => n.kind === SymbolKind.Namespace && n.name === 'src/index.ts');
-    
+    const indexFileNode = snapshot.nodes.find(n => n.kind === SymbolKind.Namespace && n.displayName === 'src/index.ts');
+
     expect(indexFileNode).toBeDefined();
-    expect(indexFileNode?.id).toBe('N:simple-project:src/index.ts:file');
+    expect(indexFileNode?.id.value).toBe('N:simple-project:src/index.ts:file');
     expect(indexFileNode?.span.filePath).toContain('index.ts');
   });
 });
