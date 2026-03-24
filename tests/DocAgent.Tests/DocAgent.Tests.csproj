@@ -25,6 +25,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Testing.Verifiers.XUnit" />
     <PackageReference Include="Microsoft.CodeAnalysis.Common" />
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\tests\DocAgent.Benchmarks\DocAgent.Benchmarks.csproj" />
