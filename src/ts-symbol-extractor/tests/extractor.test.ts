@@ -50,4 +50,30 @@ describe('extractor', () => {
     expect(indexFileNode?.id.value).toBe('N:simple-project:src/index.ts:file');
     expect(indexFileNode?.span.filePath).toContain('index.ts');
   });
+
+  it('should extract enum type and enum members', () => {
+    const directionNode = snapshot.nodes.find(n => n.displayName === 'Direction' && n.kind === SymbolKind.Type);
+    expect(directionNode).toBeDefined();
+    expect(directionNode!.id.value).toContain('Direction');
+
+    const northMember = snapshot.nodes.find(n => n.displayName === 'North' && n.kind === SymbolKind.EnumMember);
+    expect(northMember).toBeDefined();
+  });
+
+  it('should extract type alias', () => {
+    const greetingNode = snapshot.nodes.find(n => n.displayName === 'Greeting' && n.kind === SymbolKind.Type);
+    expect(greetingNode).toBeDefined();
+    expect(greetingNode!.id.value).toContain('Greeting');
+  });
+
+  it('should extract constructor', () => {
+    const ctorNode = snapshot.nodes.find(n => n.kind === SymbolKind.Constructor && n.id.value.includes('ConfiguredGreeter'));
+    expect(ctorNode).toBeDefined();
+  });
+
+  it('should extract class field/property', () => {
+    const prefixNode = snapshot.nodes.find(n => n.displayName === 'prefix' && n.id.value.includes('ConfiguredGreeter'));
+    expect(prefixNode).toBeDefined();
+    expect([SymbolKind.Property, SymbolKind.Field]).toContain(prefixNode!.kind);
+  });
 });
