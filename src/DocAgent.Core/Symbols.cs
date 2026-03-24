@@ -2,6 +2,7 @@ namespace DocAgent.Core;
 
 public enum SymbolKind
 {
+    // ── C# language symbols (existing) ──────────────────────────────
     Namespace,
     Type,
     Method,
@@ -15,7 +16,33 @@ public enum SymbolKind
     Operator,
     Destructor,
     EnumMember,
-    TypeParameter
+    TypeParameter,
+
+    // ── Tools & scripts (Phase A–E) ─────────────────────────────────
+    /// <summary>A CLI tool entry from dotnet-tools.json.</summary>
+    Tool,
+    /// <summary>An MSBuild target from .targets/.props files.</summary>
+    BuildTarget,
+    /// <summary>An MSBuild property definition.</summary>
+    BuildProperty,
+    /// <summary>An MSBuild custom task reference.</summary>
+    BuildTask,
+    /// <summary>A script file (.ps1, .sh, .bash).</summary>
+    Script,
+    /// <summary>A function defined within a script file.</summary>
+    ScriptFunction,
+    /// <summary>A parameter of a script or script function.</summary>
+    ScriptParameter,
+    /// <summary>A CI/CD workflow file (GitHub Actions, Azure Pipelines, etc.).</summary>
+    CIWorkflow,
+    /// <summary>A job within a CI/CD workflow.</summary>
+    CIJob,
+    /// <summary>A step within a CI/CD job.</summary>
+    CIStep,
+    /// <summary>A Dockerfile stage (FROM ... AS stage).</summary>
+    DockerStage,
+    /// <summary>A Dockerfile instruction (RUN, COPY, etc.).</summary>
+    DockerInstruction
 }
 
 public enum Accessibility
@@ -94,13 +121,26 @@ public sealed record SymbolNode(
 
 public enum SymbolEdgeKind
 {
+    // ── Existing C# relationships ───────────────────────────────────
     Contains,
     Inherits,
     Implements,
     Calls,
     References,
     Overrides,
-    Returns
+    Returns,
+
+    // ── Cross-language / tooling relationships (Phase A–E) ──────────
+    /// <summary>A script/tool invokes a C# type, method, or another script.</summary>
+    Invokes,
+    /// <summary>A script/build target configures a resource or setting.</summary>
+    Configures,
+    /// <summary>A build target or CI step depends on another target/step.</summary>
+    DependsOn,
+    /// <summary>A CI step triggers another workflow or job.</summary>
+    Triggers,
+    /// <summary>A script imports or sources another script/module.</summary>
+    Imports
 }
 
 public sealed record SymbolEdge(SymbolId From, SymbolId To, SymbolEdgeKind Kind, EdgeScope Scope = EdgeScope.IntraProject);
