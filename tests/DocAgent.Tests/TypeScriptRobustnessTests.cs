@@ -68,11 +68,9 @@ public class TypeScriptRobustnessTests : IDisposable
         // Act
         Func<Task> act = () => _tsService.IngestTypeScriptAsync(Path.Combine(_tempDir, "non-existent.json"), CancellationToken.None);
 
-        // Assert
-        // The sidecar should return a 404-like error message or the C# service should catch the missing file early.
-        // Currently TypeScriptIngestionService.cs check sidecar entry point existence but not tsconfig existence.
-        // The sidecar itself will throw an error if tsconfig is missing.
-        await act.Should().ThrowAsync<TypeScriptIngestionException>().WithMessage("*Error reading tsconfig.json*");
+        // Assert — service now validates tsconfig existence early with structured category
+        var ex = await act.Should().ThrowAsync<TypeScriptIngestionException>().WithMessage("*tsconfig.json not found*");
+        ex.Which.Category.Should().Be("tsconfig_invalid");
     }
 
     [Fact]
