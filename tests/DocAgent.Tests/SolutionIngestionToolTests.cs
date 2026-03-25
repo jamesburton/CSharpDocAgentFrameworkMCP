@@ -79,11 +79,14 @@ public sealed class SolutionIngestionToolTests
             Options.Create(new DocAgentServerOptions()),
             NullLogger<TypeScriptIngestionService>.Instance);
 
+        var auditLogger = new AuditLogger(Options.Create(new DocAgentServerOptions()), NullLogger<AuditLogger>.Instance);
+
         return new IngestionTools(
             new StubIngestionService(),
             solutionSvc ?? new StubSolutionIngestionService(DefaultResult),
             tsSvc,
             allowlist,
+            auditLogger,
             NullLogger<IngestionTools>.Instance);
     }
 

@@ -46,11 +46,14 @@ public class TypeScriptE2ETests : IDisposable
         _tsService = new TypeScriptIngestionService(
             _store, _index, allowlist, optionsWrapper, logger);
         
+        var auditLogger = new AuditLogger(optionsWrapper, NullLogger<AuditLogger>.Instance);
+
         _tools = new IngestionTools(
             new Mock<IIngestionService>().Object,
             new Mock<ISolutionIngestionService>().Object,
             _tsService,
             allowlist,
+            auditLogger,
             NullLogger<IngestionTools>.Instance);
     }
 

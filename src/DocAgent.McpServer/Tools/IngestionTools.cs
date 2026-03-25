@@ -31,6 +31,7 @@ public sealed class IngestionTools
     private readonly ISolutionIngestionService _solutionIngestionService;
     private readonly TypeScriptIngestionService _typeScriptIngestionService;
     private readonly PathAllowlist _allowlist;
+    private readonly AuditLogger _auditLogger;
     private readonly ILogger<IngestionTools> _logger;
 
     public IngestionTools(
@@ -38,12 +39,14 @@ public sealed class IngestionTools
         ISolutionIngestionService solutionIngestionService,
         TypeScriptIngestionService typeScriptIngestionService,
         PathAllowlist allowlist,
+        AuditLogger auditLogger,
         ILogger<IngestionTools> logger)
     {
         _ingestionService = ingestionService;
         _solutionIngestionService = solutionIngestionService;
         _typeScriptIngestionService = typeScriptIngestionService;
         _allowlist = allowlist;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -287,6 +290,18 @@ public sealed class IngestionTools
             activity?.SetTag("tool.result.symbolCount", result.SymbolCount);
             activity?.SetTag("tool.result.skipped", result.Skipped);
             activity?.SetStatus(ActivityStatusCode.Ok);
+
+            _auditLogger.Log(
+                tool: "ingest_typescript",
+                arguments: new Dictionary<string, object?>
+                {
+                    ["path"] = path,
+                    ["symbolCount"] = result.SymbolCount,
+                    ["skipped"] = result.Skipped,
+                },
+                result: null,
+                duration: result.Duration,
+                success: true);
 
             return JsonSerializer.Serialize(new
             {
