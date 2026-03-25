@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-03-25T19:09:05.631Z"
-last_activity: 2026-03-25 — Completed 30-01 (MCP TypeScript integration)
+stopped_at: Completed 31-03-PLAN.md
+last_updated: "2026-03-25T19:47:23Z"
+last_activity: 2026-03-25 — Completed 31-03 (sidecar absolute path leak fix + debug logging removal)
 progress:
   total_phases: 4
   completed_phases: 4
@@ -28,7 +28,7 @@ Milestone v2.0 (TypeScript Language Support): SHIPPED
 Post-milestone work: v2.1.0 shipped (large solution ingestion optimisations) + MCP setup CLI
 
 Status: Between milestones — ad-hoc feature work
-Last activity: 2026-03-25 — Completed 31-01 (TypeScript stress tests, benchmarks, determinism + MCP tool round-trips)
+Last activity: 2026-03-25 — Completed 31-03 (sidecar absolute path leak fix + debug logging removal)
 
 Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
@@ -56,9 +56,10 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Test Status (2026-03-25)
 
-**638 passed, 0 failed (full run), 638 total**
+**632 passed, 0 failed (full run), 632 total**
 
 - 31-01 added 23 new tests (TypeScriptStressTests: 5, TypeScriptDeterminismTests: 18)
+- 31-03 added 1 new test (IngestTypeScriptAsync_produces_relative_file_paths_in_spans)
 - Full suite run confirms zero regressions
 
 ## Recent Decisions
@@ -75,6 +76,7 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 | Early tsconfig.json existence validation | Fail-fast before sidecar spawn with tsconfig_invalid category |
 | PipelineOverride for test isolation in TypeScript tests | Inject fixed-timestamp snapshots without Node.js sidecar; keeps CI fast |
 | Fixed-timestamp snapshots for determinism tests | UtcNow in service overwrites CreatedAt; fixed timestamp ensures byte-identical serialization |
+| Pass projectRoot into getSourceSpan for relative paths | Centralizes fix in one function rather than patching each call site |
 
 ## Blockers/Concerns
 
@@ -82,6 +84,6 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-25T19:09:05.621Z
-Stopped at: Completed 31-01-PLAN.md
+Last session: 2026-03-25T19:47:23Z
+Stopped at: Completed 31-03-PLAN.md
 Resume file: None
