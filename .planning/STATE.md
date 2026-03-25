@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Completed 31-03-PLAN.md
-last_updated: "2026-03-25T19:47:23Z"
-last_activity: 2026-03-25 — Completed 31-03 (sidecar absolute path leak fix + debug logging removal)
+stopped_at: Completed 31-04-PLAN.md
+last_updated: "2026-03-25T20:20:00Z"
+last_activity: 2026-03-25 — Completed 31-04 (TypeScript audit logging + Architecture.md sidecar docs)
 progress:
   total_phases: 4
   completed_phases: 4
@@ -28,7 +28,7 @@ Milestone v2.0 (TypeScript Language Support): SHIPPED
 Post-milestone work: v2.1.0 shipped (large solution ingestion optimisations) + MCP setup CLI
 
 Status: Between milestones — ad-hoc feature work
-Last activity: 2026-03-25 — Completed 31-03 (sidecar absolute path leak fix + debug logging removal)
+Last activity: 2026-03-25 — Completed 31-04 (TypeScript audit logging + Architecture.md sidecar docs)
 
 Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
@@ -56,10 +56,11 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Test Status (2026-03-25)
 
-**632 passed, 0 failed (full run), 632 total**
+**641 passed, 0 failed (full run), 641 total**
 
 - 31-01 added 23 new tests (TypeScriptStressTests: 5, TypeScriptDeterminismTests: 18)
 - 31-03 added 1 new test (IngestTypeScriptAsync_produces_relative_file_paths_in_spans)
+- 31-04 added 3 new tests (AuditLogger constructor, audit log verification, relative path spans)
 - Full suite run confirms zero regressions
 
 ## Recent Decisions
@@ -77,13 +78,15 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 | PipelineOverride for test isolation in TypeScript tests | Inject fixed-timestamp snapshots without Node.js sidecar; keeps CI fast |
 | Fixed-timestamp snapshots for determinism tests | UtcNow in service overwrites CreatedAt; fixed timestamp ensures byte-identical serialization |
 | Pass projectRoot into getSourceSpan for relative paths | Centralizes fix in one function rather than patching each call site |
+| AuditLogger constructor-injected into IngestionTools | Consistent with other DI dependencies; supplements filter-level audit with domain metadata |
+| Domain audit entry in arguments dictionary | AuditLogger.Log arguments carry symbolCount/skipped/path for JSONL audit trail |
 
 ## Blockers/Concerns
 
-- None — phase 31 completed; 638 tests passing
+- None — phase 31 completed; 641 tests passing
 
 ## Session Continuity
 
-Last session: 2026-03-25T19:47:23Z
-Stopped at: Completed 31-03-PLAN.md
+Last session: 2026-03-25T20:20:00Z
+Stopped at: Completed 31-04-PLAN.md
 Resume file: None

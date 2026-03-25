@@ -35,7 +35,7 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 ### Verification
 
 - [x] **VERF-01**: Golden-file determinism tests — same TS project produces identical snapshot on repeated ingestion
-- [ ] **VERF-02**: Cross-tool validation — all 14 MCP tools tested against TypeScript snapshots
+- [x] **VERF-02**: Cross-tool validation — all 14 MCP tools tested against TypeScript snapshots
 - [x] **VERF-03**: Security validation — PathAllowlist, no absolute path leaks in SymbolNode.Span, audit logging
 - [x] **VERF-04**: Performance profiling on large (500+ file) TS projects with baseline thresholds
 
@@ -88,7 +88,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPI-03 | Phase 30 | Complete |
 | MCPI-04 | Phase 30 | Pending |
 | VERF-01 | Phase 31 | Complete |
-| VERF-02 | Phase 31 | Pending |
+| VERF-02 | Phase 31 | Complete |
 | VERF-03 | Phase 31 | Complete |
 | VERF-04 | Phase 31 | Complete |
 
