@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace DocAgent.Core;
 
 public enum SymbolKind
@@ -55,34 +57,39 @@ public enum Accessibility
     PrivateProtected
 }
 
-public readonly record struct SymbolId(string Value);
+public readonly record struct SymbolId([property: JsonPropertyName("value")] string Value);
 
-public sealed record SourceSpan(string FilePath, int StartLine, int StartColumn, int EndLine, int EndColumn);
+public sealed record SourceSpan(
+    [property: JsonPropertyName("filePath")] string FilePath,
+    [property: JsonPropertyName("startLine")] int StartLine,
+    [property: JsonPropertyName("startColumn")] int StartColumn,
+    [property: JsonPropertyName("endLine")] int EndLine,
+    [property: JsonPropertyName("endColumn")] int EndColumn);
 
 /// <summary>Structured parameter information for methods, indexers, and delegates.</summary>
 public sealed record ParameterInfo(
-    string Name,
-    string TypeName,
-    string? DefaultValue,
-    bool IsParams,
-    bool IsRef,
-    bool IsOut,
-    bool IsIn);
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("typeName")] string TypeName,
+    [property: JsonPropertyName("defaultValue")] string? DefaultValue,
+    [property: JsonPropertyName("isParams")] bool IsParams,
+    [property: JsonPropertyName("isRef")] bool IsRef,
+    [property: JsonPropertyName("isOut")] bool IsOut,
+    [property: JsonPropertyName("isIn")] bool IsIn);
 
 /// <summary>A generic type parameter constraint (e.g., "where T : class, IDisposable").</summary>
 public sealed record GenericConstraint(
-    string TypeParameterName,
-    IReadOnlyList<string> Constraints);
+    [property: JsonPropertyName("typeParameterName")] string TypeParameterName,
+    [property: JsonPropertyName("constraints")] IReadOnlyList<string> Constraints);
 
 public sealed record DocComment(
-    string? Summary,
-    string? Remarks,
-    IReadOnlyDictionary<string, string> Params,
-    IReadOnlyDictionary<string, string> TypeParams,
-    string? Returns,
-    IReadOnlyList<string> Examples,
-    IReadOnlyList<(string Type, string Description)> Exceptions,
-    IReadOnlyList<string> SeeAlso);
+    [property: JsonPropertyName("summary")] string? Summary,
+    [property: JsonPropertyName("remarks")] string? Remarks,
+    [property: JsonPropertyName("params")] IReadOnlyDictionary<string, string> Params,
+    [property: JsonPropertyName("typeParams")] IReadOnlyDictionary<string, string> TypeParams,
+    [property: JsonPropertyName("returns")] string? Returns,
+    [property: JsonPropertyName("examples")] IReadOnlyList<string> Examples,
+    [property: JsonPropertyName("exceptions")] IReadOnlyList<(string Type, string Description)> Exceptions,
+    [property: JsonPropertyName("seeAlso")] IReadOnlyList<string> SeeAlso);
 
 /// <summary>Classifies whether a symbol node was discovered in source or synthesized as a stub for an external reference.</summary>
 public enum NodeKind
@@ -105,19 +112,19 @@ public enum EdgeScope
 }
 
 public sealed record SymbolNode(
-    SymbolId Id,
-    SymbolKind Kind,
-    string DisplayName,
-    string? FullyQualifiedName,
-    IReadOnlyList<SymbolId> PreviousIds,
-    Accessibility Accessibility,
-    DocComment? Docs,
-    SourceSpan? Span,
-    string? ReturnType,
-    IReadOnlyList<ParameterInfo> Parameters,
-    IReadOnlyList<GenericConstraint> GenericConstraints,
-    string? ProjectOrigin = null,
-    NodeKind NodeKind = NodeKind.Real);
+    [property: JsonPropertyName("id")] SymbolId Id,
+    [property: JsonPropertyName("kind")] SymbolKind Kind,
+    [property: JsonPropertyName("displayName")] string DisplayName,
+    [property: JsonPropertyName("fullyQualifiedName")] string? FullyQualifiedName,
+    [property: JsonPropertyName("previousIds")] IReadOnlyList<SymbolId> PreviousIds,
+    [property: JsonPropertyName("accessibility")] Accessibility Accessibility,
+    [property: JsonPropertyName("docComment")] DocComment? Docs,
+    [property: JsonPropertyName("span")] SourceSpan? Span,
+    [property: JsonPropertyName("returnType")] string? ReturnType,
+    [property: JsonPropertyName("parameters")] IReadOnlyList<ParameterInfo> Parameters,
+    [property: JsonPropertyName("genericConstraints")] IReadOnlyList<GenericConstraint> GenericConstraints,
+    [property: JsonPropertyName("projectOrigin")] string? ProjectOrigin = null,
+    [property: JsonPropertyName("nodeKind")] NodeKind NodeKind = NodeKind.Real);
 
 public enum SymbolEdgeKind
 {
@@ -143,18 +150,22 @@ public enum SymbolEdgeKind
     Imports
 }
 
-public sealed record SymbolEdge(SymbolId From, SymbolId To, SymbolEdgeKind Kind, EdgeScope Scope = EdgeScope.IntraProject);
+public sealed record SymbolEdge(
+    [property: JsonPropertyName("sourceId")] SymbolId From,
+    [property: JsonPropertyName("targetId")] SymbolId To,
+    [property: JsonPropertyName("kind")] SymbolEdgeKind Kind,
+    [property: JsonPropertyName("scope")] EdgeScope Scope = EdgeScope.IntraProject);
 
 public sealed record SymbolGraphSnapshot(
-    string SchemaVersion,
-    string ProjectName,
-    string SourceFingerprint,
-    string? ContentHash,
-    DateTimeOffset CreatedAt,
-    IReadOnlyList<SymbolNode> Nodes,
-    IReadOnlyList<SymbolEdge> Edges,
-    IngestionMetadata? IngestionMetadata = null,
-    string? SolutionName = null);
+    [property: JsonPropertyName("schemaVersion")] string SchemaVersion,
+    [property: JsonPropertyName("projectName")] string ProjectName,
+    [property: JsonPropertyName("sourceFingerprint")] string SourceFingerprint,
+    [property: JsonPropertyName("contentHash")] string? ContentHash,
+    [property: JsonPropertyName("createdAt")] DateTimeOffset CreatedAt,
+    [property: JsonPropertyName("nodes")] IReadOnlyList<SymbolNode> Nodes,
+    [property: JsonPropertyName("edges")] IReadOnlyList<SymbolEdge> Edges,
+    [property: JsonPropertyName("ingestionMetadata")] IngestionMetadata? IngestionMetadata = null,
+    [property: JsonPropertyName("solutionName")] string? SolutionName = null);
 
 public enum SerializationFormat
 {

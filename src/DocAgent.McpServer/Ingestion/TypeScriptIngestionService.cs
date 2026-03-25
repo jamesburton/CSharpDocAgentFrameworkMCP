@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DocAgent.Core;
 using DocAgent.Indexing;
 using DocAgent.Ingestion;
@@ -31,9 +32,14 @@ public sealed class TypeScriptIngestionService
     // Per-path semaphores — serialize same-project ingestion.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions SidecarJsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter(allowIntegerValues: false),
+            new DocCommentConverter()
+        }
     };
 
     public TypeScriptIngestionService(
@@ -416,7 +422,7 @@ public sealed class TypeScriptIngestionService
             if (!root.TryGetProperty("result", out var resultProp))
                 throw new TypeScriptIngestionException("parse_error", "Invalid JSON-RPC response from sidecar: missing 'result' or 'error'.");
 
-            var snapshot = JsonSerializer.Deserialize<SymbolGraphSnapshot>(resultProp.GetRawText(), JsonOptions);
+            var snapshot = JsonSerializer.Deserialize<SymbolGraphSnapshot>(resultProp.GetRawText(), SidecarJsonOptions);
             return snapshot ?? throw new TypeScriptIngestionException("parse_error", "Failed to deserialize SymbolGraphSnapshot from sidecar response.");
         }
         catch (JsonException ex)
