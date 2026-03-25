@@ -87,7 +87,7 @@ Full details: milestones/v1.5-ROADMAP.md
 - [ ] **Phase 28: Sidecar Scaffold and IPC Protocol** - Node.js project, NDJSON protocol, C# process spawning, Aspire orchestration
 - [x] **Phase 29: Core Symbol Extraction** - TypeScript Compiler API walker producing SymbolNode/SymbolEdge graphs with stable IDs (completed 2026-03-24)
 - [x] **Phase 30: MCP Integration and Incremental Ingestion** - ingest_typescript tool, incremental file hashing, BM25 tokenization (completed 2026-03-25)
-- [ ] **Phase 31: Verification and Hardening** - Determinism, cross-tool validation, security, performance profiling
+- [x] **Phase 31: Verification and Hardening** - Determinism, cross-tool validation, security, performance profiling (completed 2026-03-25)
 
 ## Phase Details
 
@@ -188,4 +188,4 @@ Plans:
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
 | 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
-| 31. Verification and Hardening | v2.0 | 2/2 | Complete | 2026-03-08 |
+| 31. Verification and Hardening | 2/2 | Complete   | 2026-03-25 | 2026-03-08 |
