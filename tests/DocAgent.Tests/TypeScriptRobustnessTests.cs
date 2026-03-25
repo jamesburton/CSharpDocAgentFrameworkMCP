@@ -190,6 +190,41 @@ public class TypeScriptRobustnessTests : IDisposable
             msg.Contains("symbolCount"));
     }
 
+    [Fact]
+    public async Task IngestTypeScriptAsync_produces_relative_file_paths_in_spans()
+    {
+        // Arrange — create a minimal TypeScript project with a subdirectory
+        var projectDir = Path.Combine(_tempDir, "relative-paths");
+        var srcDir = Path.Combine(projectDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var tsconfigPath = Path.Combine(projectDir, "tsconfig.json");
+        File.WriteAllText(tsconfigPath, """{ "include": ["src/**/*.ts"] }""");
+        File.WriteAllText(Path.Combine(srcDir, "hello.ts"),
+            "export function hello(): string { return 'hi'; }");
+
+        // Act — use real sidecar pipeline (NOT PipelineOverride)
+        var result = await _tsService.IngestTypeScriptAsync(tsconfigPath, CancellationToken.None);
+
+        // Assert — retrieve the snapshot and check all spans
+        var snapshot = await _store.LoadAsync(result.SnapshotId);
+        snapshot.Should().NotBeNull("snapshot must be stored after ingestion");
+
+        var nodesWithSpans = snapshot!.Nodes
+            .Where(n => n.Span is not null)
+            .ToList();
+
+        nodesWithSpans.Should().NotBeEmpty("at least one node should have a source span");
+
+        foreach (var node in nodesWithSpans)
+        {
+            node.Span!.FilePath.Should().NotStartWith("/",
+                $"node '{node.DisplayName}' should not have a Unix absolute path");
+            node.Span!.FilePath.Should().NotMatchRegex(@"^[A-Za-z]:[/\\]",
+                $"node '{node.DisplayName}' should not have a Windows absolute path");
+        }
+    }
+
     public void Dispose()
     {
         _index.Dispose();
