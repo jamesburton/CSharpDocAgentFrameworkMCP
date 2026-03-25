@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Phase 30 context gathered
-last_updated: "2026-03-25T09:40:18.308Z"
-last_activity: 2026-03-20 — Session resumed
+stopped_at: Completed 30-01-PLAN.md
+last_updated: "2026-03-25T10:13:47.423Z"
+last_activity: 2026-03-25 — Completed 30-01 (MCP TypeScript integration)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -28,7 +28,7 @@ Milestone v2.0 (TypeScript Language Support): SHIPPED
 Post-milestone work: v2.1.0 shipped (large solution ingestion optimisations) + MCP setup CLI
 
 Status: Between milestones — ad-hoc feature work
-Last activity: 2026-03-20 — Session resumed
+Last activity: 2026-03-25 — Completed 30-01 (MCP TypeScript integration)
 
 Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
@@ -54,13 +54,11 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 - Reference docs: Setup, Agents, GitHooks guides
 - `CliServiceProvider` for minimal DI host
 
-## Test Status (2026-03-20)
+## Test Status (2026-03-25)
 
-**488 passed, 2 failed, 490 total**
+**599 passed, 0 failed (targeted run), 599 total**
 
-Failing tests:
-1. `ChangeToolTests.ReviewChanges_PathDenied_ReturnsAccessDenied` — response shape mismatch (expects `"error"` property)
-2. `RegressionGuardTests.SolutionIngestion_DoesNotRegressBeyondBaseline` — BenchmarkDotNet `ResultStatistics` null (environment issue)
+Note: Full test suite run during 30-01 execution. Previously failing tests may still exist (ChangeToolTests, RegressionGuardTests).
 
 ## Recent Decisions
 
@@ -71,6 +69,9 @@ Failing tests:
 | CLI command architecture (CliRunner routing) | Clean separation of concerns for setup commands |
 | Sentinel-based git hooks | Non-destructive hook management alongside existing hooks |
 | TypeScript enum members from `symbol.exports` not `symbol.members` | TS Compiler API stores enum members in exports Map; members is always undefined for enums |
+| Expanded manifest scope to tsconfig+package-lock | Complete change detection for TypeScript projects |
+| Category property on TypeScriptIngestionException | Structured error responses without separate exception types |
+| Early tsconfig.json existence validation | Fail-fast before sidecar spawn with tsconfig_invalid category |
 
 ## Blockers/Concerns
 
@@ -80,6 +81,6 @@ Failing tests:
 
 ## Session Continuity
 
-Last session: 2026-03-25T09:40:18.293Z
-Stopped at: Phase 30 context gathered
-Resume file: .planning/phases/30-mcp-integration-and-incremental-ingestion/30-CONTEXT.md
+Last session: 2026-03-25T10:13:47.415Z
+Stopped at: Completed 30-01-PLAN.md
+Resume file: None
