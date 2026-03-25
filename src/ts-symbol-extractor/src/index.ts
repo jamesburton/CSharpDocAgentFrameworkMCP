@@ -7,7 +7,6 @@ import type { ExtractRequest, ExtractResponse, ErrorResponse } from './types.js'
  * Handles a single JSON-RPC request line and returns a JSON-RPC response line.
  */
 export async function handleRequest(line: string): Promise<string | null> {
-  console.error(`Sidecar received: ${line.substring(0, 100)}${line.length > 100 ? '...' : ''}`);
   let request: any;
   try {
     request = JSON.parse(line);
@@ -68,7 +67,6 @@ async function main() {
   });
 
   for await (const line of rl) {
-    console.error(`Sidecar processing line (length ${line.length}): ${line.substring(0, 50)}...`);
     if (!line.trim()) continue;
     const response = await handleRequest(line);
     if (response) {

@@ -63,7 +63,7 @@ export function extractSymbols(tsconfigPath: string): SymbolGraphSnapshot {
       displayName: relativePath,
       fullyQualifiedName: relativePath,
       accessibility: Accessibility.Public,
-      span: getSourceSpan(sourceFile, sourceFile),
+      span: getSourceSpan(sourceFile, sourceFile, projectRoot),
       docComment: null,
       parameters: [],
       genericConstraints: [],
@@ -127,7 +127,7 @@ function extractDeclaration(
     displayName: symbol.getName(),
     fullyQualifiedName: checker.getFullyQualifiedName(symbol),
     accessibility: getAccessibility(node),
-    span: getSourceSpan(node, sourceFile),
+    span: getSourceSpan(node, sourceFile, projectRoot),
     docComment: getDocComment(symbol, checker),
     parameters: getParameters(node, checker),
     genericConstraints: getGenericConstraints(node, checker),
@@ -276,12 +276,12 @@ function getReturnType(node: ts.Node, checker: ts.TypeChecker): string | undefin
 /**
  * Extracts SourceSpan from a TypeScript node.
  */
-function getSourceSpan(node: ts.Node, sourceFile: ts.SourceFile): SourceSpan {
+function getSourceSpan(node: ts.Node, sourceFile: ts.SourceFile, projectRoot: string): SourceSpan {
   const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
   const { line: endLine, character: endCharacter } = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
 
   return {
-    filePath: sourceFile.fileName.replace(/\\/g, '/'),
+    filePath: path.relative(projectRoot, sourceFile.fileName).replace(/\\/g, '/'),
     startLine: line + 1,
     startColumn: character + 1,
     endLine: endLine + 1,

@@ -14,7 +14,7 @@
       "fullyQualifiedName": "src/index.ts",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 6,
         "startColumn": 1,
         "endLine": 76,
@@ -34,7 +34,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".hello",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 6,
         "startColumn": 1,
         "endLine": 8,
@@ -73,7 +73,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".IGreeter",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 10,
         "startColumn": 1,
         "endLine": 15,
@@ -93,7 +93,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".IGreeter.greet",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 14,
         "startColumn": 3,
         "endLine": 14,
@@ -130,7 +130,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeter",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 20,
         "startColumn": 1,
         "endLine": 27,
@@ -159,7 +159,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeter.greet",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 24,
         "startColumn": 3,
         "endLine": 26,
@@ -196,7 +196,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".SpecialGreeter",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 32,
         "startColumn": 1,
         "endLine": 39,
@@ -225,7 +225,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".SpecialGreeter.greetSpecially",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 36,
         "startColumn": 3,
         "endLine": 38,
@@ -262,7 +262,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Direction",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 44,
         "startColumn": 1,
         "endLine": 49,
@@ -291,7 +291,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Direction.North",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 45,
         "startColumn": 3,
         "endLine": 45,
@@ -311,7 +311,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Direction.South",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 46,
         "startColumn": 3,
         "endLine": 46,
@@ -331,7 +331,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Direction.East",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 47,
         "startColumn": 3,
         "endLine": 47,
@@ -351,7 +351,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Direction.West",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 48,
         "startColumn": 3,
         "endLine": 48,
@@ -371,7 +371,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".Greeting",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 54,
         "startColumn": 1,
         "endLine": 54,
@@ -400,7 +400,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".ConfiguredGreeter",
       "accessibility": 0,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 59,
         "startColumn": 1,
         "endLine": 75,
@@ -429,7 +429,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".ConfiguredGreeter.prefix",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 61,
         "startColumn": 3,
         "endLine": 61,
@@ -458,7 +458,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".ConfiguredGreeter.__constructor",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 67,
         "startColumn": 3,
         "endLine": 70,
@@ -497,7 +497,7 @@
       "fullyQualifiedName": "\"C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index\".ConfiguredGreeter.greet",
       "accessibility": 1,
       "span": {
-        "filePath": "C:/Development/CSharpDocAgentFrameworkMCP/src/ts-symbol-extractor/tests/fixtures/simple-project/src/index.ts",
+        "filePath": "src/index.ts",
         "startLine": 72,
         "startColumn": 3,
         "endLine": 74,
