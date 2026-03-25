@@ -148,11 +148,13 @@ Plans:
   2. A cross-tool validation suite exercises all 14 MCP tools against TypeScript snapshots and verifies correct results (search hits, symbol details, reference traversal, diff output, change review)
   3. Security validation confirms PathAllowlist enforcement on ingest_typescript, no absolute paths leak in SymbolNode.Span fields, and audit logging captures TypeScript ingestion events
   4. Performance profiling on a 500+ file TypeScript project completes within established baseline thresholds and identifies no IPC serialization bottlenecks
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
 - [x] 31-01-PLAN.md — Performance and Large-Scale Validation
 - [x] 31-02-PLAN.md — Robustness and Security Hardening
+- [ ] 31-03-PLAN.md — Gap closure: Fix absolute path leak in sidecar spans and remove debug logging
+- [ ] 31-04-PLAN.md — Gap closure: TypeScript audit logging and Architecture.md documentation
 
 ## Progress
 
@@ -188,4 +190,4 @@ Plans:
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
 | 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
-| 31. Verification and Hardening | 2/2 | Complete   | 2026-03-25 | 2026-03-08 |
+| 31. Verification and Hardening | 2/4 | Gap Closure | 2026-03-25 |
