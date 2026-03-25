@@ -39,15 +39,15 @@ export interface SymbolGraphSnapshot {
   solutionName: string | null;
 }
 
-export const enum NodeKind {
-  Real = 0,
-  Stub = 1
+export enum NodeKind {
+  Real = "Real",
+  Stub = "Stub"
 }
 
-export const enum EdgeScope {
-  IntraProject = 0,
-  CrossProject = 1,
-  External = 2
+export enum EdgeScope {
+  IntraProject = "IntraProject",
+  CrossProject = "CrossProject",
+  External = "External"
 }
 
 export interface SymbolNode {
@@ -71,30 +71,30 @@ export interface SymbolEdge {
   scope?: EdgeScope;
 }
 
-export const enum SymbolKind {
-  Namespace = 0,
-  Type = 1,
-  Method = 2,
-  Property = 3,
-  Field = 4,
-  Event = 5,
-  Parameter = 6,
-  Constructor = 7,
-  Delegate = 8,
-  Indexer = 9,
-  Operator = 10,
-  Destructor = 11,
-  EnumMember = 12,
-  TypeParameter = 13
+export enum SymbolKind {
+  Namespace = "Namespace",
+  Type = "Type",
+  Method = "Method",
+  Property = "Property",
+  Field = "Field",
+  Event = "Event",
+  Parameter = "Parameter",
+  Constructor = "Constructor",
+  Delegate = "Delegate",
+  Indexer = "Indexer",
+  Operator = "Operator",
+  Destructor = "Destructor",
+  EnumMember = "EnumMember",
+  TypeParameter = "TypeParameter"
 }
 
-export const enum Accessibility {
-  Public = 0,
-  Internal = 1,
-  Protected = 2,
-  Private = 3,
-  ProtectedInternal = 4,
-  PrivateProtected = 5
+export enum Accessibility {
+  Public = "Public",
+  Internal = "Internal",
+  Protected = "Protected",
+  Private = "Private",
+  ProtectedInternal = "ProtectedInternal",
+  PrivateProtected = "PrivateProtected"
 }
 
 export interface SourceSpan {
@@ -128,14 +128,21 @@ export interface GenericConstraint {
   constraints: string[];
 }
 
-export const enum SymbolEdgeKind {
-  Contains = 0,
-  Extends = 1,
-  Implements = 2,
-  References = 3,
-  Calls = 4,
-  Overrides = 5,
-  Inherits = 6
+export enum SymbolEdgeKind {
+  Contains = "Contains",
+  Inherits = "Inherits",
+  Implements = "Implements",
+  References = "References",
+  Calls = "Calls",
+  Overrides = "Overrides",
+  InheritsFrom = "InheritsFrom",
+  Returns = "Returns",
+  Accepts = "Accepts",
+  Invokes = "Invokes",
+  Configures = "Configures",
+  DependsOn = "DependsOn",
+  Triggers = "Triggers",
+  Imports = "Imports"
 }
 
 export interface IngestionMetadata {
