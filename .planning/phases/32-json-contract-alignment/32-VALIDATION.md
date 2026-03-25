@@ -2,8 +2,8 @@
 phase: 32
 slug: json-contract-alignment
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-25
 ---
 
@@ -36,25 +36,20 @@ created: 2026-03-25
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 32-01-01 | 01 | 1 | SIDE-03 | unit (golden file) | `dotnet test --filter "Category=Deserialization"` | ❌ W0 | ⬜ pending |
-| 32-01-02 | 01 | 1 | EXTR-04 | unit (golden file) | `dotnet test --filter "Category=Deserialization"` | ❌ W0 | ⬜ pending |
-| 32-01-03 | 01 | 1 | EXTR-06 | unit (golden file) | `dotnet test --filter "Category=Deserialization"` | ❌ W0 | ⬜ pending |
-| 32-02-01 | 02 | 2 | MCPI-01 | integration | `dotnet test --filter "Category=E2E"` | ❌ W0 | ⬜ pending |
-| 32-02-02 | 02 | 2 | MCPI-02 | integration | `dotnet test --filter "Category=E2E"` | ❌ W0 | ⬜ pending |
-| 32-02-03 | 02 | 2 | MCPI-02 | e2e (sidecar) | `RUN_SIDECAR_TESTS=true dotnet test --filter "Category=Sidecar"` | ❌ W0 | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | Status |
+|---------|------|------|-------------|-----------|-------------------|--------|
+| 32-01-01 | 01 | 1 | SIDE-03 | unit (TS) | `cd src/ts-symbol-extractor && npx tsc --noEmit && npx vitest run` | pending |
+| 32-01-02 | 01 | 1 | EXTR-04, EXTR-06 | build | `dotnet build src/DocAgentFramework.sln && dotnet test src/DocAgentFramework.sln --filter "FullyQualifiedName~TypeScript" --no-build` | pending |
+| 32-02-01 | 02 | 2 | MCPI-01 | unit (golden file) | `dotnet test tests/DocAgent.Tests --filter "Category=Deserialization" --no-build` | pending |
+| 32-02-02 | 02 | 2 | MCPI-02 | integration | `dotnet build tests/DocAgent.Tests && dotnet test tests/DocAgent.Tests --filter "Category=Sidecar" --no-build` | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/DocAgent.Tests/TypeScriptDeserializationTests.cs` — stubs for SIDE-03, EXTR-04, EXTR-06 using golden file
-- [ ] `tests/DocAgent.Tests/TypeScriptContractE2ETests.cs` — stubs for MCPI-01, MCPI-02 with full MCP tool verification
-- [ ] `tests/DocAgent.Tests/TypeScriptSidecarIntegrationTests.cs` — stubs for MCPI-02 sidecar path (gated by RUN_SIDECAR_TESTS)
-- [ ] Golden file captured from real sidecar output against test fixtures
+Wave 0 is not needed for this phase. Each task creates and verifies its own tests inline. Plan 01 tasks are pure implementation (no test files). Plan 02 tasks create the test files themselves and run them as verification.
 
 ---
 
@@ -66,11 +61,11 @@ created: 2026-03-25
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify commands
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 not required — tasks create their own tests
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
