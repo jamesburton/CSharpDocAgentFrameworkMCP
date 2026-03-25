@@ -132,11 +132,12 @@ Plans:
   2. After ingestion, all 14 existing MCP tools (search_symbols, get_symbol, get_references, find_implementations, get_doc_coverage, diff_snapshots, explain_project, review_changes, find_breaking_changes, explain_change, ingest_project, ingest_solution, explain_solution, diff_solution_snapshots) produce correct results when querying the TypeScript snapshot
   3. Re-ingesting the same TypeScript project after modifying one file only re-parses the changed file (SHA-256 file hashing) and produces an updated snapshot
   4. BM25 search correctly tokenizes and matches camelCase TypeScript symbol names (e.g., searching "create" finds "createServer")
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] 30-01-PLAN.md — Ingest TypeScript MCP Tool and Incremental Ingestion
-- [ ] 30-02-PLAN.md — Search Refinement and E2E Verification
+- [x] 30-01-PLAN.md — Ingest TypeScript MCP Tool and Incremental Ingestion
+- [x] 30-02-PLAN.md — Search Refinement and E2E Verification
+- [ ] 30-03-PLAN.md — Gap closure: TypeScript tool verification tests and camelCase search integration tests
 
 ### Phase 31: Verification and Hardening
 **Goal**: The TypeScript ingestion pipeline is proven deterministic, secure, and performant through comprehensive validation against real-world projects
@@ -186,5 +187,5 @@ Plans:
 | 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
-| 30. MCP Integration and Incremental Ingestion | 2/2 | Complete   | 2026-03-25 | 2026-03-08 |
+| 30. MCP Integration and Incremental Ingestion | 2/3 | In Progress | — |
 | 31. Verification and Hardening | v2.0 | 2/2 | Complete | 2026-03-08 |
