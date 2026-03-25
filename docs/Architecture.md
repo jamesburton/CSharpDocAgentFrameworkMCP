@@ -144,3 +144,78 @@ Nine static parsers in `DocAgent.McpServer.Ingestion` extract symbols from non-C
 All parsers are pure static classes with no DI. They return `(IReadOnlyList<SymbolNode>, IReadOnlyList<SymbolEdge>)`.
 
 Edge kinds used: `Invokes`, `Configures`, `DependsOn`, `Triggers`, `Imports`, `Contains`, `References`.
+
+---
+
+## TypeScript Sidecar Architecture
+
+DocAgentFramework supports TypeScript ingestion via a Node.js sidecar process that uses the TypeScript Compiler API to extract symbols, types, and documentation from TypeScript projects.
+
+### Node.js Sidecar Design
+
+| Aspect | Detail |
+|--------|--------|
+| Location | `src/ts-symbol-extractor/` (standalone Node.js ESM project) |
+| Build | Bundled to `dist/index.js` via esbuild for single-file deployment |
+| Host integration | `TypeScriptIngestionService` (C#) spawns the sidecar as a child process |
+| Communication | JSON-RPC 2.0 over stdin/stdout; all sidecar logging goes to stderr |
+| Parser | Uses `ts.createProgram` from the TypeScript Compiler API to parse `tsconfig.json` projects |
+| Lifecycle | Spawned per-ingestion call; exits after producing output |
+
+### NDJSON Protocol Definition
+
+The sidecar communicates using newline-delimited JSON-RPC 2.0 messages:
+
+**Request** (C# to Node.js, one JSON object on stdin):
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "extract", "params": { "tsconfigPath": "/abs/path/tsconfig.json", "outputPath": "/tmp/output.json" } }
+```
+
+**Response** (Node.js to C#, one JSON object on stdout):
+```json
+{ "jsonrpc": "2.0", "id": 1, "result": { "nodes": [...], "edges": [...], ... } }
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `tsconfigPath` | Yes | Absolute path to the `tsconfig.json` file to parse |
+| `outputPath` | No | When set, writes the response to a file instead of stdout (bypasses pipe buffer limits for large projects) |
+
+**Error codes** (standard JSON-RPC 2.0):
+
+| Code | Meaning |
+|------|---------|
+| -32700 | Parse error (malformed JSON input) |
+| -32600 | Invalid request (missing required fields) |
+| -32601 | Method not found (unsupported method name) |
+| -32603 | Internal error (TypeScript compilation failure) |
+
+### TypeScript Symbol Mapping Strategy
+
+TypeScript constructs are mapped to the unified `SymbolNode` / `SymbolEdge` model:
+
+| TypeScript Construct | SymbolKind | SymbolId Prefix |
+|---------------------|------------|-----------------|
+| Source file | `Namespace` | `N` |
+| Class, Interface, Enum, Type alias | `Type` | `T` |
+| Function, Method | `Method` | `M` |
+| Property | `Property` | `P` |
+| Field, Variable | `Field` | `F` |
+| Enum member | `EnumMember` | `E` |
+
+**SymbolId format:** `{prefix}:{projectName}:{relativePath}:{symbolName}` (e.g., `T:myapp:src/utils.ts:Helper`)
+
+**Edge mapping:**
+
+| TypeScript Relationship | SymbolEdgeKind |
+|------------------------|----------------|
+| `extends` (class) | `InheritsFrom` |
+| `implements` (interface) | `Implements` |
+| `import` / `require` | `References` |
+| Containment (class member) | `Contains` |
+
+**Documentation mapping:** JSDoc/TSDoc tags map to `DocComment` fields: `@param` to params, `@returns` to returns, `@example` to example, `@throws` to throws, `@see` to see, `@remarks` to remarks. The summary is the first paragraph before any tag.
+
+**Visibility:** Exported symbols are mapped to `Public` accessibility; non-exported symbols are `Internal`.
+
+**Exclusions:** `node_modules/` directories and `.d.ts` declaration files are excluded from extraction.
