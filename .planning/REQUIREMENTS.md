@@ -19,15 +19,15 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 - [x] **EXTR-01**: Extract all declaration types (classes, interfaces, functions, enums, type aliases, constructors, methods, properties, fields) into `SymbolNode` graph
 - [x] **EXTR-02**: Generate stable, deterministic `SymbolId` for every TypeScript symbol (source-stable, collision-free with C# IDs)
 - [x] **EXTR-03**: Map TypeScript modules to `SymbolKind.Namespace` using relative file paths with `Contains` edges
-- [x] **EXTR-04**: Extract inheritance (`extends`) and implementation (`implements`) edges as `SymbolEdge` relationships
+- [ ] **EXTR-04**: Extract inheritance (`extends`) and implementation (`implements`) edges as `SymbolEdge` relationships
 - [x] **EXTR-05**: Map export visibility to accessibility (exported = public, non-exported = internal)
-- [x] **EXTR-06**: Extract JSDoc/TSDoc comments into `DocComment` (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
+- [ ] **EXTR-06**: Extract JSDoc/TSDoc comments into `DocComment` (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
 - [x] **EXTR-07**: Capture source spans (file path + line range) for every extracted symbol
 - [x] **EXTR-08**: Filter source files to project sources only — exclude `.d.ts` from `node_modules` to prevent snapshot bloat
 
 ### MCP Integration
 
-- [x] **MCPI-01**: `ingest_typescript` MCP tool accepting tsconfig.json path with PathAllowlist security enforcement
+- [ ] **MCPI-01**: `ingest_typescript` MCP tool accepting tsconfig.json path with PathAllowlist security enforcement
 - [ ] **MCPI-02**: All 14 existing MCP tools produce correct results when querying TypeScript snapshots
 - [x] **MCPI-03**: Incremental TypeScript ingestion via SHA-256 file hashing — only re-parse changed files
 - [ ] **MCPI-04**: BM25 search tokenizer handles camelCase (TS convention) alongside PascalCase (C#)
@@ -71,22 +71,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | Phase 28 | Pending |
-| SIDE-02 | Phase 28 | Pending |
-| SIDE-03 | Phase 28 | Pending |
-| SIDE-04 | Phase 28 | Pending |
+| SIDE-01 | Phase 28 → Phase 34 | Pending |
+| SIDE-02 | Phase 28 → Phase 34 | Pending |
+| SIDE-03 | Phase 28 → Phase 32 | Pending |
+| SIDE-04 | Phase 28 → Phase 33 | Pending |
 | EXTR-01 | Phase 29 | Complete |
 | EXTR-02 | Phase 29 | Complete |
 | EXTR-03 | Phase 29 | Complete |
-| EXTR-04 | Phase 29 | Complete |
+| EXTR-04 | Phase 29 → Phase 32 | Pending |
 | EXTR-05 | Phase 29 | Complete |
-| EXTR-06 | Phase 29 | Complete |
+| EXTR-06 | Phase 29 → Phase 32 | Pending |
 | EXTR-07 | Phase 29 | Complete |
 | EXTR-08 | Phase 29 | Complete |
-| MCPI-01 | Phase 30 | Complete |
-| MCPI-02 | Phase 30 | Pending |
+| MCPI-01 | Phase 30 → Phase 32 | Pending |
+| MCPI-02 | Phase 30 → Phase 32, Phase 34 | Pending |
 | MCPI-03 | Phase 30 | Complete |
-| MCPI-04 | Phase 30 | Pending |
+| MCPI-04 | Phase 30 → Phase 34 | Pending |
 | VERF-01 | Phase 31 | Complete |
 | VERF-02 | Phase 31 | Complete |
 | VERF-03 | Phase 31 | Complete |
@@ -99,4 +99,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after roadmap creation*
+*Last updated: 2026-03-25 after gap closure phase creation (Phases 32-34)*

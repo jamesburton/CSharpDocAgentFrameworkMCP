@@ -7,7 +7,7 @@
 - ✅ **v1.2 Multi-Project & Solution-Level Graphs** — Phases 13-18 (shipped 2026-03-02)
 - ✅ **v1.3 Housekeeping** — Phases 19-22 (shipped 2026-03-04)
 - ✅ **v1.5 Robustness** — Phases 23-27 (shipped 2026-03-08)
-- [ ] **v2.0 TypeScript Language Support** — Phases 28-31 (in progress)
+- [ ] **v2.0 TypeScript Language Support** — Phases 28-34 (in progress)
 
 ## Phases
 
@@ -156,6 +156,38 @@ Plans:
 - [ ] 31-03-PLAN.md — Gap closure: Fix absolute path leak in sidecar spans and remove debug logging
 - [ ] 31-04-PLAN.md — Gap closure: TypeScript audit logging and Architecture.md documentation
 
+### Phase 32: JSON Contract Alignment (TS ↔ C# Deserialization)
+**Goal:** Fix all JSON deserialization mismatches between TypeScript sidecar output and C# domain types so the real sidecar→C# pipeline produces correct SymbolGraphSnapshots
+**Depends on**: Phase 31
+**Requirements**: SIDE-03, EXTR-04, EXTR-06, MCPI-01, MCPI-02
+**Gap Closure:** Closes gaps from v2.0 audit — JSON property names, enum ordinals, E2E integration
+**Success Criteria** (what must be TRUE):
+  1. SymbolEdge property names align: TS `sourceId`/`targetId` correctly deserialize to C# `From`/`To`
+  2. SymbolNode doc property aligns: TS `docComment` correctly deserializes to C# `Docs`
+  3. SymbolEdgeKind enum ordinals match between TS and C# (e.g., `Inherits` maps to the same integer on both sides)
+  4. An E2E integration test exercises real sidecar → JSON → C# deserialization (no PipelineOverride) and produces a valid, queryable snapshot
+
+### Phase 33: Aspire Sidecar Integration
+**Goal:** Register the Node.js sidecar as a managed Aspire resource in AppHost so `dotnet run --project src/DocAgent.AppHost` starts and orchestrates the sidecar
+**Depends on**: Phase 32
+**Requirements**: SIDE-04
+**Gap Closure:** Closes gaps from v2.0 audit — Aspire orchestration flow
+**Success Criteria** (what must be TRUE):
+  1. `DocAgent.AppHost/Program.cs` registers the Node.js sidecar via `AddNodeApp()` or equivalent Aspire API
+  2. `NodeAvailabilityValidator` is Aspire-aware and integrates with resource health checks
+  3. Running `dotnet run --project src/DocAgent.AppHost` starts the sidecar and fails with a clear error if Node.js is unavailable
+
+### Phase 34: Traceability and Verification Cleanup
+**Goal:** Update all stale requirement checkboxes, create missing verification artifacts, and fill Nyquist validation gaps
+**Depends on**: Phase 32, Phase 33
+**Requirements**: SIDE-01, SIDE-02, MCPI-02, MCPI-04
+**Gap Closure:** Closes tech debt and Nyquist gaps from v2.0 audit
+**Success Criteria** (what must be TRUE):
+  1. SIDE-01, SIDE-02 checkboxes in REQUIREMENTS.md reflect verified satisfaction
+  2. MCPI-02, MCPI-04 checkboxes updated after Phase 32 fixes
+  3. Phase 28 has a retroactive VERIFICATION.md
+  4. Phases 29, 30, 31 have VALIDATION.md (Nyquist compliance)
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -191,3 +223,6 @@ Plans:
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
 | 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
 | 31. Verification and Hardening | 4/4 | Complete    | 2026-03-25 |
+| 32. JSON Contract Alignment | v2.0 | 0/0 | Planned | — |
+| 33. Aspire Sidecar Integration | v2.0 | 0/0 | Planned | — |
+| 34. Traceability and Verification Cleanup | v2.0 | 0/0 | Planned | — |
