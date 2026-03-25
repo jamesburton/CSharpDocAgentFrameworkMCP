@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Completed 29-core-symbol-extraction/29-03-PLAN.md
-last_updated: "2026-03-24T23:43:34.444Z"
+stopped_at: Phase 30 context gathered
+last_updated: "2026-03-25T09:40:18.308Z"
 last_activity: 2026-03-20 — Session resumed
 progress:
   total_phases: 4
@@ -80,6 +80,6 @@ Failing tests:
 
 ## Session Continuity
 
-Last session: 2026-03-24T23:39:23.086Z
-Stopped at: Completed 29-core-symbol-extraction/29-03-PLAN.md
-Resume file: None
+Last session: 2026-03-25T09:40:18.293Z
+Stopped at: Phase 30 context gathered
+Resume file: .planning/phases/30-mcp-integration-and-incremental-ingestion/30-CONTEXT.md
