@@ -187,5 +187,5 @@ Plans:
 | 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
-| 30. MCP Integration and Incremental Ingestion | 2/3 | In Progress | — |
+| 30. MCP Integration and Incremental Ingestion | 3/3 | Complete   | 2026-03-25 |
 | 31. Verification and Hardening | v2.0 | 2/2 | Complete | 2026-03-08 |
