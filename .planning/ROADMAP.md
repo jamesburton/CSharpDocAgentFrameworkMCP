@@ -156,8 +156,8 @@ Plans:
 - [ ] 31-03-PLAN.md — Gap closure: Fix absolute path leak in sidecar spans and remove debug logging
 - [ ] 31-04-PLAN.md — Gap closure: TypeScript audit logging and Architecture.md documentation
 
-### Phase 32: JSON Contract Alignment (TS ↔ C# Deserialization)
-**Goal:** Fix all JSON deserialization mismatches between TypeScript sidecar output and C# domain types so the real sidecar→C# pipeline produces correct SymbolGraphSnapshots
+### Phase 32: JSON Contract Alignment (TS <-> C# Deserialization)
+**Goal:** Fix all JSON deserialization mismatches between TypeScript sidecar output and C# domain types so the real sidecar->C# pipeline produces correct SymbolGraphSnapshots
 **Depends on**: Phase 31
 **Requirements**: SIDE-03, EXTR-04, EXTR-06, MCPI-01, MCPI-02
 **Gap Closure:** Closes gaps from v2.0 audit — JSON property names, enum ordinals, E2E integration
@@ -165,7 +165,12 @@ Plans:
   1. SymbolEdge property names align: TS `sourceId`/`targetId` correctly deserialize to C# `From`/`To`
   2. SymbolNode doc property aligns: TS `docComment` correctly deserializes to C# `Docs`
   3. SymbolEdgeKind enum ordinals match between TS and C# (e.g., `Inherits` maps to the same integer on both sides)
-  4. An E2E integration test exercises real sidecar → JSON → C# deserialization (no PipelineOverride) and produces a valid, queryable snapshot
+  4. An E2E integration test exercises real sidecar -> JSON -> C# deserialization (no PipelineOverride) and produces a valid, queryable snapshot
+**Plans**: 2 plans
+
+Plans:
+- [ ] 32-01-PLAN.md — TS string enum conversion + C# deserialization alignment (JsonPropertyName, DocCommentConverter, JsonStringEnumConverter)
+- [ ] 32-02-PLAN.md — Golden file deserialization tests + real sidecar E2E integration tests
 
 ### Phase 33: Aspire Sidecar Integration
 **Goal:** Register the Node.js sidecar as a managed Aspire resource in AppHost so `dotnet run --project src/DocAgent.AppHost` starts and orchestrates the sidecar
@@ -223,6 +228,6 @@ Plans:
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
 | 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
 | 31. Verification and Hardening | 4/4 | Complete    | 2026-03-25 |
-| 32. JSON Contract Alignment | v2.0 | 0/0 | Planned | — |
+| 32. JSON Contract Alignment | v2.0 | 0/2 | In Progress | — |
 | 33. Aspire Sidecar Integration | v2.0 | 0/0 | Planned | — |
 | 34. Traceability and Verification Cleanup | v2.0 | 0/0 | Planned | — |
