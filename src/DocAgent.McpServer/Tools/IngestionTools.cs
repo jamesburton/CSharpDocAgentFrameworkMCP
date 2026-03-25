@@ -236,6 +236,7 @@ public sealed class IngestionTools
         ModelContextProtocol.Server.McpServer mcpServer,
         RequestContext<CallToolRequestParams> requestContext,
         [Description("Absolute path to tsconfig.json file")] string path,
+        [Description("Force re-index even if snapshot is current")] bool forceReindex = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -255,10 +256,36 @@ public sealed class IngestionTools
                 return ErrorJson("access_denied", "Path is not in the configured allow list.");
             }
 
+            // Extract progress token — may be null, string, or number.
+            var progressToken = requestContext?.Params?.Meta?["progressToken"];
+
+            Func<int, int, string, Task>? progressCallback = progressToken is not null
+                ? async (current, total, message) =>
+                {
+                    try
+                    {
+                        await mcpServer.SendNotificationAsync(
+                            "notifications/progress",
+                            new
+                            {
+                                progressToken,
+                                progress = (double)current,
+                                total = (double)total,
+                                message,
+                            }).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
+                    }
+                }
+                : null;
+
             var result = await _typeScriptIngestionService.IngestTypeScriptAsync(
-                absolutePath, cancellationToken).ConfigureAwait(false);
+                absolutePath, cancellationToken, forceReindex, progressCallback).ConfigureAwait(false);
 
             activity?.SetTag("tool.result.symbolCount", result.SymbolCount);
+            activity?.SetTag("tool.result.skipped", result.Skipped);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
             return JsonSerializer.Serialize(new
@@ -268,15 +295,116 @@ public sealed class IngestionTools
                 durationMs = result.Duration.TotalMilliseconds,
                 warnings = result.Warnings,
                 indexError = result.IndexError,
+                skipped = result.Skipped,
+                reason = result.Reason,
             }, s_jsonOptions);
         }
         catch (OperationCanceledException)
         {
             throw;
         }
+        catch (TypeScriptIngestionException ex) when (ex.Category is not null)
+        {
+            _logger.LogError(ex, "TypeScript ingestion failed for {Path} (category: {Category})", path, ex.Category);
+            return ErrorJson(ex.Category, ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "TypeScript ingestion failed for {Path}", path);
+            return ErrorJson("ingestion_failed", $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Tool: ingest_typescript_workspace
+    // ─────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "ingest_typescript_workspace")]
+    [Description("Ingest a TypeScript workspace (monorepo), discovering and ingesting all tsconfig.json projects under a root directory.")]
+    public async Task<string> IngestTypeScriptWorkspace(
+        ModelContextProtocol.Server.McpServer mcpServer,
+        RequestContext<CallToolRequestParams> requestContext,
+        [Description("Absolute path to the root directory")] string path,
+        [Description("Force re-index even if snapshot is current")] bool forceReindex = false,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var activity = DocAgentTelemetry.Source.StartActivity(
+                "tool.ingest_typescript_workspace", ActivityKind.Internal);
+            activity?.SetTag("tool.name", "ingest_typescript_workspace");
+
+            if (string.IsNullOrWhiteSpace(path))
+                return ErrorJson("invalid_input", "path is required.");
+
+            var absolutePath = Path.GetFullPath(path);
+            if (!_allowlist.IsAllowed(absolutePath))
+            {
+                _logger.LogWarning("Workspace ingestion denied: path {Path} outside allowlist", absolutePath);
+                activity?.SetStatus(ActivityStatusCode.Error, "access_denied");
+                return ErrorJson("access_denied", "Path is not in the configured allow list.");
+            }
+
+            // Extract progress token
+            var progressToken = requestContext?.Params?.Meta?["progressToken"];
+
+            Func<int, int, string, Task>? progressCallback = progressToken is not null
+                ? async (current, total, message) =>
+                {
+                    try
+                    {
+                        await mcpServer.SendNotificationAsync(
+                            "notifications/progress",
+                            new
+                            {
+                                progressToken,
+                                progress = (double)current,
+                                total = (double)total,
+                                message,
+                            }).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Progress notification failed (non-fatal)");
+                    }
+                }
+                : null;
+
+            var result = await _typeScriptIngestionService.IngestTypeScriptWorkspaceAsync(
+                absolutePath, cancellationToken, forceReindex, progressCallback).ConfigureAwait(false);
+
+            activity?.SetTag("tool.result.totalProjectCount", result.TotalProjectCount);
+            activity?.SetTag("tool.result.ingestedCount", result.IngestedCount);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            return JsonSerializer.Serialize(new
+            {
+                totalProjectCount = result.TotalProjectCount,
+                ingestedCount = result.IngestedCount,
+                durationMs = result.Duration.TotalMilliseconds,
+                projects = result.Projects.Select(p => new
+                {
+                    tsconfigPath = p.TsconfigPath,
+                    snapshotId = p.SnapshotId,
+                    symbolCount = p.SymbolCount,
+                    status = p.Status,
+                    reason = p.Reason,
+                }),
+                warnings = result.Warnings,
+            }, s_jsonOptions);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (TypeScriptIngestionException ex) when (ex.Category is not null)
+        {
+            _logger.LogError(ex, "TypeScript workspace ingestion failed for {Path} (category: {Category})", path, ex.Category);
+            return ErrorJson(ex.Category, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TypeScript workspace ingestion failed for {Path}", path);
             return ErrorJson("ingestion_failed", $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
         }
     }
