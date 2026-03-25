@@ -17,11 +17,27 @@ public sealed class TypeScriptIngestionException : Exception
     /// </summary>
     public string StderrOutput { get; }
 
+    /// <summary>
+    /// Diagnostic error category: sidecar_timeout, parse_error, tsconfig_invalid.
+    /// </summary>
+    public string? Category { get; }
+
     public TypeScriptIngestionException(int exitCode, string stderrOutput)
         : base($"TypeScript sidecar exited with code {exitCode}: {stderrOutput}")
     {
         ExitCode = exitCode;
         StderrOutput = stderrOutput;
+    }
+
+    /// <summary>
+    /// Creates an exception with a structured error category.
+    /// </summary>
+    public TypeScriptIngestionException(string category, string message)
+        : base(message)
+    {
+        ExitCode = -1;
+        StderrOutput = string.Empty;
+        Category = category;
     }
 
     public TypeScriptIngestionException(string message) : base(message)

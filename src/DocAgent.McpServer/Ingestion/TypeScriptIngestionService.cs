@@ -50,7 +50,11 @@ public sealed class TypeScriptIngestionService
         _logger = logger;
     }
 
-    public async Task<IngestionResult> IngestTypeScriptAsync(string tsconfigPath, CancellationToken cancellationToken)
+    public async Task<IngestionResult> IngestTypeScriptAsync(
+        string tsconfigPath,
+        CancellationToken cancellationToken,
+        bool forceReindex = false,
+        Func<int, int, string, Task>? progressCallback = null)
     {
         if (string.IsNullOrWhiteSpace(tsconfigPath))
             throw new ArgumentException("tsconfig.json path is required", nameof(tsconfigPath));
@@ -63,10 +67,15 @@ public sealed class TypeScriptIngestionService
             throw new UnauthorizedAccessException("Path is not in the configured allow list.");
         }
 
+        if (!File.Exists(normalizedPath))
+            throw new TypeScriptIngestionException("tsconfig_invalid", "tsconfig.json not found at the specified path.");
+
         var semaphore = _locks.GetOrAdd(normalizedPath, _ => new SemaphoreSlim(1, 1));
 
-        var timeoutSeconds = _options.IngestionTimeoutSeconds > 0 ? _options.IngestionTimeoutSeconds : 300;
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+        var sidecarTimeout = _options.TypeScriptSidecarTimeoutSeconds > 0
+            ? _options.TypeScriptSidecarTimeoutSeconds
+            : 120;
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(sidecarTimeout));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var ct = linkedCts.Token;
 
@@ -76,32 +85,45 @@ public sealed class TypeScriptIngestionService
 
         try
         {
+            if (progressCallback is not null)
+                await progressCallback(0, 3, "starting").ConfigureAwait(false);
+
             // --- Incremental Check ---
             var projectDir = Path.GetDirectoryName(normalizedPath)!;
             var extensions = _options.TypeScriptFileExtensions ?? [".ts", ".tsx"];
             var tsFiles = Directory.EnumerateFiles(projectDir, "*.*", SearchOption.AllDirectories)
+                .Where(f => !f.Contains("node_modules", StringComparison.OrdinalIgnoreCase))
                 .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
                 .OrderBy(f => f, StringComparer.Ordinal)
                 .ToList();
 
-            var currentManifest = await FileHasher.ComputeManifestAsync(tsFiles, ct).ConfigureAwait(false);
-            
+            // Include tsconfig.json and package-lock.json in manifest scope
+            var manifestFiles = new List<string>(tsFiles);
+            if (File.Exists(normalizedPath))
+                manifestFiles.Add(normalizedPath);
+            var packageLockPath = Path.Combine(projectDir, "package-lock.json");
+            if (File.Exists(packageLockPath))
+                manifestFiles.Add(packageLockPath);
+            manifestFiles.Sort(StringComparer.Ordinal);
+
+            var currentManifest = await FileHasher.ComputeManifestAsync(manifestFiles, ct).ConfigureAwait(false);
+
             // Use a stable manifest path based on the tsconfig path hash to avoid collisions
             var pathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedPath))).ToLowerInvariant()[..8];
             var manifestName = $"ts-manifest-{pathHash}.json";
             var manifestPath = Path.Combine(_store.ArtifactsDir, manifestName);
-            
+
             var previousManifest = await FileHasher.LoadAsync(manifestPath, ct).ConfigureAwait(false);
             var diff = FileHasher.Diff(previousManifest, currentManifest);
 
             SymbolGraphSnapshot? snapshot = null;
 
-            if (!diff.HasChanges && previousManifest is not null)
+            if (!forceReindex && !diff.HasChanges && previousManifest is not null)
             {
                 // Try to load the latest snapshot for this project
                 var entries = await _store.ListAsync(ct).ConfigureAwait(false);
                 var projectEntries = entries.Where(e => e.ProjectName == Path.GetFileName(projectDir)).Reverse();
-                
+
                 foreach (var entry in projectEntries)
                 {
                     var candidate = await _store.LoadAsync(entry.ContentHash, ct).ConfigureAwait(false);
@@ -109,42 +131,59 @@ public sealed class TypeScriptIngestionService
                     {
                         snapshot = candidate;
                         _logger.LogInformation("Incremental hit for TypeScript project {Project}. Reusing snapshot {Hash}.", snapshot.ProjectName, entry.ContentHash);
-                        break;
+                        sw.Stop();
+                        return new IngestionResult(
+                            SnapshotId: entry.ContentHash,
+                            SymbolCount: snapshot.Nodes.Count,
+                            ProjectCount: 1,
+                            Duration: sw.Elapsed,
+                            Warnings: warnings.AsReadOnly(),
+                            IndexError: null,
+                            Skipped: true,
+                            Reason: "no changes detected");
                     }
                 }
             }
 
-            if (snapshot is null)
+            if (progressCallback is not null)
+                await progressCallback(1, 3, "extracting").ConfigureAwait(false);
+
+            if (PipelineOverride is not null)
             {
-                if (PipelineOverride is not null)
-                {
-                    snapshot = await PipelineOverride(normalizedPath).ConfigureAwait(false);
-                }
-                else
-                {
-                    snapshot = await RunSidecarExtractionAsync(normalizedPath, warnings, ct).ConfigureAwait(false);
-                }
-
-                // Ensure CreatedAt is fresh.
-                snapshot = snapshot with { CreatedAt = DateTimeOffset.UtcNow };
-
-                // Save snapshot
-                var saved = await _store.SaveAsync(snapshot, ct: ct).ConfigureAwait(false);
-                snapshot = saved;
-
-                // Index (soft failure)
-                try
-                {
-                    await _index.IndexAsync(saved, ct).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogWarning(ex, "Index update failed for TypeScript snapshot {SnapshotId}", saved.ContentHash);
-                }
-
-                // Save new manifest
-                await FileHasher.SaveAsync(currentManifest, manifestPath, ct).ConfigureAwait(false);
+                snapshot = await PipelineOverride(normalizedPath).ConfigureAwait(false);
             }
+            else
+            {
+                snapshot = await RunSidecarExtractionAsync(normalizedPath, warnings, ct).ConfigureAwait(false);
+            }
+
+            // Ensure CreatedAt is fresh.
+            snapshot = snapshot with { CreatedAt = DateTimeOffset.UtcNow };
+
+            // Save snapshot
+            var saved = await _store.SaveAsync(snapshot, ct: ct).ConfigureAwait(false);
+            snapshot = saved;
+
+            if (progressCallback is not null)
+                await progressCallback(2, 3, "indexing").ConfigureAwait(false);
+
+            // Index (soft failure)
+            string? indexError = null;
+            try
+            {
+                await _index.IndexAsync(saved, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Index update failed for TypeScript snapshot {SnapshotId}", saved.ContentHash);
+                indexError = ex.Message;
+            }
+
+            // Save new manifest
+            await FileHasher.SaveAsync(currentManifest, manifestPath, ct).ConfigureAwait(false);
+
+            if (progressCallback is not null)
+                await progressCallback(3, 3, "complete").ConfigureAwait(false);
 
             sw.Stop();
 
@@ -154,12 +193,106 @@ public sealed class TypeScriptIngestionService
                 ProjectCount: 1,
                 Duration: sw.Elapsed,
                 Warnings: warnings.AsReadOnly(),
-                IndexError: null);
+                IndexError: indexError);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            throw new TypeScriptIngestionException("sidecar_timeout", $"TypeScript sidecar timed out after {sidecarTimeout} seconds.");
         }
         finally
         {
             semaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// Discover all tsconfig.json files under a root directory and ingest each as a separate project.
+    /// </summary>
+    public async Task<WorkspaceIngestionResult> IngestTypeScriptWorkspaceAsync(
+        string rootDir,
+        CancellationToken cancellationToken,
+        bool forceReindex = false,
+        Func<int, int, string, Task>? progressCallback = null)
+    {
+        if (string.IsNullOrWhiteSpace(rootDir))
+            throw new ArgumentException("Root directory path is required", nameof(rootDir));
+
+        var normalizedRoot = Path.GetFullPath(rootDir);
+
+        if (!_allowlist.IsAllowed(normalizedRoot))
+        {
+            _logger.LogWarning("Workspace ingestion denied: path {Path} outside allowlist", normalizedRoot);
+            throw new UnauthorizedAccessException("Path is not in the configured allow list.");
+        }
+
+        if (!Directory.Exists(normalizedRoot))
+            throw new TypeScriptIngestionException("tsconfig_invalid", "Root directory does not exist.");
+
+        var sw = Stopwatch.StartNew();
+        var warnings = new List<string>();
+
+        // Discover all tsconfig.json files, excluding node_modules
+        var tsconfigFiles = Directory.EnumerateFiles(normalizedRoot, "tsconfig.json", SearchOption.AllDirectories)
+            .Where(f => !f.Contains("node_modules", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .ToList();
+
+        if (tsconfigFiles.Count == 0)
+        {
+            warnings.Add("No tsconfig.json files found under the root directory.");
+            sw.Stop();
+            return new WorkspaceIngestionResult(
+                TotalProjectCount: 0,
+                IngestedCount: 0,
+                Projects: [],
+                Duration: sw.Elapsed,
+                Warnings: warnings.AsReadOnly());
+        }
+
+        var results = new List<WorkspaceProjectResult>();
+        var ingestedCount = 0;
+
+        for (var i = 0; i < tsconfigFiles.Count; i++)
+        {
+            var tsconfig = tsconfigFiles[i];
+            if (progressCallback is not null)
+                await progressCallback(i, tsconfigFiles.Count, $"ingesting project {i + 1}/{tsconfigFiles.Count}: {Path.GetRelativePath(normalizedRoot, tsconfig)}").ConfigureAwait(false);
+
+            try
+            {
+                var result = await IngestTypeScriptAsync(tsconfig, cancellationToken, forceReindex).ConfigureAwait(false);
+                ingestedCount++;
+                results.Add(new WorkspaceProjectResult(
+                    TsconfigPath: Path.GetRelativePath(normalizedRoot, tsconfig),
+                    SnapshotId: result.SnapshotId,
+                    SymbolCount: result.SymbolCount,
+                    Status: result.Skipped ? "skipped" : "success",
+                    Reason: result.Reason));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to ingest TypeScript project at {Path}", tsconfig);
+                warnings.Add($"Failed: {tsconfig}: {ex.Message}");
+                results.Add(new WorkspaceProjectResult(
+                    TsconfigPath: Path.GetRelativePath(normalizedRoot, tsconfig),
+                    SnapshotId: null,
+                    SymbolCount: 0,
+                    Status: "error",
+                    Reason: ex.Message));
+            }
+        }
+
+        if (progressCallback is not null)
+            await progressCallback(tsconfigFiles.Count, tsconfigFiles.Count, "complete").ConfigureAwait(false);
+
+        sw.Stop();
+
+        return new WorkspaceIngestionResult(
+            TotalProjectCount: tsconfigFiles.Count,
+            IngestedCount: ingestedCount,
+            Projects: results.AsReadOnly(),
+            Duration: sw.Elapsed,
+            Warnings: warnings.AsReadOnly());
     }
 
     private async Task<SymbolGraphSnapshot> RunSidecarExtractionAsync(string tsconfigPath, ICollection<string> warnings, CancellationToken ct)
@@ -230,7 +363,7 @@ public sealed class TypeScriptIngestionService
         };
 
         var requestJson = JsonSerializer.Serialize(request);
-        
+
         // Start reading stdout task - we expect a small signal response now
         var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
 
@@ -254,7 +387,7 @@ public sealed class TypeScriptIngestionService
             throw new TypeScriptIngestionException("Sidecar process exited but output file was not created.");
 
         string responseJson;
-        try 
+        try
         {
             responseJson = await File.ReadAllTextAsync(tempOutputFile, ct).ConfigureAwait(false);
         }
@@ -277,19 +410,35 @@ public sealed class TypeScriptIngestionService
             {
                 var message = errorProp.TryGetProperty("message", out var m) ? m.GetString() : "Unknown sidecar error";
                 var code = errorProp.TryGetProperty("code", out var c) ? c.GetInt32() : -1;
-                throw new TypeScriptIngestionException($"Sidecar returned error {code}: {message}");
+                throw new TypeScriptIngestionException("parse_error", $"Sidecar returned error {code}: {message}");
             }
 
             if (!root.TryGetProperty("result", out var resultProp))
-                throw new TypeScriptIngestionException("Invalid JSON-RPC response from sidecar: missing 'result' or 'error'.");
+                throw new TypeScriptIngestionException("parse_error", "Invalid JSON-RPC response from sidecar: missing 'result' or 'error'.");
 
             var snapshot = JsonSerializer.Deserialize<SymbolGraphSnapshot>(resultProp.GetRawText(), JsonOptions);
-            return snapshot ?? throw new TypeScriptIngestionException("Failed to deserialize SymbolGraphSnapshot from sidecar response.");
+            return snapshot ?? throw new TypeScriptIngestionException("parse_error", "Failed to deserialize SymbolGraphSnapshot from sidecar response.");
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse sidecar response from file. Length: {Length}", responseJson.Length);
-            throw new TypeScriptIngestionException($"Failed to parse JSON-RPC response from sidecar. Length: {responseJson.Length}", ex);
+            throw new TypeScriptIngestionException("parse_error", $"Failed to parse JSON-RPC response from sidecar. Length: {responseJson.Length}");
         }
     }
 }
+
+/// <summary>Result of a workspace-level TypeScript ingestion.</summary>
+public sealed record WorkspaceIngestionResult(
+    int TotalProjectCount,
+    int IngestedCount,
+    IReadOnlyList<WorkspaceProjectResult> Projects,
+    TimeSpan Duration,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>Per-project result within a workspace ingestion.</summary>
+public sealed record WorkspaceProjectResult(
+    string TsconfigPath,
+    string? SnapshotId,
+    int SymbolCount,
+    string Status,
+    string? Reason);

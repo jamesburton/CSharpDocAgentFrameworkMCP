@@ -33,6 +33,9 @@ public sealed class DocAgentServerOptions
     /// <summary>File extensions to scan for TypeScript incremental hashing. Default: .ts,.tsx</summary>
     public string[] TypeScriptFileExtensions { get; set; } = [".ts", ".tsx"];
 
+    /// <summary>Maximum seconds allowed for the TypeScript sidecar process. Default 120.</summary>
+    public int TypeScriptSidecarTimeoutSeconds { get; set; } = 120;
+
     /// <summary>Audit logging configuration.</summary>
     public AuditOptions Audit { get; set; } = new();
 

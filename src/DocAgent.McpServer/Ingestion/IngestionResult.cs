@@ -7,4 +7,6 @@ public sealed record IngestionResult(
     int ProjectCount,
     TimeSpan Duration,
     IReadOnlyList<string> Warnings,
-    string? IndexError = null);
+    string? IndexError = null,
+    bool Skipped = false,
+    string? Reason = null);
