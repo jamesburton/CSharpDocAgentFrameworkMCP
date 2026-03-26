@@ -30,4 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\tests\DocAgent.Benchmarks\DocAgent.Benchmarks.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="golden-files\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
