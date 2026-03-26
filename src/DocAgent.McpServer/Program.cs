@@ -44,6 +44,12 @@ var artifactsDirFromEnv = DocAgent.McpServer.Config.PathExpander.Expand(
 if (artifactsDirFromEnv is not null)
     builder.Configuration["DocAgent:ArtifactsDir"] = artifactsDirFromEnv;
 
+// Inject sidecar dir from Aspire env var (standalone mode uses appsettings.json or fallback)
+var sidecarDirFromEnv = DocAgent.McpServer.Config.PathExpander.Expand(
+    Environment.GetEnvironmentVariable("DOCAGENT_SIDECAR_DIR"));
+if (sidecarDirFromEnv is not null)
+    builder.Configuration["DocAgent:SidecarDir"] = sidecarDirFromEnv;
+
 // Strongly-typed configuration from appsettings.json section "DocAgent"
 builder.Services.Configure<DocAgentServerOptions>(
     builder.Configuration.GetSection("DocAgent"));

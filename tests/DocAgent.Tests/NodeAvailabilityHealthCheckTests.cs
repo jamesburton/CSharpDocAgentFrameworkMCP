@@ -1,6 +1,8 @@
 using DocAgent.McpServer.Config;
 using DocAgent.McpServer.Validation;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -73,5 +75,44 @@ public class NodeAvailabilityHealthCheckTests
 
         // Assert
         result.Status.Should().Be(HealthStatus.Degraded);
+    }
+
+    [Fact]
+    public void SidecarDirEnvVar_WhenSet_BindsToDocAgentServerOptions()
+    {
+        // Arrange: use a path that is already absolute and platform-appropriate
+        var expectedDir = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar + "docagent-test-sidecar-dir";
+        Environment.SetEnvironmentVariable("DOCAGENT_SIDECAR_DIR", expectedDir);
+        try
+        {
+            // Act: replicate the env var pickup logic from McpServer/Program.cs using
+            // ConfigurationBuilder + ServiceCollection (no WebApplication needed)
+            var sidecarDirFromEnv = DocAgent.McpServer.Config.PathExpander.Expand(
+                Environment.GetEnvironmentVariable("DOCAGENT_SIDECAR_DIR"));
+
+            var configDict = new Dictionary<string, string?>();
+            if (sidecarDirFromEnv is not null)
+                configDict["DocAgent:SidecarDir"] = sidecarDirFromEnv;
+
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(configDict)
+                .Build();
+
+            var services = new ServiceCollection();
+            services.Configure<DocAgentServerOptions>(config.GetSection("DocAgent"));
+            var sp = services.BuildServiceProvider();
+            var options = sp.GetRequiredService<IOptions<DocAgentServerOptions>>().Value;
+
+            // Assert: env var value flows into DocAgentServerOptions.SidecarDir
+            // PathExpander.Expand normalizes the path (resolves . and .. segments)
+            options.SidecarDir.Should().NotBeNull();
+            options.SidecarDir!.Should().EndWith("docagent-test-sidecar-dir");
+        }
+        finally
+        {
+            // Cleanup: always unset the env var
+            Environment.SetEnvironmentVariable("DOCAGENT_SIDECAR_DIR", null);
+        }
     }
 }
