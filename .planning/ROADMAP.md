@@ -196,6 +196,11 @@ Plans:
   2. MCPI-02, MCPI-04 checkboxes updated after Phase 32 fixes
   3. Phase 28 has a retroactive VERIFICATION.md
   4. Phases 29, 30, 31 have VALIDATION.md (Nyquist compliance)
+**Plans**: 2 plans
+
+Plans:
+- [ ] 34-01-PLAN.md — Phase 28 retroactive VERIFICATION.md + REQUIREMENTS.md checkbox updates
+- [ ] 34-02-PLAN.md — Retroactive VALIDATION.md for phases 29, 30, 31 (Nyquist compliance)
 
 ## Progress
 
@@ -229,9 +234,9 @@ Plans:
 | 26. API Extensions | v1.5 | 2/2 | Complete | 2026-03-08 |
 | 27. Documentation Refresh | v1.5 | 1/1 | Complete | 2026-03-08 |
 | 28. Sidecar Scaffold and IPC Protocol | v2.0 | 2/2 | Complete | 2026-03-08 |
-| 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
-| 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
-| 31. Verification and Hardening | 4/4 | Complete    | 2026-03-25 |
-| 32. JSON Contract Alignment | 2/2 | Complete    | 2026-03-26 | — |
-| 33. Aspire Sidecar Integration | 1/1 | Complete    | 2026-03-26 | — |
-| 34. Traceability and Verification Cleanup | v2.0 | 0/0 | Planned | — |
+| 29. Core Symbol Extraction | v2.0 | 3/3 | Complete | 2026-03-24 |
+| 30. MCP Integration and Incremental Ingestion | v2.0 | 3/3 | Complete | 2026-03-25 |
+| 31. Verification and Hardening | v2.0 | 4/4 | Complete | 2026-03-25 |
+| 32. JSON Contract Alignment | v2.0 | 2/2 | Complete | 2026-03-26 |
+| 33. Aspire Sidecar Integration | v2.0 | 1/1 | Complete | 2026-03-26 |
+| 34. Traceability and Verification Cleanup | v2.0 | 0/2 | Planned | — |
