@@ -27,8 +27,8 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 
 ### MCP Integration
 
-- [ ] **MCPI-01**: `ingest_typescript` MCP tool accepting tsconfig.json path with PathAllowlist security enforcement
-- [ ] **MCPI-02**: All 14 existing MCP tools produce correct results when querying TypeScript snapshots
+- [x] **MCPI-01**: `ingest_typescript` MCP tool accepting tsconfig.json path with PathAllowlist security enforcement
+- [x] **MCPI-02**: All 14 existing MCP tools produce correct results when querying TypeScript snapshots
 - [x] **MCPI-03**: Incremental TypeScript ingestion via SHA-256 file hashing — only re-parse changed files
 - [ ] **MCPI-04**: BM25 search tokenizer handles camelCase (TS convention) alongside PascalCase (C#)
 
@@ -83,8 +83,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXTR-06 | Phase 29 → Phase 32 | Complete |
 | EXTR-07 | Phase 29 | Complete |
 | EXTR-08 | Phase 29 | Complete |
-| MCPI-01 | Phase 30 → Phase 32 | Pending |
-| MCPI-02 | Phase 30 → Phase 32, Phase 34 | Pending |
+| MCPI-01 | Phase 30 → Phase 32 | Complete |
+| MCPI-02 | Phase 30 → Phase 32, Phase 34 | Complete |
 | MCPI-03 | Phase 30 | Complete |
 | MCPI-04 | Phase 30 → Phase 34 | Pending |
 | VERF-01 | Phase 31 | Complete |
