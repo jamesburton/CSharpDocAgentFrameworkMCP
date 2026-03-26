@@ -181,6 +181,10 @@ Plans:
   1. `DocAgent.AppHost/Program.cs` registers the Node.js sidecar via `AddNodeApp()` or equivalent Aspire API
   2. `NodeAvailabilityValidator` is Aspire-aware and integrates with resource health checks
   3. Running `dotnet run --project src/DocAgent.AppHost` starts the sidecar and fails with a clear error if Node.js is unavailable
+**Plans**: 1 plan
+
+Plans:
+- [ ] 33-01-PLAN.md — AppHost sidecar registration, NodeAvailabilityHealthCheck, DOCAGENT_SIDECAR_DIR env var wiring
 
 ### Phase 34: Traceability and Verification Cleanup
 **Goal:** Update all stale requirement checkboxes, create missing verification artifacts, and fill Nyquist validation gaps
@@ -229,5 +233,5 @@ Plans:
 | 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
 | 31. Verification and Hardening | 4/4 | Complete    | 2026-03-25 |
 | 32. JSON Contract Alignment | 2/2 | Complete    | 2026-03-26 | — |
-| 33. Aspire Sidecar Integration | v2.0 | 0/0 | Planned | — |
+| 33. Aspire Sidecar Integration | v2.0 | 0/1 | Planned | — |
 | 34. Traceability and Verification Cleanup | v2.0 | 0/0 | Planned | — |
