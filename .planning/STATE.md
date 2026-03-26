@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
 stopped_at: Completed 33-01 (Aspire sidecar registration + NodeAvailabilityHealthCheck)
-last_updated: "2026-03-26T03:09:24Z"
-last_activity: 2026-03-26 — Completed 33-01 (Aspire sidecar integration: AddNodeApp + DOCAGENT_SIDECAR_DIR wiring)
+last_updated: "2026-03-26T03:15:01.365Z"
+last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
 progress:
   total_phases: 7
   completed_phases: 6
