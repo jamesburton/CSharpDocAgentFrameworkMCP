@@ -12,7 +12,7 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 - [ ] **SIDE-01**: Node.js sidecar project (`ts-symbol-extractor`) with package.json, esbuild bundling, vitest test setup
 - [ ] **SIDE-02**: NDJSON stdin/stdout IPC protocol with defined request/response contract
 - [x] **SIDE-03**: C# `TypeScriptIngestionService` that spawns Node.js sidecar, sends request, deserializes response into `SymbolGraphSnapshot`
-- [ ] **SIDE-04**: Aspire AppHost registers Node.js sidecar via `AddNodeApp()` with startup validation for Node.js availability
+- [x] **SIDE-04**: Aspire AppHost registers Node.js sidecar via `AddNodeApp()` with startup validation for Node.js availability
 
 ### Symbol Extraction
 
@@ -74,7 +74,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SIDE-01 | Phase 28 → Phase 34 | Pending |
 | SIDE-02 | Phase 28 → Phase 34 | Pending |
 | SIDE-03 | Phase 28 → Phase 32 | Complete |
-| SIDE-04 | Phase 28 → Phase 33 | Pending |
+| SIDE-04 | Phase 28 → Phase 33 | Complete |
 | EXTR-01 | Phase 29 | Complete |
 | EXTR-02 | Phase 29 | Complete |
 | EXTR-03 | Phase 29 | Complete |

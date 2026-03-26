@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Phase 33 context gathered
-last_updated: "2026-03-26T01:39:44.096Z"
-last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
+stopped_at: Completed 33-01 (Aspire sidecar registration + NodeAvailabilityHealthCheck)
+last_updated: "2026-03-26T03:09:24Z"
+last_activity: 2026-03-26 — Completed 33-01 (Aspire sidecar integration: AddNodeApp + DOCAGENT_SIDECAR_DIR wiring)
 progress:
   total_phases: 7
-  completed_phases: 5
-  total_plans: 14
-  completed_plans: 14
+  completed_phases: 6
+  total_plans: 15
+  completed_plans: 15
 ---
 
 # Project State
@@ -56,13 +56,14 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Test Status (2026-03-26)
 
-**649 passed, 0 failed (full run), 649 total** (32-02: 614 non-stress/non-determinism confirmed; 8 new tests added)
+**654 passed, 0 failed (non-stress run), 654 total** (33-01: 631 non-stress confirmed + 5 new NodeAvailabilityHealthCheckTests)
 
 - 31-01 added 23 new tests (TypeScriptStressTests: 5, TypeScriptDeterminismTests: 18)
 - 31-03 added 1 new test (IngestTypeScriptAsync_produces_relative_file_paths_in_spans)
 - 31-04 added 3 new tests (AuditLogger constructor, audit log verification, relative path spans)
 - 32-01 zero regressions — 56 TypeScript tests pass, 570 non-TypeScript tests pass
 - 32-02 added 8 new tests (6 TypeScriptDeserializationTests + 2 TypeScriptSidecarIntegrationTests)
+- 33-01 added 5 new tests (NodeAvailabilityHealthCheckTests: 4 health check + 1 env var binding)
 
 ## Recent Decisions
 
@@ -89,13 +90,16 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 | Mirror SidecarJsonOptions in tests rather than exposing as internal | Minimal production API surface changes for test purposes; exact mirror of private options |
 | GoldenFile_Snapshot_Matches_Reference uses exact counts | We control the golden file, so exact counts (18 nodes, 20 edges) catch dropped nodes/edges definitively |
 | Sidecar integration tests use LuceneRAMDirectory | Avoids FSDirectory per-snapshot swapping issues; consistent with TypeScriptToolVerificationTests pattern |
+| NodeAvailabilityHealthCheck returns Degraded not Unhealthy | Keeps /health at HTTP 200 so Aspire dashboard probe always succeeds even without Node.js |
+| AppHost-level AddHealthChecks not available in Aspire.AppHost.Sdk | McpServer /health endpoint handles sidecar availability reporting instead |
+| No .WaitFor(sidecar) in AppHost | Parallel startup with graceful degradation — McpServer starts independently |
 
 ## Blockers/Concerns
 
-- None — phase 32 plans 01 and 02 completed; JSON contract aligned and tested
+- None — phase 33 plan 01 completed; Aspire sidecar integration functional
 
 ## Session Continuity
 
-Last session: 2026-03-26T01:39:44.083Z
-Stopped at: Phase 33 context gathered
-Resume file: .planning/phases/33-aspire-sidecar-integration/33-CONTEXT.md
+Last session: 2026-03-26T03:09:24Z
+Stopped at: Completed 33-01 (Aspire sidecar registration + NodeAvailabilityHealthCheck)
+Resume file: .planning/phases/33-aspire-sidecar-integration/33-01-SUMMARY.md
