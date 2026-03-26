@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Phase 34 context gathered
-last_updated: "2026-03-26T11:24:13.009Z"
+stopped_at: Completed 34-02-PLAN.md
+last_updated: "2026-03-26T12:29:45.687Z"
 last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 17
+  completed_plans: 16
 ---
 
 # Project State
@@ -93,6 +93,7 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 | NodeAvailabilityHealthCheck returns Degraded not Unhealthy | Keeps /health at HTTP 200 so Aspire dashboard probe always succeeds even without Node.js |
 | AppHost-level AddHealthChecks not available in Aspire.AppHost.Sdk | McpServer /health endpoint handles sidecar availability reporting instead |
 | No .WaitFor(sidecar) in AppHost | Parallel startup with graceful degradation — McpServer starts independently |
+| Retroactive VALIDATION.md files use `complete` status | Phase already verified; `draft` reserved for pre-execution files |
 
 ## Blockers/Concerns
 
@@ -100,6 +101,6 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-26T11:24:13.003Z
-Stopped at: Phase 34 context gathered
-Resume file: .planning/phases/34-traceability-and-verification-cleanup/34-CONTEXT.md
+Last session: 2026-03-26T12:29:45.682Z
+Stopped at: Completed 34-02-PLAN.md
+Resume file: None
