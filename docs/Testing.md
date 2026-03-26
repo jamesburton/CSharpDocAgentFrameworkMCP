@@ -84,6 +84,36 @@ In environments where these conditions are not met (Docker images without SDK, C
 RUN_BENCHMARKS=1 dotnet test --filter "Category=Benchmark" -c Release
 ```
 
+### TypeScript Sidecar Integration Tests
+
+`TypeScriptSidecarIntegrationTests` validates the real Node.js sidecar pipeline (no mocks). These tests are always skipped in standard `dotnet test` runs via `[Fact(Skip=...)]`.
+
+**Prerequisites:**
+- Node.js installed and on PATH
+- Sidecar built: `cd src/ts-symbol-extractor && npm install && npm run build`
+
+**Running manually:**
+
+Remove the `Skip` attribute from the test method(s) temporarily, then run:
+
+```bash
+dotnet test --filter "FullyQualifiedName~TypeScriptSidecarIntegration"
+```
+
+Note: Due to static `[Fact(Skip=...)]`, the env var alone does not unskip tests. Remove the Skip attribute temporarily, or run the test methods directly via IDE test runner.
+
+### TypeScriptIngestionBenchmarks
+
+`TypeScriptIngestionBenchmarks` (in the Benchmarks project) measures sidecar ingestion performance. Requires the same prerequisites as sidecar integration tests.
+
+**Running:**
+
+```bash
+dotnet run -c Release --project tests/DocAgent.Benchmarks
+```
+
+**CI integration:** Not included in standard `dotnet test`. To add to CI, ensure Node.js and compiled sidecar are available in the CI environment, then run the benchmark project directly.
+
 ### Test Parallelism and Environment Variables
 
 Tests in `PathAllowlistTests` and `StartupValidatorTests` mutate the `DOCAGENT_ALLOWED_PATHS` environment variable. These classes are placed in a shared `[Collection("EnvVarMutating")]` to prevent parallel execution, avoiding flaky failures from env var pollution. The `ChangeToolTests` path-denied tests use an explicit deny allowlist that is immune to env var leakage.

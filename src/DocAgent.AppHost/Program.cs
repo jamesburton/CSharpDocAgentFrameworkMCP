@@ -15,6 +15,7 @@ var mcpServer = builder.AddProject<Projects.DocAgent_McpServer>("docagent-mcp")
     .WithEnvironment("DOCAGENT_ALLOWED_PATHS",
         builder.Configuration["DocAgent:AllowlistPaths"] ?? "")
     .WithEnvironment("DOCAGENT_SIDECAR_DIR", sidecarDir)
+    .WithReference(sidecar)
     .WithHttpEndpoint(port: 8089, name: "health")
     .WithHttpHealthCheck("/health");
 
