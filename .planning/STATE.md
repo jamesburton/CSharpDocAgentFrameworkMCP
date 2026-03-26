@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
 stopped_at: Completed 34-01-PLAN.md
-last_updated: "2026-03-26T12:30:47.800Z"
-last_activity: 2026-03-26 — Completed 34-01 (Phase 28 retroactive VERIFICATION.md + REQUIREMENTS.md 20/20 complete)
+last_updated: "2026-03-26T12:34:08.152Z"
+last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
 progress:
   total_phases: 7
   completed_phases: 7
