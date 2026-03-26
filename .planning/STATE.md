@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-03-26T14:37:45.244Z"
-last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
+stopped_at: Completed 35-02-PLAN.md
+last_updated: "2026-03-26T14:39:58.226Z"
+last_activity: "2026-03-26 — Completed 35-01 (TS/C# contract alignment: typeParameterName, IsOptional, dormant enum removal)"
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -56,7 +56,7 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Test Status (2026-03-26)
 
-**657 passed, 0 failed (non-stress run), 659 total** (35-01: 654 baseline + 5 new contract alignment tests, 2 skipped stress)
+**657 passed, 0 failed (non-stress run), 659 total** (35-02: sidecar E2E tests correctly show as Skipped, 2 skipped)
 
 - 31-01 added 23 new tests (TypeScriptStressTests: 5, TypeScriptDeterminismTests: 18)
 - 31-03 added 1 new test (IngestTypeScriptAsync_produces_relative_file_paths_in_spans)
@@ -65,6 +65,7 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 - 32-02 added 8 new tests (6 TypeScriptDeserializationTests + 2 TypeScriptSidecarIntegrationTests)
 - 33-01 added 5 new tests (NodeAvailabilityHealthCheckTests: 4 health check + 1 env var binding)
 - 35-01 added 5 new tests (GenericConstraint typeParameterName, ParameterInfo IsOptional, SymbolEdgeKind InheritsFrom/Accepts rejection)
+- 35-02 zero new tests; sidecar E2E tests now show as Skipped (was silently Passed) — honest CI output
 
 ## Recent Decisions
 
@@ -99,13 +100,15 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 | ParameterInfo.IsOptional added at end with default=false | Backward-compatible: existing 7-arg call sites compile without change; follows project convention of appending to record |
 | GenericConstraint.name renamed to typeParameterName in TS | TS was the source of INT-01 silent data loss; C# already had correct JsonPropertyName |
 | Removed InheritsFrom and Accepts from TS SymbolEdgeKind | Dormant values never emitted; removal eliminates INT-04 latent deserialization throw risk |
+| Static [Fact(Skip=...)] for sidecar E2E tests | Honest CI output — tests show Skipped not silently Passed; skip message explains prerequisites |
+| WithReference(sidecar) for Aspire dependency link | Creates dashboard dependency graph edge without WaitFor; NodeApp supports this extension method |
 
 ## Blockers/Concerns
 
-- None — phase 33 plan 01 completed; Aspire sidecar integration functional
+- None — phase 35 complete; INT-02 and INT-03 from v2.0 audit closed
 
 ## Session Continuity
 
-Last session: 2026-03-26T14:37:45.235Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-03-26T14:39:58.220Z
+Stopped at: Completed 35-02-PLAN.md
 Resume file: None
