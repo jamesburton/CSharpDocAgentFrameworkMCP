@@ -26,7 +26,7 @@ public sealed class NodeAvailabilityValidator : IHostedLifecycleService
         _logger = logger;
     }
 
-    internal static NodeCheckResult ParseNodeVersion(string? versionOutput)
+    public static NodeCheckResult ParseNodeVersion(string? versionOutput)
     {
         if (string.IsNullOrWhiteSpace(versionOutput))
             return new NodeCheckResult(false, false, null);

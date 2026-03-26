@@ -59,7 +59,11 @@ builder.Services.AddSingleton<AuditLogger>();
 builder.Services.AddSingleton<ToolRateLimiter>();
 
 // Health checks for Aspire probing
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<NodeAvailabilityHealthCheck>(
+        "node-js-sidecar",
+        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded,
+        tags: new[] { "sidecar", "typescript" });
 
 // OpenTelemetry tracing + metrics + logging
 builder.Services.AddOpenTelemetry()
