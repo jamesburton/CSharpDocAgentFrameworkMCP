@@ -202,6 +202,20 @@ Plans:
 - [ ] 34-01-PLAN.md — Phase 28 retroactive VERIFICATION.md + REQUIREMENTS.md checkbox updates
 - [ ] 34-02-PLAN.md — Retroactive VALIDATION.md for phases 29, 30, 31 (Nyquist compliance)
 
+### Phase 35: Contract Fidelity and CI Observability
+**Goal:** Fix all remaining TS↔C# contract mismatches (GenericConstraint, ParameterInfo, edge kinds) and improve CI test observability (sidecar E2E skip markers, Aspire resource wiring, benchmark docs)
+**Depends on**: Phase 34
+**Requirements**: SIDE-03, SIDE-04, EXTR-01, EXTR-04
+**Gap Closure:** Closes tech debt from v2.0 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. GenericConstraint field names align between TS and C# — generic type constraints round-trip correctly through sidecar deserialization
+  2. ParameterInfo includes `isOptional` field in C# record — TypeScript optional parameters are distinguishable from required ones
+  3. SymbolEdgeKind enum is consistent between TS and C# — no dormant values that would throw on deserialization
+  4. Sidecar E2E tests use proper xUnit Skip/Trait markers instead of silent early-return guards
+  5. AppHost sidecar resource is wired to McpServer via `WithReference()` for Aspire dashboard dependency visibility
+  6. Sidecar benchmark CI requirements are documented
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -240,3 +254,4 @@ Plans:
 | 32. JSON Contract Alignment | v2.0 | 2/2 | Complete | 2026-03-26 |
 | 33. Aspire Sidecar Integration | v2.0 | 1/1 | Complete | 2026-03-26 |
 | 34. Traceability and Verification Cleanup | 2/2 | Complete    | 2026-03-26 | — |
+| 35. Contract Fidelity and CI Observability | v2.0 | 0/0 | Planned | — |

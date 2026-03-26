@@ -73,12 +73,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SIDE-01 | Phase 28 → Phase 34 | Complete |
 | SIDE-02 | Phase 28 → Phase 34 | Complete |
-| SIDE-03 | Phase 28 → Phase 32 | Complete |
-| SIDE-04 | Phase 28 → Phase 33 | Complete |
-| EXTR-01 | Phase 29 | Complete |
+| SIDE-03 | Phase 28 → Phase 32 → Phase 35 | Complete |
+| SIDE-04 | Phase 28 → Phase 33 → Phase 35 | Complete |
+| EXTR-01 | Phase 29 → Phase 35 | Complete |
 | EXTR-02 | Phase 29 | Complete |
 | EXTR-03 | Phase 29 | Complete |
-| EXTR-04 | Phase 29 → Phase 32 | Complete |
+| EXTR-04 | Phase 29 → Phase 32 → Phase 35 | Complete |
 | EXTR-05 | Phase 29 | Complete |
 | EXTR-06 | Phase 29 → Phase 32 | Complete |
 | EXTR-07 | Phase 29 | Complete |
@@ -100,4 +100,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-26 — Phase 34 traceability cleanup: SIDE-01, SIDE-02, MCPI-04 marked Complete; coverage updated to 20/20*
+*Last updated: 2026-03-26 — Phase 35 gap closure added: SIDE-03, SIDE-04, EXTR-01, EXTR-04 traceability extended*
