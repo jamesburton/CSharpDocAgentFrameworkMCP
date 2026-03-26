@@ -124,7 +124,7 @@ export interface ParameterInfo {
 }
 
 export interface GenericConstraint {
-  name: string;
+  typeParameterName: string;
   constraints: string[];
 }
 
@@ -135,9 +135,7 @@ export enum SymbolEdgeKind {
   References = "References",
   Calls = "Calls",
   Overrides = "Overrides",
-  InheritsFrom = "InheritsFrom",
   Returns = "Returns",
-  Accepts = "Accepts",
   Invokes = "Invokes",
   Configures = "Configures",
   DependsOn = "DependsOn",

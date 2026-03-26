@@ -256,7 +256,7 @@ function getParameters(node: ts.Node, checker: ts.TypeChecker): ParameterInfo[] 
 function getGenericConstraints(node: ts.Node, checker: ts.TypeChecker): GenericConstraint[] {
   if (ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node) || ts.isFunctionLike(node)) {
     return (node.typeParameters || []).map(tp => ({
-      name: tp.name.getText(),
+      typeParameterName: tp.name.getText(),
       constraints: tp.constraint ? [checker.typeToString(checker.getTypeAtLocation(tp.constraint))] : []
     }));
   }
