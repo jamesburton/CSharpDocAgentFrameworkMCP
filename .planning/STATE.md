@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
 stopped_at: Completed 32-02-PLAN.md
-last_updated: "2026-03-26T00:21:38.597Z"
-last_activity: "2026-03-25 — Completed 32-01 (JSON contract alignment: TS string enums + C# JsonPropertyName + DocCommentConverter)"
+last_updated: "2026-03-26T00:50:50.138Z"
+last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
 progress:
   total_phases: 7
   completed_phases: 5

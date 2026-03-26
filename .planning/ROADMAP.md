@@ -228,6 +228,6 @@ Plans:
 | 29. Core Symbol Extraction | 3/3 | Complete    | 2026-03-24 | — |
 | 30. MCP Integration and Incremental Ingestion | 3/3 | Complete    | 2026-03-25 |
 | 31. Verification and Hardening | 4/4 | Complete    | 2026-03-25 |
-| 32. JSON Contract Alignment | 2/2 | Complete   | 2026-03-26 | — |
+| 32. JSON Contract Alignment | 2/2 | Complete    | 2026-03-26 | — |
 | 33. Aspire Sidecar Integration | v2.0 | 0/0 | Planned | — |
 | 34. Traceability and Verification Cleanup | v2.0 | 0/0 | Planned | — |
