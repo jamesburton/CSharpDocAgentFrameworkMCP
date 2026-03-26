@@ -214,7 +214,11 @@ Plans:
   4. Sidecar E2E tests use proper xUnit Skip/Trait markers instead of silent early-return guards
   5. AppHost sidecar resource is wired to McpServer via `WithReference()` for Aspire dashboard dependency visibility
   6. Sidecar benchmark CI requirements are documented
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 35-01-PLAN.md — TS/C# contract fixes (GenericConstraint, ParameterInfo, dormant edge kinds) + deserialization tests
+- [ ] 35-02-PLAN.md — CI observability (xUnit skip markers, Aspire dependency wiring, benchmark docs)
 
 ## Progress
 
@@ -254,4 +258,4 @@ Plans:
 | 32. JSON Contract Alignment | v2.0 | 2/2 | Complete | 2026-03-26 |
 | 33. Aspire Sidecar Integration | v2.0 | 1/1 | Complete | 2026-03-26 |
 | 34. Traceability and Verification Cleanup | 2/2 | Complete    | 2026-03-26 | — |
-| 35. Contract Fidelity and CI Observability | v2.0 | 0/0 | Planned | — |
+| 35. Contract Fidelity and CI Observability | v2.0 | 0/2 | In Progress | — |
