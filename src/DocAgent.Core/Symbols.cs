@@ -74,7 +74,8 @@ public sealed record ParameterInfo(
     [property: JsonPropertyName("isParams")] bool IsParams,
     [property: JsonPropertyName("isRef")] bool IsRef,
     [property: JsonPropertyName("isOut")] bool IsOut,
-    [property: JsonPropertyName("isIn")] bool IsIn);
+    [property: JsonPropertyName("isIn")] bool IsIn,
+    [property: JsonPropertyName("isOptional")] bool IsOptional = false);
 
 /// <summary>A generic type parameter constraint (e.g., "where T : class, IDisposable").</summary>
 public sealed record GenericConstraint(

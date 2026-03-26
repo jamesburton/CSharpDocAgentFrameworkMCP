@@ -221,4 +221,76 @@ public sealed class TypeScriptDeserializationTests
                 $"edge To='{edge.To.Value}' must reference an existing node");
         }
     }
+
+    // ── Contract alignment tests (Plan 35-01) ────────────────────────────────
+
+    [Fact]
+    public void GenericConstraint_TypeParameterName_Deserializes_Correctly()
+    {
+        // Verifies that GenericConstraint JSON with "typeParameterName" field deserializes
+        // to the C# record's TypeParameterName property (JsonPropertyName match).
+        const string json = """{"typeParameterName":"T","constraints":["object"]}""";
+
+        var result = JsonSerializer.Deserialize<GenericConstraint>(json, SidecarJsonOptions);
+
+        result.Should().NotBeNull();
+        result!.TypeParameterName.Should().Be("T",
+            "typeParameterName JSON field must map to C# TypeParameterName property");
+        result.Constraints.Should().ContainSingle().Which.Should().Be("object");
+    }
+
+    [Fact]
+    public void ParameterInfo_IsOptional_True_Deserializes_Correctly()
+    {
+        // Verifies that ParameterInfo JSON with "isOptional": true deserializes to
+        // ParameterInfo.IsOptional == true.
+        const string json = """{"name":"x","typeName":"string","isOptional":true,"defaultValue":null,"isParams":false,"isRef":false,"isOut":false,"isIn":false}""";
+
+        var result = JsonSerializer.Deserialize<ParameterInfo>(json, SidecarJsonOptions);
+
+        result.Should().NotBeNull();
+        result!.IsOptional.Should().BeTrue(
+            "isOptional=true in JSON must deserialize to ParameterInfo.IsOptional == true");
+    }
+
+    [Fact]
+    public void ParameterInfo_Without_IsOptional_Defaults_To_False()
+    {
+        // Verifies backward compatibility: JSON without "isOptional" key deserializes
+        // with IsOptional == false (the default).
+        const string json = """{"name":"x","typeName":"string","defaultValue":null,"isParams":false,"isRef":false,"isOut":false,"isIn":false}""";
+
+        var result = JsonSerializer.Deserialize<ParameterInfo>(json, SidecarJsonOptions);
+
+        result.Should().NotBeNull();
+        result!.IsOptional.Should().BeFalse(
+            "missing isOptional field must default to false for backward compatibility");
+    }
+
+    [Fact]
+    public void SymbolEdgeKind_InheritsFrom_Throws_JsonException()
+    {
+        // Verifies that TS-emitted "InheritsFrom" string throws JsonException on C# side
+        // because there is no InheritsFrom member in the C# SymbolEdgeKind enum and
+        // allowIntegerValues: false is set on the converter.
+        // This is the guard against INT-04: latent deserialization throw from dormant TS enum values.
+        const string json = "\"InheritsFrom\"";
+
+        var act = () => JsonSerializer.Deserialize<SymbolEdgeKind>(json, SidecarJsonOptions);
+
+        act.Should().Throw<JsonException>(
+            "InheritsFrom has no C# SymbolEdgeKind counterpart and must be rejected by the strict converter");
+    }
+
+    [Fact]
+    public void SymbolEdgeKind_Accepts_Throws_JsonException()
+    {
+        // Same pattern as InheritsFrom — verifies "Accepts" is also rejected.
+        const string json = "\"Accepts\"";
+
+        var act = () => JsonSerializer.Deserialize<SymbolEdgeKind>(json, SidecarJsonOptions);
+
+        act.Should().Throw<JsonException>(
+            "Accepts has no C# SymbolEdgeKind counterpart and must be rejected by the strict converter");
+    }
 }
