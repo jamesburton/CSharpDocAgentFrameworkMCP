@@ -1,36 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: TypeScript Language Support
-status: Between milestones — ad-hoc feature work
-stopped_at: Completed 35-02-PLAN.md
-last_updated: "2026-03-26T15:20:40.120Z"
-last_activity: "2026-03-26 — Completed 35-01 (TS/C# contract alignment: typeParameterName, IsOptional, dormant enum removal)"
+milestone: v2.5
+milestone_name: NuGet Package Mapping
+status: Defining requirements
+stopped_at: —
+last_updated: "2026-03-26T16:00:00.000Z"
+last_activity: "2026-03-26 — Milestone v2.5 started"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 19
-  completed_plans: 19
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-08)
+See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** Agents can query a stable, compiler-grade symbol graph of any .NET or TypeScript codebase via MCP tools, getting precise answers about types, members, relationships, and documentation.
-**Current focus:** MCP Setup & Installation System (CLI for onboarding users and projects)
+**Current focus:** NuGet Package Mapping — dependency graph + DLL reflection + MCP tools
 
 ## Current Position
 
-Milestone v2.0 (TypeScript Language Support): SHIPPED
-Post-milestone work: v2.1.0 shipped (large solution ingestion optimisations) + MCP setup CLI
-
-Status: Between milestones — ad-hoc feature work
-Last activity: 2026-03-26 — Completed 35-01 (TS/C# contract alignment: typeParameterName, IsOptional, dormant enum removal)
-
-Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-26 — Milestone v2.5 started
 
 ## Post-v2.0 Shipped Work
 

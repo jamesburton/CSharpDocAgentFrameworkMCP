@@ -59,10 +59,22 @@ Agents can query a stable, compiler-grade symbol graph of any .NET or TypeScript
 
 ### Active
 
-(No active milestone — plan next with `/gsd:new-milestone`)
+## Current Milestone: v2.5 NuGet Package Mapping
+
+**Goal:** Agents can query the full NuGet dependency graph and cross-reference package-exported public APIs with indexed source code references.
+
+**Target features:**
+- Parse `packages.lock.json` for direct + transitive dependency tree
+- Reflect NuGet DLLs from local cache via Roslyn MetadataReference — extract public types and members
+- Enrich existing stub nodes with real type info from DLL reflection
+- Add `PackageGraph` structure for dependency metadata (name, version, direct/transitive, assembly mappings)
+- `get_dependencies` MCP tool — query package dependency graph for a project
+- `find_package_usages` MCP tool — find references to a package's exported types in indexed code
+- PathAllowlist security on all new tools
+- .NET packages only (npm deferred)
 
 ### Out of Scope
-- Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred
+- Package mapping for npm/TypeScript packages — deferred; .NET NuGet only for v2.5
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
 - Non-stdio MCP transports (HTTP, SSE) — no demand yet; security model not designed
 - Polyglot support (Tree-sitter, LSP bridge) — future tier; .NET + TypeScript only for now
@@ -137,4 +149,4 @@ Full pipeline operational: 15 MCP tools across 4 tool classes (DocTools: 7, Chan
 | Tool docs organized by source file category in CLAUDE.md | Easy cross-reference between docs and source | ✓ Good — 4 categories match 4 tool classes |
 
 ---
-*Last updated: 2026-03-26 after v2.0 TypeScript Language Support milestone shipped*
+*Last updated: 2026-03-26 after v2.5 NuGet Package Mapping milestone started*
