@@ -19,11 +19,9 @@ namespace DocAgent.Tests;
 /// Real sidecar E2E integration tests that exercise the full pipeline:
 /// Node.js sidecar → JSON → C# deserialization → valid snapshot → queryable index.
 ///
-/// These tests require <c>RUN_SIDECAR_TESTS=true</c> environment variable to run.
-/// Without it they return immediately (early-exit pattern) to keep CI fast.
-///
-/// With <c>RUN_SIDECAR_TESTS=true</c>, the tests also require Node.js and the
-/// compiled sidecar (<c>ts-symbol-extractor/dist/index.js</c>) to be available.
+/// These tests are always skipped in standard <c>dotnet test</c> runs via <c>[Fact(Skip=...)]</c>.
+/// They require Node.js and the compiled sidecar (<c>ts-symbol-extractor/dist/index.js</c>).
+/// Run them via IDE test runner after temporarily removing the Skip attribute.
 ///
 /// Coverage: MCPI-01 (ingest_typescript), MCPI-02 (search_symbols, get_symbol, get_references).
 /// </summary>
@@ -79,12 +77,9 @@ public sealed class TypeScriptSidecarIntegrationTests : IDisposable
     /// Tests the full ingestion pipeline via real Node.js sidecar against the simple-project fixture.
     /// Validates: snapshot structure, edge integrity, doc comment preservation, and enum deserialization.
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Requires Node.js and compiled sidecar. Set RUN_SIDECAR_TESTS=true and run: dotnet test --filter 'FullyQualifiedName~TypeScriptSidecarIntegration'")]
     public async Task RealSidecar_SimpleProject_Produces_Valid_Snapshot()
     {
-        if (Environment.GetEnvironmentVariable("RUN_SIDECAR_TESTS") != "true")
-            return; // Skip unless explicitly opted in
-
         var tsconfigPath = FindSimpleProjectTsconfig();
         tsconfigPath.Should().NotBeNull("simple-project fixture tsconfig.json must be locatable from test assembly directory");
 
@@ -139,12 +134,9 @@ public sealed class TypeScriptSidecarIntegrationTests : IDisposable
     /// MCP tools: search_symbols, get_symbol, get_references.
     /// Validates MCPI-01 (real ingestion) and MCPI-02 (query tool compatibility).
     /// </summary>
-    [Fact]
+    [Fact(Skip = "Requires Node.js and compiled sidecar. Set RUN_SIDECAR_TESTS=true and run: dotnet test --filter 'FullyQualifiedName~TypeScriptSidecarIntegration'")]
     public async Task RealSidecar_Snapshot_Is_Queryable()
     {
-        if (Environment.GetEnvironmentVariable("RUN_SIDECAR_TESTS") != "true")
-            return; // Skip unless explicitly opted in
-
         var tsconfigPath = FindSimpleProjectTsconfig();
         tsconfigPath.Should().NotBeNull("simple-project fixture tsconfig.json must be locatable");
 
