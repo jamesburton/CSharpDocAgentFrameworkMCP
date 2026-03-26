@@ -9,8 +9,8 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 
 ### Sidecar Infrastructure
 
-- [ ] **SIDE-01**: Node.js sidecar project (`ts-symbol-extractor`) with package.json, esbuild bundling, vitest test setup
-- [ ] **SIDE-02**: NDJSON stdin/stdout IPC protocol with defined request/response contract
+- [x] **SIDE-01**: Node.js sidecar project (`ts-symbol-extractor`) with package.json, esbuild bundling, vitest test setup
+- [x] **SIDE-02**: NDJSON stdin/stdout IPC protocol with defined request/response contract
 - [x] **SIDE-03**: C# `TypeScriptIngestionService` that spawns Node.js sidecar, sends request, deserializes response into `SymbolGraphSnapshot`
 - [x] **SIDE-04**: Aspire AppHost registers Node.js sidecar via `AddNodeApp()` with startup validation for Node.js availability
 
@@ -30,7 +30,7 @@ Requirements for TypeScript Language Support milestone. Each maps to roadmap pha
 - [x] **MCPI-01**: `ingest_typescript` MCP tool accepting tsconfig.json path with PathAllowlist security enforcement
 - [x] **MCPI-02**: All 14 existing MCP tools produce correct results when querying TypeScript snapshots
 - [x] **MCPI-03**: Incremental TypeScript ingestion via SHA-256 file hashing — only re-parse changed files
-- [ ] **MCPI-04**: BM25 search tokenizer handles camelCase (TS convention) alongside PascalCase (C#)
+- [x] **MCPI-04**: BM25 search tokenizer handles camelCase (TS convention) alongside PascalCase (C#)
 
 ### Verification
 
@@ -71,8 +71,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | Phase 28 → Phase 34 | Pending |
-| SIDE-02 | Phase 28 → Phase 34 | Pending |
+| SIDE-01 | Phase 28 → Phase 34 | Complete |
+| SIDE-02 | Phase 28 → Phase 34 | Complete |
 | SIDE-03 | Phase 28 → Phase 32 | Complete |
 | SIDE-04 | Phase 28 → Phase 33 | Complete |
 | EXTR-01 | Phase 29 | Complete |
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPI-01 | Phase 30 → Phase 32 | Complete |
 | MCPI-02 | Phase 30 → Phase 32, Phase 34 | Complete |
 | MCPI-03 | Phase 30 | Complete |
-| MCPI-04 | Phase 30 → Phase 34 | Pending |
+| MCPI-04 | Phase 30 → Phase 34 | Complete |
 | VERF-01 | Phase 31 | Complete |
 | VERF-02 | Phase 31 | Complete |
 | VERF-03 | Phase 31 | Complete |
@@ -94,9 +94,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 **Coverage:**
 - v2.0 requirements: 20 total
+- Complete: 20
 - Mapped to phases: 20
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-25 after gap closure phase creation (Phases 32-34)*
+*Last updated: 2026-03-26 — Phase 34 traceability cleanup: SIDE-01, SIDE-02, MCPI-04 marked Complete; coverage updated to 20/20*
