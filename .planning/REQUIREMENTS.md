@@ -67,30 +67,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEP-01 | — | Pending |
-| DEP-02 | — | Pending |
-| DEP-03 | — | Pending |
-| DEP-04 | — | Pending |
-| REFL-01 | — | Pending |
-| REFL-02 | — | Pending |
-| REFL-03 | — | Pending |
-| REFL-04 | — | Pending |
-| REFL-05 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| INTG-04 | — | Pending |
-| INTG-05 | — | Pending |
-| TOOL-01 | — | Pending |
-| TOOL-02 | — | Pending |
-| TOOL-03 | — | Pending |
-| TOOL-04 | — | Pending |
+| DEP-01 | Phase 36 | Pending |
+| DEP-02 | Phase 36 | Pending |
+| DEP-03 | Phase 36 | Pending |
+| DEP-04 | Phase 36 | Pending |
+| REFL-01 | Phase 37 | Pending |
+| REFL-02 | Phase 37 | Pending |
+| REFL-03 | Phase 37 | Pending |
+| REFL-04 | Phase 37 | Pending |
+| REFL-05 | Phase 37 | Pending |
+| INTG-01 | Phase 38 | Pending |
+| INTG-02 | Phase 38 | Pending |
+| INTG-03 | Phase 38 | Pending |
+| INTG-04 | Phase 38 | Pending |
+| INTG-05 | Phase 39 | Pending |
+| TOOL-01 | Phase 40 | Pending |
+| TOOL-02 | Phase 40 | Pending |
+| TOOL-03 | Phase 40 | Pending |
+| TOOL-04 | Phase 40 | Pending |
 
 **Coverage:**
 - v2.5 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after initial definition*
+*Last updated: 2026-03-26 after roadmap creation — all 18 requirements mapped*
