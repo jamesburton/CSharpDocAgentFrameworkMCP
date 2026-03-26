@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
-stopped_at: Completed 34-01-PLAN.md
-last_updated: "2026-03-26T12:34:08.152Z"
+stopped_at: Completed 35-01-PLAN.md
+last_updated: "2026-03-26T14:37:45.244Z"
 last_activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 7
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 19
+  completed_plans: 18
 ---
 
 # Project State
@@ -28,7 +28,7 @@ Milestone v2.0 (TypeScript Language Support): SHIPPED
 Post-milestone work: v2.1.0 shipped (large solution ingestion optimisations) + MCP setup CLI
 
 Status: Between milestones — ad-hoc feature work
-Last activity: 2026-03-26 — Completed 32-02 (golden file deserialization tests + sidecar E2E integration tests)
+Last activity: 2026-03-26 — Completed 35-01 (TS/C# contract alignment: typeParameterName, IsOptional, dormant enum removal)
 
 Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
@@ -56,7 +56,7 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Test Status (2026-03-26)
 
-**654 passed, 0 failed (non-stress run), 654 total** (33-01: 631 non-stress confirmed + 5 new NodeAvailabilityHealthCheckTests)
+**657 passed, 0 failed (non-stress run), 659 total** (35-01: 654 baseline + 5 new contract alignment tests, 2 skipped stress)
 
 - 31-01 added 23 new tests (TypeScriptStressTests: 5, TypeScriptDeterminismTests: 18)
 - 31-03 added 1 new test (IngestTypeScriptAsync_produces_relative_file_paths_in_spans)
@@ -64,6 +64,7 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 - 32-01 zero regressions — 56 TypeScript tests pass, 570 non-TypeScript tests pass
 - 32-02 added 8 new tests (6 TypeScriptDeserializationTests + 2 TypeScriptSidecarIntegrationTests)
 - 33-01 added 5 new tests (NodeAvailabilityHealthCheckTests: 4 health check + 1 env var binding)
+- 35-01 added 5 new tests (GenericConstraint typeParameterName, ParameterInfo IsOptional, SymbolEdgeKind InheritsFrom/Accepts rejection)
 
 ## Recent Decisions
 
@@ -95,6 +96,9 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 | No .WaitFor(sidecar) in AppHost | Parallel startup with graceful degradation — McpServer starts independently |
 | Retroactive VALIDATION.md files use `complete` status | Phase already verified; `draft` reserved for pre-execution files |
 | Retroactive VERIFICATION.md justified by downstream phase success | Phases 29-33 all built on Phase 28 deliverables; success chain confirms Phase 28 functional |
+| ParameterInfo.IsOptional added at end with default=false | Backward-compatible: existing 7-arg call sites compile without change; follows project convention of appending to record |
+| GenericConstraint.name renamed to typeParameterName in TS | TS was the source of INT-01 silent data loss; C# already had correct JsonPropertyName |
+| Removed InheritsFrom and Accepts from TS SymbolEdgeKind | Dormant values never emitted; removal eliminates INT-04 latent deserialization throw risk |
 
 ## Blockers/Concerns
 
@@ -102,6 +106,6 @@ Progress (v2.0): [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-26T12:30:47.793Z
-Stopped at: Completed 34-01-PLAN.md
+Last session: 2026-03-26T14:37:45.235Z
+Stopped at: Completed 35-01-PLAN.md
 Resume file: None
