@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: TypeScript Language Support
 status: Between milestones — ad-hoc feature work
 stopped_at: Completed 35-02-PLAN.md
-last_updated: "2026-03-26T14:39:58.226Z"
+last_updated: "2026-03-26T14:43:26.630Z"
 last_activity: "2026-03-26 — Completed 35-01 (TS/C# contract alignment: typeParameterName, IsOptional, dormant enum removal)"
 progress:
   total_phases: 8
