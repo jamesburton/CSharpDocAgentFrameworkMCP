@@ -1,389 +1,471 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** TypeScript language support integration into existing C# DocAgentFramework MCP server
-**Researched:** 2026-03-08
+**Domain:** NuGet package mapping integration into existing DocAgentFramework MCP server
+**Researched:** 2026-03-26
+**Confidence:** HIGH — based on direct reads of all affected source files
 
-## Recommended Architecture
+---
 
-### High-Level Integration Model: Node.js Sidecar with stdin/stdout NDJSON
+## System Overview
 
-The TypeScript sidecar runs as a child process spawned by the C# McpServer. Communication uses newline-delimited JSON (NDJSON) over stdin/stdout -- the same protocol pattern the MCP server itself uses with its clients. The sidecar is a **stateless request-response extractor**: C# sends a request ("extract symbols from this tsconfig.json"), the sidecar responds with a `SymbolGraphSnapshot`-shaped JSON payload, and the C# side deserializes it into the existing domain types.
+The existing pipeline runs: **discover → parse → normalize → index → serve → diff → review**.
 
-```
-                         ┌──────────────────────────────────────────────┐
-                         │           DocAgent.McpServer (C#)            │
-                         │                                              │
-  MCP Client ──stdio──>  │  IngestionTools ──> TypeScriptIngestionSvc   │
-                         │                         │                    │
-                         │                    Process.Start()           │
-                         │                    stdin/stdout NDJSON       │
-                         │                         │                    │
-                         │              ┌──────────v──────────┐        │
-                         │              │  ts-symbol-extractor │        │
-                         │              │   (Node.js sidecar)  │        │
-                         │              │                      │        │
-                         │              │  TypeScript Compiler │        │
-                         │              │  API (ts.createProgram)│       │
-                         │              └──────────────────────┘        │
-                         │                         │                    │
-                         │                    JSON response             │
-                         │                         v                    │
-                         │  SnapshotStore.SaveAsync(snapshot)           │
-                         │  BM25SearchIndex.IndexAsync(snapshot)        │
-                         │                                              │
-                         │  -- All 14 existing MCP tools work --       │
-                         └──────────────────────────────────────────────┘
-```
-
-### IPC Protocol Decision: Why stdin/stdout NDJSON
-
-| Option | Verdict | Rationale |
-|--------|---------|-----------|
-| **stdin/stdout NDJSON** | **CHOSEN** | Zero network ports, zero dependencies beyond Node.js, matches the MCP stdio pattern already used by the server, simplest process lifecycle (kill child = cleanup done), works cross-platform, trivially testable with fixture JSON files |
-| gRPC | Rejected | Requires protobuf tooling in both C# and Node.js, port management, health checks, proto file sync -- massive overhead for a same-machine request-response call |
-| HTTP | Rejected | Requires port allocation, HTTP server in Node.js, HttpClient in C#, retry logic -- over-engineering for a subprocess |
-| Named pipes | Rejected | Platform-specific names (Windows vs Unix), no advantage over stdin/stdout for a parent-child process pair, harder to test |
-
-**Confidence: HIGH** -- stdin/stdout JSON is the established pattern for MCP tool communication and Language Server Protocol. The existing codebase already handles this pattern.
-
-### Component Boundaries
-
-| Component | Responsibility | Communicates With | New/Modified |
-|-----------|---------------|-------------------|--------------|
-| `ts-symbol-extractor/` | Node.js CLI: reads tsconfig.json, walks TS Compiler API, emits SymbolGraphSnapshot JSON | stdin/stdout with TypeScriptIngestionService | **NEW** (Node.js project) |
-| `TypeScriptIngestionService` | C# service: spawns sidecar, sends request, deserializes response, feeds into SnapshotStore + SearchIndex | ts-symbol-extractor (child process), SnapshotStore, ISearchIndex | **NEW** (C# class in McpServer) |
-| `TypeScriptTools` (or extend `IngestionTools`) | MCP tool handler for `ingest_typescript` | TypeScriptIngestionService, PathAllowlist | **NEW** (C# class in McpServer) |
-| `SnapshotStore` | Persists SymbolGraphSnapshot artifacts (MessagePack) | TypeScriptIngestionService (caller) | **UNCHANGED** |
-| `BM25SearchIndex` | Indexes snapshot for search | TypeScriptIngestionService (caller) | **UNCHANGED** |
-| `DocTools`, `ChangeTools`, `SolutionTools` | Query/diff/review snapshots | KnowledgeQueryService, SymbolGraphDiffer | **UNCHANGED** |
-| `SymbolGraphDiffer` | Static diff engine | Called by ChangeTools, SolutionTools | **UNCHANGED** |
-| `DocAgent.AppHost/Program.cs` | Aspire orchestration | AddNodeApp for sidecar lifecycle | **MODIFIED** (add Node.js resource) |
-
-### Data Flow: TypeScript Compiler API to SymbolGraphSnapshot
+v2.5 adds a lateral branch: after a solution is ingested, agents can query the NuGet dependency graph and find references to package-exported types in indexed source. This does NOT extend the main pipeline — it runs alongside it, sharing the same snapshot store and stub nodes produced during solution ingestion.
 
 ```
-1. User calls `ingest_typescript` MCP tool with path to tsconfig.json
-2. TypeScriptIngestionService validates path via PathAllowlist
-3. TypeScriptIngestionService spawns `node ts-symbol-extractor/dist/index.js`
-4. Sends NDJSON request on stdin:
-   { "command": "extract", "tsconfigPath": "/abs/path/tsconfig.json" }
-5. Sidecar:
-   a. ts.createProgram() from tsconfig.json
-   b. Walk all source files in the program
-   c. For each file, walk the AST:
-      - Modules/namespaces -> SymbolKind.Namespace
-      - Interfaces -> SymbolKind.Type
-      - Classes -> SymbolKind.Type
-      - Functions -> SymbolKind.Method
-      - Properties -> SymbolKind.Property
-      - Enums -> SymbolKind.Type, members -> SymbolKind.EnumMember
-      - Type aliases -> SymbolKind.Type
-      - Constructors -> SymbolKind.Constructor
-      - Accessors -> SymbolKind.Property
-   d. Build edges: Contains, Inherits, Implements, References, Returns
-   e. Extract JSDoc comments -> DocComment shape
-   f. Compute source spans -> SourceSpan shape
-   g. Emit JSON response matching SymbolGraphSnapshot schema on stdout
-6. TypeScriptIngestionService deserializes JSON -> SymbolGraphSnapshot
-7. Applies SymbolSorter for deterministic ordering (reuse existing C# logic)
-8. SnapshotStore.SaveAsync() -> content-addressed .msgpack file
-9. BM25SearchIndex.IndexAsync() -> search index updated
-10. Return IngestionResult to MCP client
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        EXISTING PIPELINE (unchanged)                          │
+│                                                                               │
+│  ingest_solution ──> SolutionIngestionService ──> SymbolGraphSnapshot        │
+│                            │                           │                      │
+│                       stub nodes                  SnapshotStore               │
+│                       (NodeKind.Stub)              BM25SearchIndex            │
+│                            │                           │                      │
+│                            └───────────────────────────┘                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                          │
+                                  (v2.5 extension)
+                                          │
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        NEW v2.5 COMPONENTS                                    │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │  DocAgent.Ingestion                                                  │     │
+│  │  ┌──────────────────────┐   ┌──────────────────────────────────┐   │     │
+│  │  │  LockFileParser      │   │  NuGetCacheReflector             │   │     │
+│  │  │                      │   │                                  │   │     │
+│  │  │  reads               │   │  opens DLL via                   │   │     │
+│  │  │  packages.lock.json  │   │  MetadataReference.CreateFrom... │   │     │
+│  │  │  → PackageEntry[]    │   │  → SymbolNode[] (for enrichment) │   │     │
+│  │  └──────────────────────┘   └──────────────────────────────────┘   │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│                    │                           │                              │
+│                    ▼                           ▼                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │  DocAgent.Core                                                       │     │
+│  │  PackageGraph                                                        │     │
+│  │  { PackageEntry[], AssemblyMapping }                                 │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│                    │                                                          │
+│                    ▼                                                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │  DocAgent.McpServer                                                  │     │
+│  │                                                                       │     │
+│  │  PackageQueryService        PackageTools                             │     │
+│  │  (new, injectable)          [McpServerToolType]                      │     │
+│  │  uses snapshot stubs  ────> get_dependencies                        │     │
+│  │  + PackageGraph             find_package_usages                     │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## IPC Protocol Specification
+## Component Responsibilities
 
-### Request (C# to Node.js, one NDJSON line on stdin)
-
-```json
-{
-  "id": "req-1",
-  "command": "extract",
-  "tsconfigPath": "/absolute/path/to/tsconfig.json",
-  "options": {
-    "includePrivate": false,
-    "includeNodeModules": false
-  }
-}
-```
-
-### Response (Node.js to C#, one NDJSON line on stdout)
-
-```json
-{
-  "id": "req-1",
-  "success": true,
-  "snapshot": {
-    "schemaVersion": "1.0",
-    "projectName": "my-ts-project",
-    "sourceFingerprint": "abc123...",
-    "contentHash": null,
-    "createdAt": "2026-03-08T12:00:00Z",
-    "nodes": [ ... ],
-    "edges": [ ... ]
-  }
-}
-```
-
-### Error Response
-
-```json
-{
-  "id": "req-1",
-  "success": false,
-  "error": "Could not find tsconfig.json at /path/to/tsconfig.json"
-}
-```
-
-### Protocol Design Decisions
-
-- `id` field enables future request pipelining (not needed for v2.0 single-request pattern, but free to include)
-- `contentHash` is null in the sidecar response -- C# computes it via SnapshotStore (matches existing Roslyn pattern where `RoslynSymbolGraphBuilder` returns `ContentHash: null`)
-- Node SymbolIds use the same format: `{projectName}:{fullyQualifiedName}`
-- Sidecar logs to **stderr only** (never stdout) to avoid corrupting the NDJSON stream
-- Single newline terminates each JSON message (standard NDJSON)
+| Component | Layer | Responsibility | New or Modified |
+|-----------|-------|----------------|-----------------|
+| `LockFileParser` | DocAgent.Ingestion | Parse `packages.lock.json` → `PackageEntry[]` with version, dependency type, resolved deps | **NEW** |
+| `NuGetCacheReflector` | DocAgent.Ingestion | Locate DLLs in NuGet cache by package name+version, open via `MetadataReference.CreateFromFile`, walk public namespace symbols → `SymbolNode[]` | **NEW** |
+| `PackageGraph` | DocAgent.Core | Immutable value type holding `PackageEntry[]` + `AssemblyMapping` (package name → DLL paths → assembly names) | **NEW** |
+| `PackageEntry` | DocAgent.Core | Name, version, type (direct/transitive), framework, resolved dependency list | **NEW** |
+| `StubNodeEnricher` | DocAgent.McpServer/Ingestion or DocAgent.Ingestion | Matches existing `NodeKind.Stub` nodes (by FQN/assembly name) against DLL-reflected symbols, replaces bare stubs with enriched nodes | **NEW** |
+| `PackageQueryService` | DocAgent.McpServer | Loads snapshot, finds stub nodes by package assembly name, traverses edges to find source-code usages; wraps `PackageGraph` queries | **NEW** |
+| `PackageTools` | DocAgent.McpServer/Tools | MCP tool handler for `get_dependencies` and `find_package_usages`; PathAllowlist enforcement | **NEW** |
+| `SolutionIngestionService` | DocAgent.McpServer/Ingestion | After per-project walks, optionally trigger `LockFileParser` + `NuGetCacheReflector` + `StubNodeEnricher` per project; attach `PackageGraph` to result | **MODIFIED** (light touch) |
+| `SolutionIngestionResult` | DocAgent.McpServer/Ingestion | Add optional `PackageGraphs` field (Dictionary<projectName, PackageGraph>) | **MODIFIED** (additive) |
+| `ServiceCollectionExtensions` | DocAgent.McpServer | Register `PackageQueryService`, `PackageTools` | **MODIFIED** |
+| `SnapshotStore` | DocAgent.Ingestion | No change — PackageGraph serialized separately | **UNCHANGED** |
+| `BM25SearchIndex` | DocAgent.Indexing | No change — enriched stub nodes already filtered at index time | **UNCHANGED** |
+| All existing MCP tools | DocAgent.McpServer/Tools | No change | **UNCHANGED** |
 
 ---
 
-## TypeScript Symbol Mapping
+## Recommended Project Structure
 
-### SymbolKind Mapping
+New files go in existing projects — no new projects needed:
 
-| TypeScript Concept | SymbolKind | SymbolId Format | Notes |
-|-------------------|------------|-----------------|-------|
-| Module (file-level) | `Namespace` | `proj:path/to/file` | TS modules are file-scoped |
-| Namespace (explicit `namespace {}`) | `Namespace` | `proj:Ns.SubNs` | Rare in modern TS |
-| Interface | `Type` | `proj:IFoo` or `proj:Ns.IFoo` | |
-| Class | `Type` | `proj:MyClass` | |
-| Type alias | `Type` | `proj:MyType` | Includes union, intersection, mapped, conditional |
-| Enum | `Type` | `proj:MyEnum` | |
-| Enum member | `EnumMember` | `proj:MyEnum.Value` | |
-| Function (top-level) | `Method` | `proj:myFunction` | No `Function` kind in existing enum; Method is correct |
-| Method (class/interface member) | `Method` | `proj:MyClass.myMethod` | |
-| Property | `Property` | `proj:MyClass.myProp` | |
-| Constructor | `Constructor` | `proj:MyClass.constructor` | |
-| Getter/Setter | `Property` | `proj:MyClass.myProp` | Treated as property, not separate accessor |
-| Type parameter | `TypeParameter` | `proj:MyClass.T` | |
-| Parameter | `Parameter` | `proj:myFunction.paramName` | |
+```
+src/
+├── DocAgent.Core/
+│   ├── Symbols.cs              # existing — no change
+│   ├── SolutionTypes.cs        # existing — no change
+│   ├── PackageTypes.cs         # NEW — PackageEntry, PackageGraph, AssemblyMapping
+│   └── Abstractions.cs         # existing — no change
+│
+├── DocAgent.Ingestion/
+│   ├── LockFileParser.cs       # NEW — pure static, packages.lock.json → PackageEntry[]
+│   ├── NuGetCacheReflector.cs  # NEW — Roslyn MetadataReference reflection → SymbolNode[]
+│   └── (existing files unchanged)
+│
+├── DocAgent.McpServer/
+│   ├── Ingestion/
+│   │   ├── StubNodeEnricher.cs          # NEW — enriches NodeKind.Stub nodes from DLL reflection
+│   │   ├── SolutionIngestionService.cs  # MODIFIED — call enrichment post-walk
+│   │   └── SolutionIngestionResult.cs   # MODIFIED — add PackageGraphs field
+│   └── Tools/
+│       ├── PackageTools.cs              # NEW — get_dependencies, find_package_usages
+│       └── (existing tool files unchanged)
+│
+└── DocAgent.Tests/
+    ├── LockFileParserTests.cs         # NEW
+    ├── NuGetCacheReflectorTests.cs    # NEW
+    ├── StubNodeEnricherTests.cs       # NEW
+    └── PackageToolsTests.cs           # NEW
+```
 
-**Key decision:** The existing `SymbolKind` enum has 14 values. TypeScript symbols map naturally to 10 of them. No new enum values needed for v2.0.
+### Structure Rationale
 
-### Edge Mapping
-
-| TypeScript Relationship | SymbolEdgeKind | Example |
-|------------------------|----------------|---------|
-| Class extends Class | `Inherits` | `class B extends A` |
-| Class implements Interface | `Implements` | `class C implements I` |
-| Interface extends Interface | `Inherits` | `interface I2 extends I1` |
-| Namespace contains Type | `Contains` | Module file contains class |
-| Type contains Member | `Contains` | Class contains method |
-| Method return type | `Returns` | Method returns a type |
-| Method overrides base | `Overrides` | Override in derived class |
-| Type reference in signature | `References` | Parameter type, property type |
-
-### JSDoc to DocComment Mapping
-
-| JSDoc Tag | DocComment Field | Notes |
-|-----------|-----------------|-------|
-| `@description` / first line | `Summary` | |
-| `@remarks` | `Remarks` | |
-| `@param name desc` | `Params["name"]` | |
-| `@typeParam T desc` / `@template T desc` | `TypeParams["T"]` | |
-| `@returns desc` | `Returns` | |
-| `@example` | `Examples` list | |
-| `@throws` / `@exception` | `Exceptions` list | |
-| `@see` / `@link` | `SeeAlso` list | |
+- **`PackageTypes.cs` in DocAgent.Core:** `PackageEntry` and `PackageGraph` are pure domain types with no IO. They belong in Core, where `SymbolNode`, `SymbolEdge`, and `SolutionSnapshot` live. They will be referenced by both Ingestion (producers) and McpServer (consumers).
+- **`LockFileParser` and `NuGetCacheReflector` in DocAgent.Ingestion:** Lock file parsing and DLL reflection are pure data-extraction concerns — they transform external data into domain types. Ingestion already has `XmlDocParser` (XML → domain) and `RoslynSymbolGraphBuilder` (Roslyn → domain) as precedents. No dependency on McpServer.
+- **`StubNodeEnricher` in DocAgent.McpServer/Ingestion:** Enrichment modifies a `SymbolGraphSnapshot` using `PackageGraph` data. It runs inside `SolutionIngestionService` which already lives in McpServer/Ingestion. Collocating keeps the modification scope clear.
+- **`PackageTools` in DocAgent.McpServer/Tools:** All MCP tool handlers live here. No exception.
 
 ---
 
-## Snapshot Storage: Same artifacts/ Directory
+## Key Design Decisions
 
-TypeScript snapshots use the **same** `artifacts/` directory and `manifest.json` as C# snapshots. Rationale:
+### PackageGraph Relation to SymbolGraphSnapshot
 
-1. **SnapshotStore is language-agnostic.** It stores `SymbolGraphSnapshot` objects. TS snapshots are `SymbolGraphSnapshot` objects. No changes needed.
-2. **manifest.json already has `ProjectName`.** TS projects will have distinct names (e.g., "my-ts-app" vs "DocAgent.Core"), so no collision.
-3. **Content-addressed storage prevents conflicts.** Each snapshot gets a unique XxHash128 filename.
-4. **All query tools work unchanged.** `search_symbols`, `get_references`, `diff_snapshots` etc. operate on `SymbolGraphSnapshot` -- they do not know or care about the source language.
+`PackageGraph` is **not embedded in `SymbolGraphSnapshot`**. Rationale:
 
-The only addition: an optional `LanguageOrigin` string property on `SymbolGraphSnapshot` (default null for backward compat with existing C# snapshots, "typescript" for TS snapshots). This is informational only -- it does not affect query, diff, or review behavior.
+1. `SymbolGraphSnapshot` is MessagePack-serialized and content-addressed. Adding a large `PackageGraph` would bloat every snapshot file and break backward compatibility with existing serialized artifacts.
+2. `PackageGraph` is derived from `packages.lock.json` + DLL reflection — it is re-derivable at any time. It does not need snapshot-level versioning.
+3. The relationship is: one `PackageGraph` per project, many projects per solution. The existing `SolutionIngestionResult` (not `SymbolGraphSnapshot`) is the right place to carry per-project package metadata through the ingestion pipeline.
+
+Instead: `PackageGraph` is attached to `SolutionIngestionResult.PackageGraphs` (a `Dictionary<string, PackageGraph>` keyed by project name). `PackageTools` receives this via `PackageQueryService`, which holds the last-ingested package data in memory (or recomputes from lock files on demand).
+
+**Storage strategy for persistence:** If agents need to query package graphs between server restarts, persist `PackageGraph` as a separate JSON sidecar file in `artifacts/` named `{snapshotHash}.packages.json`. This keeps snapshots clean and allows lazy loading. For v2.5, in-memory is sufficient — persist only if needed.
+
+### Stub Node Enrichment Strategy
+
+Existing stubs (`NodeKind.Stub`) have:
+- `Id`: documentation comment ID from Roslyn (e.g., `T:Microsoft.Extensions.Logging.ILogger`)
+- `FullyQualifiedName`: e.g., `Microsoft.Extensions.Logging.ILogger`
+- `ProjectOrigin`: the assembly name (e.g., `Microsoft.Extensions.Logging.Abstractions`)
+- `Docs`: null
+- `Parameters`, `ReturnType`, `GenericConstraints`: empty
+
+Enrichment goal: replace null docs and empty type info with real data reflected from the NuGet DLL.
+
+**Enrichment matching key:** `SymbolNode.Id.Value` (the documentation comment ID). This is stable — Roslyn generates identical IDs whether from source or metadata. Match reflected `ISymbol.GetDocumentationCommentId()` against stub IDs.
+
+**Enrichment result:** A new `SymbolNode` with the same `Id` but `NodeKind.Real` (or a new `NodeKind.Enriched` — see below), populated `Docs`, `ReturnType`, `Parameters`, `GenericConstraints`.
+
+**NodeKind decision:** Use a new `NodeKind.Enriched = 2` value. Rationale: enriched nodes are still not from project source (Real), but they carry real metadata unlike stubs. This allows the BM25 index and query tools to handle them distinctly if needed. If `Enriched` is added, the existing `NodeKind.Real=0, NodeKind.Stub=1` ordering is preserved — append at end per MessagePack enum ordering constraint (see `feedback_messagepack_enum_ordering.md`).
+
+**Enrichment is optional per project:** If no `packages.lock.json` exists (e.g., older project format), or if the NuGet cache does not have the DLL, the stub remains a stub. Enrichment failures are soft warnings, not hard errors.
+
+### NuGet Cache Location Discovery
+
+The NuGet global cache is at `%USERPROFILE%/.nuget/packages` on Windows and `~/.nuget/packages` on Linux/macOS. DLL paths follow the convention:
+
+```
+{nugetCacheRoot}/{packageId}/{version}/lib/{tfm}/{assemblyName}.dll
+```
+
+For a given `PackageEntry(Name="Microsoft.Extensions.Logging.Abstractions", Version="10.0.0")` and target framework `net10.0`, the reflector checks:
+
+```
+~/.nuget/packages/microsoft.extensions.logging.abstractions/10.0.0/lib/net10.0/*.dll
+```
+
+**TFM fallback order:** Try exact TFM first (e.g., `net10.0`), then fall back to nearest compatible TFM using a simple version comparison (e.g., `net9.0`, `net8.0`, `netstandard2.1`, `netstandard2.0`). Do not implement full NuGet compatibility graph — simple prefix matching is sufficient for reflection purposes.
+
+**PathAllowlist consideration:** The NuGet cache is the user's local machine cache, not a user-supplied path. It does not go through the PathAllowlist (which guards tool-provided paths). The reflector uses hardcoded/config-discovered cache paths. Add a `NuGetCachePath` option to `DocAgentServerOptions` for override.
 
 ---
 
-## Aspire Integration
+## Data Flow
 
-The `DocAgent.AppHost/Program.cs` adds the Node.js sidecar as an Aspire resource using `Aspire.Hosting.NodeJs` (NuGet package):
+### get_dependencies Flow
+
+```
+Agent: get_dependencies(snapshotHash, projectName)
+    │
+    ▼
+PackageTools.GetDependencies()
+    │── PathAllowlist check on snapshotStore.ArtifactsDir (existing pattern)
+    │── PackageQueryService.GetPackageGraphAsync(snapshotHash, projectName)
+    │       │── Load PackageGraph from in-memory cache (or artifacts/{hash}.packages.json)
+    │       │── If not found: reparse lock file from project path in SolutionSnapshot
+    │       └── Return PackageGraph
+    │── Serialize PackageEntry[] as JSON
+    └── Return to agent
+```
+
+### find_package_usages Flow
+
+```
+Agent: find_package_usages(snapshotHash, packageName)
+    │
+    ▼
+PackageTools.FindPackageUsages()
+    │── PathAllowlist check
+    │── Load SymbolGraphSnapshot from SnapshotStore
+    │── Filter Stub nodes where ProjectOrigin matches package assembly names
+    │       (use PackageGraph.AssemblyMapping[packageName] to get assembly names)
+    │── For each matching stub node:
+    │       Walk snapshot.Edges where e.To == stubNode.Id and e.Scope == EdgeScope.External
+    │       Collect e.From nodes (these are the source symbols referencing the package type)
+    │── Return: list of (stubType, [sourceSymbolsReferencing])
+    └── Serialize as JSON
+```
+
+### Stub Enrichment Flow (during ingest_solution)
+
+```
+SolutionIngestionService.IngestAsync()
+    │
+    │ [after per-project walk produces stubNodes list]
+    │
+    ▼
+LockFileParser.Parse(projectDir + "/packages.lock.json")
+    │── Returns PackageEntry[] (direct + transitive, with version + framework info)
+    └── Soft failure: returns empty if file missing
+    │
+    ▼
+NuGetCacheReflector.ReflectPackagesAsync(PackageEntry[], targetFramework)
+    │── For each PackageEntry, find DLL in NuGet cache
+    │── Open DLL via MetadataReference.CreateFromFile
+    │── Walk global namespace for public symbols
+    │── Returns Dictionary<assemblyName, SymbolNode[]>
+    └── Soft failure: skips missing DLLs with warning
+    │
+    ▼
+StubNodeEnricher.Enrich(stubNodes, reflectedSymbols)
+    │── Match stub.Id.Value against reflected symbol IDs
+    │── Replace matched stubs with enriched nodes (NodeKind.Enriched)
+    └── Returns enriched SymbolNode list (replaces stubNodes in allNodes)
+    │
+    ▼
+PackageGraph built from LockFileParser output + reflector assembly mapping
+    │
+    └── Stored in SolutionIngestionResult.PackageGraphs[projectName]
+```
+
+---
+
+## Architectural Patterns to Follow
+
+### Pattern 1: Pure Static Parsers (LockFileParser)
+
+The existing parsers (`XmlDocParser`, `LockFileParser` in v2.3 polyglot parsers, `PowerShellScriptParser`) are pure static classes returning tuples of domain types. No DI, no IO abstractions. `LockFileParser` follows this:
 
 ```csharp
-// Program.cs additions
-var tsExtractor = builder.AddNodeApp("ts-extractor",
-    scriptPath: "../ts-symbol-extractor/dist/index.js",
-    workingDirectory: "../ts-symbol-extractor");
+// In DocAgent.Ingestion
+public static class LockFileParser
+{
+    public static IReadOnlyList<PackageEntry> Parse(string lockFilePath)
+    { ... }
 
-var mcpServer = builder.AddProject<Projects.DocAgent_McpServer>("docagent-mcp")
-    .WithEnvironment("DOCAGENT_ARTIFACTS_DIR", ...)
-    .WithEnvironment("DOCAGENT_TS_EXTRACTOR_PATH",
-        "../ts-symbol-extractor/dist/index.js");
+    public static IReadOnlyList<PackageEntry> ParseFromJson(string lockFileJson)
+    { ... } // for testing with fixture JSON
+}
 ```
 
-**Important caveat:** Aspire's `AddNodeApp` runs Node.js as a long-lived background process. For the sidecar pattern (spawned per-request or kept warm with stdin/stdout), the C# `TypeScriptIngestionService` manages the process directly via `System.Diagnostics.Process`. Aspire's role is limited to:
-- Ensuring Node.js and npm are available in the dev environment
-- Running `npm install` / `npm run build` during app host startup (via npm scripts)
-- Dashboard visibility for the Node.js project
-- Environment variable wiring
+**Why:** Zero-dependency static parsers are trivially testable with fixture files. No mocking needed. Matches the `feedback_parser_design_pattern.md` memory: "Non-C# parsers are pure static classes."
 
-For v2.0: **C# spawns the sidecar on demand per ingestion request (cold start).** The ~200ms Node.js startup overhead is negligible compared to TypeScript compilation time (seconds to minutes). Warm process pooling is a v2.1 optimization if needed.
+### Pattern 2: Soft Failure with Warnings
 
-### Process Lifecycle
+`NuGetCacheReflector` and `StubNodeEnricher` must not throw on missing DLLs or unmatched stubs. Follow the existing pattern of accumulating warnings into a `List<string> warnings` parameter:
 
-| Strategy | Pros | Cons | When |
-|----------|------|------|------|
-| **Cold start** (spawn per request) | Simplest, no state leak, clean isolation | ~200ms startup overhead | **v2.0 default** |
-| **Warm pool** (long-lived process) | Fast repeated ingestions | Must handle crashes, stdin buffer management | v2.1 if latency matters |
+```csharp
+public static class NuGetCacheReflector
+{
+    public static Dictionary<string, IReadOnlyList<SymbolNode>> Reflect(
+        IReadOnlyList<PackageEntry> packages,
+        string targetFramework,
+        string? nugetCacheRoot,
+        List<string> warnings)
+    { ... }
+}
+```
+
+This matches `SolutionIngestionService`'s existing `warnings` list pattern.
+
+### Pattern 3: PipelineOverride Seam for Enrichment
+
+`SolutionIngestionService` has an existing `PipelineOverride` seam for MSBuild-free testing. The NuGet enrichment step needs a comparable seam:
+
+```csharp
+// In SolutionIngestionService
+internal Func<string, List<PackageEntry>>? LockFileParserOverride { get; set; }
+internal Func<IReadOnlyList<PackageEntry>, string, Dictionary<string, IReadOnlyList<SymbolNode>>>? ReflectorOverride { get; set; }
+```
+
+Tests inject fake lock file data and fake reflection results without touching the real NuGet cache or file system.
+
+### Pattern 4: PackageQueryService as Thin Cache Layer
+
+`PackageQueryService` does not own ingestion logic — it caches and queries results:
+
+```csharp
+public sealed class PackageQueryService
+{
+    private readonly SnapshotStore _snapshotStore;
+    // In-memory: populated by SolutionIngestionService after each ingest
+    private readonly ConcurrentDictionary<string, Dictionary<string, PackageGraph>> _cache;
+
+    public void StorePackageGraphs(string snapshotHash, Dictionary<string, PackageGraph> graphs) { ... }
+    public Dictionary<string, PackageGraph>? GetPackageGraphs(string snapshotHash) { ... }
+}
+```
+
+`SolutionIngestionService` calls `StorePackageGraphs` after each successful ingest. `PackageTools` calls `GetPackageGraphs` to serve tool requests. This avoids re-running lock file parsing on every tool call.
+
+### Pattern 5: PathAllowlist Only on Tool-Facing Paths
+
+NuGet cache paths are internal (not tool-provided) and do not go through `PathAllowlist`. Only the snapshot store directory (already gated in SolutionTools) and any user-provided path parameters need allowlist checks. `PackageTools` follows the same `!_allowlist.IsAllowed(_snapshotStore.ArtifactsDir)` guard used by `SolutionTools`.
 
 ---
 
-## Patterns to Follow
+## Integration Points
 
-### Pattern 1: PipelineOverride Seam (Already Established)
+### With Existing SolutionIngestionService
 
-The existing `IngestionService` has a `PipelineOverride` property for testing without MSBuild. `TypeScriptIngestionService` must follow the same pattern:
+`SolutionIngestionService` is the single integration point for stub enrichment. After the existing `allNodes.AddRange(stubNodes)` line, call the enrichment pipeline. The enrichment is conditional on `packages.lock.json` existing for the project directory. The signature of `IngestAsync` does not change — `PackageGraphs` flow out via `SolutionIngestionResult`.
+
+**Exact insertion point:** After the per-project loop that builds `stubNodes` and before `SymbolSorter.SortNodes(allNodes)`. Enrichment replaces stub nodes in-place in `allNodes`.
+
+### With Existing SnapshotStore
+
+No change. `SnapshotStore` serializes `SymbolGraphSnapshot` objects. If enriched nodes replace stubs, the snapshot contains `NodeKind.Enriched` nodes instead — this is transparent to `SnapshotStore`. The content hash will differ from an unenriched snapshot, which is correct (different content = different hash).
+
+### With Existing BM25SearchIndex
+
+The existing `BM25SearchIndex.WriteDocuments` filters `n.NodeKind == NodeKind.Real`. This needs a one-line change to also include `NodeKind.Enriched` so that enriched package symbols are searchable:
 
 ```csharp
-internal Func<string, CancellationToken, Task<SymbolGraphSnapshot>>? PipelineOverride { get; set; }
+// Before:
+foreach (var node in snapshot.Nodes.Where(n => n.NodeKind == NodeKind.Real))
+// After:
+foreach (var node in snapshot.Nodes.Where(n => n.NodeKind is NodeKind.Real or NodeKind.Enriched))
 ```
 
-This allows tests to inject canned JSON responses without spawning Node.js.
+Same one-line change in `PopulateNodes`. This is the only Indexing layer change.
 
-### Pattern 2: Closure-Based Singleton Path Resolution
+### With Existing DocTools / SolutionTools
 
-The existing `ServiceCollectionExtensions.AddDocAgent()` uses a closure to share the artifacts directory between `SnapshotStore` and `BM25SearchIndex`. TypeScript ingestion must use the same resolved path -- no separate artifacts directory.
+No change. These tools operate on `SymbolGraphSnapshot`. Enriched nodes are queryable via `get_symbol`, `search_symbols`, `get_references` without any tool changes.
 
-### Pattern 3: PathAllowlist Before Pipeline Work
+### With Existing KnowledgeQueryService
 
-Every tool validates the path against `PathAllowlist` before doing any pipeline work. `ingest_typescript` must follow this pattern exactly -- check the tsconfig.json path before spawning the sidecar.
+No change. `GetReferencesAsync` traverses `EdgeScope.External` edges — these already point to stub/enriched nodes. `find_implementations` and `get_references` return enriched nodes as-is.
 
-### Pattern 4: Deterministic Snapshot Output via SymbolSorter
+---
 
-The existing `SymbolSorter` sorts nodes and edges for deterministic output. The C# side should sort after deserialization using the existing `SymbolSorter`, rather than requiring the sidecar to sort. This keeps the sidecar simple and reuses proven sorting logic.
+## New Dependency: Roslyn MetadataReference in DocAgent.Ingestion
 
-### Pattern 5: Content Hash Computed by SnapshotStore
+`NuGetCacheReflector` needs `Microsoft.CodeAnalysis.CSharp` to open DLL metadata. This package is already in `Directory.Packages.props` at 4.14.0. The `DocAgent.Ingestion` project currently does NOT reference it (it uses `XmlDocParser` which is pure XML). Add:
 
-The sidecar emits `contentHash: null`. The C# `SnapshotStore.SaveAsync()` computes the XxHash128 content hash. This matches the existing `RoslynSymbolGraphBuilder` pattern exactly.
+```xml
+<!-- In DocAgent.Ingestion/DocAgent.Ingestion.csproj -->
+<PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+```
 
-### Pattern 6: Per-Path Semaphore Serialization
+No version needed — centrally managed at 4.14.0. This is a compile-time dependency only; the Roslyn `MetadataReference.CreateFromFile` API is available in the existing pinned version.
 
-The existing `IngestionService` uses `ConcurrentDictionary<string, SemaphoreSlim>` to serialize same-project ingestions while allowing different projects in parallel. `TypeScriptIngestionService` should use the same pattern.
+**Alternative considered:** Put `NuGetCacheReflector` in `DocAgent.McpServer` instead, avoiding the Roslyn dep in Ingestion. Rejected because: (a) DLL reflection is a pure data-extraction concern like `RoslynSymbolGraphBuilder`, and (b) McpServer already has a heavy dependency set; isolating extraction in Ingestion keeps layer contracts clean.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Adding Language-Specific Query Tools
+### Anti-Pattern 1: Embedding PackageGraph in SymbolGraphSnapshot
 
-**What:** Creating `search_typescript_symbols`, `get_typescript_symbol`, etc.
-**Why bad:** Doubles the tool surface area. The existing 14 tools already work on any `SymbolGraphSnapshot`.
-**Instead:** Use the existing tools. If a user wants only TS symbols, they use the `project` filter parameter on `search_symbols`.
+**What people might do:** Add a `PackageGraph? PackageInfo` field to `SymbolGraphSnapshot`.
+**Why it's wrong:** Breaks MessagePack backward compat with all existing serialized artifacts. Bloats snapshot files with data that's re-derivable from lock files. Entangles symbol graph versioning with package metadata versioning.
+**Do this instead:** Keep `PackageGraph` in `SolutionIngestionResult` and `PackageQueryService`. Store as a sidecar JSON if persistence is needed.
 
-### Anti-Pattern 2: Mixed-Language Snapshots
+### Anti-Pattern 2: Making Stub Enrichment Blocking on Missing DLLs
 
-**What:** Putting C# and TypeScript symbols in the same `SymbolGraphSnapshot`.
-**Why bad:** Breaks incremental ingestion, diffing, and content hashing. Cross-language edges are explicitly out of scope for v2.0.
-**Instead:** Separate snapshots per language per project. Query tools can search across all loaded snapshots.
+**What people might do:** Throw if a package DLL is not found in the NuGet cache.
+**Why it's wrong:** The NuGet cache may be partial (not all packages restored on CI, different machine than dev). Enrichment is a quality enhancement, not a correctness requirement. A missing DLL stub is better than a failed ingestion.
+**Do this instead:** Log a warning, leave the stub node as `NodeKind.Stub`, continue. Same pattern as MSBuild project failures in `SolutionIngestionService`.
 
-### Anti-Pattern 3: Sidecar as HTTP Server
+### Anti-Pattern 3: Running NuGet Restore During Ingestion
 
-**What:** Running the Node.js sidecar as a long-lived HTTP server with Express/Fastify.
-**Why bad:** Port management, health checks, connection pooling, retry logic -- all unnecessary for a same-machine subprocess.
-**Instead:** stdin/stdout NDJSON. The parent process owns the lifecycle.
+**What people might do:** Shell out to `dotnet restore` to ensure packages are available before reflection.
+**Why it's wrong:** Ingestion must be fast and safe. Running `dotnet restore` modifies the file system, is slow, can fail on CI, and introduces a subprocess dependency that breaks the test isolation model.
+**Do this instead:** Reflect only from what is already in the NuGet cache. If the DLL is not there, skip with a warning.
 
-### Anti-Pattern 4: Shared Code-Generated Types Between C# and Node.js
+### Anti-Pattern 4: New MCP Tools for Enrichment Control
 
-**What:** Generating C# classes from TypeScript interfaces (or vice versa) to keep them in sync.
-**Why bad:** Build-time code generation adds toolchain complexity. The contract is simple JSON.
-**Instead:** Define the JSON contract in a `PROTOCOL.md` document. Write a C# `TypeScriptExtractionResponse` record and a TypeScript `ExtractionResponse` interface. Test with fixture files that both sides validate.
+**What people might do:** Add `enrich_stubs` or `reflect_packages` MCP tools.
+**Why it's wrong:** Enrichment is an internal optimization pass, not a user-facing operation. Exposing it as a tool creates an ordering contract (must call after ingest) and confusing tool surface.
+**Do this instead:** Run enrichment automatically inside `SolutionIngestionService` when lock files are present. Users call `ingest_solution`; enrichment happens transparently.
 
-### Anti-Pattern 5: Using ts-morph Instead of Raw Compiler API
+### Anti-Pattern 5: Per-Symbol NuGet Cache Lookup
 
-**What:** Using ts-morph (wrapper library) instead of the TypeScript Compiler API directly.
-**Why bad:** ts-morph adds ~4MB dependency and an abstraction layer over `ts.createProgram()`. The extraction logic is straightforward tree-walking -- the wrapper adds no value and makes it harder to control memory and performance.
-**Instead:** Use `typescript` package directly: `ts.createProgram()`, `program.getTypeChecker()`, walk `ts.forEachChild()`.
-
----
-
-## New Components (Build Order)
-
-Ordered by dependency -- each step builds on the previous:
-
-| Order | Component | Type | Depends On | Estimated Effort |
-|-------|-----------|------|------------|-----------------|
-| 1 | JSON contract types (`TypeScriptExtractionResponse`, etc.) | C# records in McpServer | Core domain types | Small |
-| 2 | `ts-symbol-extractor/` Node.js project scaffold | New Node.js project | npm, typescript | Small |
-| 3 | TS symbol walker (core extraction logic) | TypeScript code in sidecar | TypeScript Compiler API | **Large** -- core of the work |
-| 4 | NDJSON stdin/stdout handler in sidecar | TypeScript code in sidecar | Step 3 | Small |
-| 5 | `TypeScriptIngestionService` (C# process spawner + deserializer) | C# class in McpServer | Steps 1, 4 | Medium |
-| 6 | `ingest_typescript` MCP tool | C# tool class in McpServer | Step 5, PathAllowlist | Small |
-| 7 | Aspire AppHost wiring | C# modification to AppHost | Step 2 (npm build) | Small |
-| 8 | Incremental TS ingestion (SHA-256 file hashing) | C# + TS | Steps 5, existing IncrementalIngestionEngine | Medium |
-
-### Build Order Rationale
-
-Steps 1-2 can run in parallel (C# contracts and Node.js scaffold are independent). Step 3 is the critical path -- the TS symbol walker is the most complex new code. Steps 5-6 are blocked on steps 3-4. Step 7 is independent of steps 3-6. Step 8 should come last because incremental ingestion requires the full pipeline to work first.
+**What people might do:** For each stub node, search the NuGet cache for matching assemblies.
+**Why it's wrong:** Could be hundreds of stub nodes per project. Each cache probe is a filesystem call. This would make ingestion O(n) on stub count with filesystem overhead.
+**Do this instead:** Parse the lock file first (cheap JSON parse, no filesystem probing), get the exact package list, locate each DLL once per package, reflect all symbols from that DLL in a single pass. Match stubs against the collected reflections in memory.
 
 ---
 
-## Modified Components (Minimal Changes)
+## Component Build Order
 
-Only these existing files need changes:
+Dependencies flow downward — build in this order:
 
-| File | Change | Scope |
-|------|--------|-------|
-| `DocAgent.AppHost/Program.cs` | Add `Aspire.Hosting.NodeJs` reference and `AddNodeApp` call | 3-5 lines |
-| `DocAgent.McpServer/ServiceCollectionExtensions.cs` | Register `TypeScriptIngestionService` and `ITypeScriptIngestionService` | 2-3 lines |
-| `DocAgent.Core/Symbols.cs` (optional) | Add `LanguageOrigin` string property to `SymbolGraphSnapshot` (default null) | 1 line on record + MessagePack compat |
-| `DocAgent.McpServer/Config/DocAgentServerOptions.cs` | Add `TypeScriptExtractorPath` config property | 1-2 lines |
-| `src/Directory.Packages.props` | Add `Aspire.Hosting.NodeJs` package version | 1 line |
-| `CLAUDE.md` | Document `ingest_typescript` tool | ~20 lines |
+| Step | Component | File | Depends On | Notes |
+|------|-----------|------|------------|-------|
+| 1 | `PackageTypes.cs` | DocAgent.Core | — | Pure domain types; no deps; unblocks everything |
+| 2 | `LockFileParser.cs` | DocAgent.Ingestion | Step 1 (PackageEntry) | Pure static parser; testable with fixture JSON immediately |
+| 3 | `NuGetCacheReflector.cs` | DocAgent.Ingestion | Steps 1, 2; Roslyn dep added | Core complexity; critical path for enrichment |
+| 4 | `StubNodeEnricher.cs` | DocAgent.McpServer/Ingestion | Steps 1, 3 | Matches stubs → enriched nodes |
+| 5 | Modify `SolutionIngestionService.cs` | DocAgent.McpServer/Ingestion | Steps 2, 3, 4 | Wire enrichment pipeline; add PipelineOverride seams |
+| 6 | Modify `SolutionIngestionResult.cs` | DocAgent.McpServer/Ingestion | Step 1 | Add PackageGraphs field |
+| 7 | `PackageQueryService.cs` | DocAgent.McpServer | Steps 1, 5, 6 | Cache + query service; depends on ingestion result |
+| 8 | Modify `BM25SearchIndex.cs` | DocAgent.Indexing | Step 1 (NodeKind.Enriched) | One-line filter change |
+| 9 | `PackageTools.cs` | DocAgent.McpServer/Tools | Steps 7, 8 | MCP tools; final integration point |
+| 10 | Register in `ServiceCollectionExtensions.cs` | DocAgent.McpServer | Steps 7, 9 | Wire DI |
+| 11 | Tests | DocAgent.Tests | Steps 1–9 | Can start at Step 1; grow incrementally |
 
-Everything else (SnapshotStore, BM25SearchIndex, DocTools, ChangeTools, SolutionTools, SymbolGraphDiffer, KnowledgeQueryService, PathAllowlist, AuditLogger, RateLimiter, all existing MCP tools) remains **completely unchanged**.
+**Parallelism opportunities:**
+- Steps 2 and 3 can develop in parallel after Step 1 (both are independent parsers/reflectors).
+- Step 8 is independent of Steps 4–7 (only requires `NodeKind.Enriched` enum value from Step 1).
+- Tests for each component can be written alongside that component.
 
----
-
-## Scalability Considerations
-
-| Concern | At 1 project | At 10 projects (monorepo) | At 100+ files per project |
-|---------|--------------|--------------------------|--------------------------|
-| Sidecar startup | ~200ms cold start | Same (one process per ingestion call) | Same |
-| Memory (Node.js) | ~50-100MB for TS compiler | ~200-500MB for large monorepo | Scales with file count |
-| Memory (C#) | Negligible (JSON deserialization) | Same per-project pattern | Same |
-| Snapshot size | Small (.msgpack) | One snapshot per TS project | Scales linearly with symbols |
-| Index rebuild | Fast (BM25 is quick) | Per-project index | Same |
+**Critical path:** Step 1 → Step 3 → Step 4 → Step 5 → Step 7 → Step 9. Step 3 (`NuGetCacheReflector`) is the most complex new component and gates the enrichment half of the milestone.
 
 ---
 
-## Integration Points Summary
+## Modified Files Summary
 
-| Boundary | Current | v2.0 Change |
-|----------|---------|-------------|
-| `SnapshotStore` | Stores C# snapshots | Stores TS snapshots too (same API, no changes) |
-| `BM25SearchIndex` | Indexes C# snapshots | Indexes TS snapshots too (same API, no changes) |
-| `DocTools` (7 tools) | Queries snapshots | Queries TS snapshots identically (no changes) |
-| `ChangeTools` (3 tools) | Diffs snapshots | Diffs TS snapshots identically (no changes) |
-| `IngestionTools` | C# ingestion only | New `ingest_typescript` tool (new class or added to existing) |
-| `PathAllowlist` | Validates .csproj/.sln paths | Also validates tsconfig.json paths (no code change needed) |
-| `AuditFilter` | Audits all tool calls | Audits `ingest_typescript` calls automatically (no change) |
-| `RateLimitFilter` | Rate limits all tools | Rate limits `ingest_typescript` automatically (no change) |
-| `SymbolGraphDiffer` | Diffs C# snapshots | Diffs TS snapshots identically (static, no change) |
+| File | Change Type | Scope |
+|------|-------------|-------|
+| `DocAgent.Core/PackageTypes.cs` | NEW | `PackageEntry`, `PackageGraph`, `AssemblyMapping` records |
+| `DocAgent.Core/Symbols.cs` | MODIFIED | Add `NodeKind.Enriched = 2` enum value |
+| `DocAgent.Ingestion/DocAgent.Ingestion.csproj` | MODIFIED | Add `Microsoft.CodeAnalysis.CSharp` PackageReference |
+| `DocAgent.Ingestion/LockFileParser.cs` | NEW | Pure static lock file parser |
+| `DocAgent.Ingestion/NuGetCacheReflector.cs` | NEW | DLL reflection via Roslyn MetadataReference |
+| `DocAgent.McpServer/Ingestion/StubNodeEnricher.cs` | NEW | Stub → enriched node matching |
+| `DocAgent.McpServer/Ingestion/SolutionIngestionService.cs` | MODIFIED | Call enrichment pipeline after stub synthesis; add seams |
+| `DocAgent.McpServer/Ingestion/SolutionIngestionResult.cs` | MODIFIED | Add `PackageGraphs` field |
+| `DocAgent.McpServer/PackageQueryService.cs` | NEW | In-memory package graph cache + query logic |
+| `DocAgent.McpServer/Tools/PackageTools.cs` | NEW | `get_dependencies`, `find_package_usages` MCP tools |
+| `DocAgent.McpServer/ServiceCollectionExtensions.cs` | MODIFIED | Register `PackageQueryService`, `PackageTools` |
+| `DocAgent.Indexing/BM25SearchIndex.cs` | MODIFIED | Include `NodeKind.Enriched` in indexing filter (2 lines) |
+| `DocAgent.McpServer/Config/DocAgentServerOptions.cs` | MODIFIED | Add `NuGetCachePath` config option |
+| `CLAUDE.md` | MODIFIED | Document `get_dependencies`, `find_package_usages` tools |
+
+Everything else (DocTools, ChangeTools, SolutionTools, ChangeReviewer, SnapshotStore, SymbolGraphDiffer, PathAllowlist, AuditLogger, RateLimiting, TypeScriptIngestionService, IncrementalSolutionIngestionService, all existing tests) remains **completely unchanged**.
 
 ---
 
-## Sources
+## Confidence Assessment
 
-- [Aspire AddNodeApp API reference](https://learn.microsoft.com/en-us/dotnet/api/aspire.hosting.nodeapphostingextension.addnodeapp?view=dotnet-aspire-9.0) -- MEDIUM confidence (API may have changed in later Aspire versions)
-- [Aspire.Hosting.NodeJs NuGet package](https://www.nuget.org/packages/Aspire.Hosting.NodeJs) -- HIGH confidence
-- [TypeScript Compiler API wiki](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- HIGH confidence
-- [ts-morph documentation](https://ts-morph.com/) -- HIGH confidence (evaluated and rejected)
-- [C# to Node.js stdin/stdout IPC pattern](https://gist.github.com/elerch/5628117) -- MEDIUM confidence (community pattern)
-- [IPC between .NET and Node.js](https://www.hardkoded.com/blog/interprocess-communication) -- MEDIUM confidence
-- Existing codebase: `IngestionService.cs`, `SnapshotStore.cs`, `RoslynSymbolGraphBuilder.cs`, `Symbols.cs`, `Abstractions.cs`, `ServiceCollectionExtensions.cs`, `AppHost/Program.cs` -- HIGH confidence (primary source, direct reads)
+| Area | Confidence | Basis |
+|------|------------|-------|
+| Integration points | HIGH | Direct reads of SolutionIngestionService, BM25SearchIndex, SolutionTools, SnapshotStore |
+| PackageGraph/SymbolGraphSnapshot separation | HIGH | MessagePack backward-compat constraints verified in Symbols.cs and PROJECT.md decisions |
+| Stub node enrichment mechanism | HIGH | NodeKind/EdgeScope enums read from Symbols.cs; stub synthesis in SolutionIngestionService fully traced |
+| NuGet cache path convention | MEDIUM | Well-known convention, but TFM fallback ordering is implementation detail to verify |
+| Roslyn MetadataReference API for DLL reflection | HIGH | Same Roslyn 4.14.0 already in use; MetadataReference.CreateFromFile is stable API |
+| Build order | HIGH | Dependencies are deterministic from source reads |
+
+---
+
+*Architecture research for: NuGet package mapping (v2.5)*
+*Researched: 2026-03-26*

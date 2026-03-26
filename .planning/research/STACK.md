@@ -1,315 +1,212 @@
-# Technology Stack: TypeScript Language Support (v2.0)
+# Stack Research: NuGet Package Mapping (v2.5)
 
-**Project:** DocAgentFramework - TypeScript Symbol Extraction via Node.js Sidecar
-**Researched:** 2026-03-08
-**Scope:** NEW additions only. Existing stack (Roslyn 4.14.0, Lucene.Net 4.8-beta, MessagePack 3.1.4, MCP SDK 1.0.0, Aspire SDK 13.1.2, OpenTelemetry 1.15.0, BenchmarkDotNet 0.15.8, etc.) is validated and unchanged.
+**Project:** DocAgentFramework — NuGet Package Mapping additions
+**Researched:** 2026-03-26
+**Scope:** NEW additions only. Existing stack validated and unchanged: Roslyn 4.14.0, Lucene.Net 4.8-beta, MessagePack 3.1.4, MCP SDK 1.0.0, Aspire 13.1.2, OpenTelemetry 1.15.0, BenchmarkDotNet 0.15.8, YamlDotNet 16.3.0, System.IO.Hashing 9.0.0, Node.js sidecar.
+**Confidence:** HIGH
+
+---
+
+## What Needs a Stack Decision
+
+The v2.5 milestone requires four new technical capabilities:
+
+1. **Parse `packages.lock.json`** — extract direct + transitive dependency trees per TFM
+2. **Resolve NuGet global cache paths** — find DLL locations cross-platform, respecting env/config overrides
+3. **Extract public API from DLLs** — load assemblies without MSBuild, walk public types and members
+4. **Model the PackageGraph** — new domain type for dependency metadata
+
+None of these require a completely new subsystem. Three need two new NuGet SDK packages; one reuses Roslyn already in the project.
 
 ---
 
 ## Recommended Stack Additions
 
-### Node.js Sidecar Runtime
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Node.js | 24.x LTS (Krypton) | Runtime for TypeScript symbol extractor sidecar | Current Active LTS through Oct 2026, Maintenance through Apr 2028. Aspire 13.x has first-class Node.js orchestration via `AddNodeApp()`. |
-| TypeScript | ~5.9.x | TypeScript Compiler API for symbol extraction | Latest stable (March 2026). Compiler API (`ts.createProgram`, `TypeChecker`, `Symbol`) provides compiler-grade symbol information -- identical fidelity to what Roslyn provides for C#. Pin to ~5.9.x to avoid TS 6.0 breaking changes (6.0 beta announced, will rewrite compiler internals). |
-
-**Confidence:** HIGH -- Node.js 24 LTS and TypeScript 5.9 verified via official release channels and npm registry.
-
-### Aspire Integration (C# Side)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Aspire.Hosting.JavaScript | 13.1.2 | Orchestrate Node.js sidecar from AppHost | Renamed from `Aspire.Hosting.NodeJs` in Aspire 13.0. Old package is deprecated. Version 13.1.2 matches existing Aspire SDK already in the project. Provides `AddNodeApp(name, projectDir, scriptPath)` to register the sidecar as a managed Aspire resource with lifecycle management, health monitoring, environment variable injection, and dashboard visibility. |
-
-**IMPORTANT:** Do NOT use `Aspire.Hosting.NodeJs` -- it is deprecated and no longer maintained. The replacement is `Aspire.Hosting.JavaScript` (same APIs, new package name).
-
-**Confidence:** HIGH -- `Aspire.Hosting.JavaScript` 13.1.2 verified on NuGet, published 2026-02-26.
-
-### IPC Protocol (C# <-> Node.js)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| NDJSON over stdin/stdout | N/A (protocol, no dependency) | Bidirectional communication between C# host and Node.js sidecar | Proven pattern: the MCP server itself uses stdio transport. NDJSON (newline-delimited JSON) is trivial on both sides -- `System.Text.Json` in C#, `JSON.parse` per line in Node.js. Zero external dependencies. ~30ms latency per message via child process IPC. Request/response correlation via `id` field. |
-
-**Why NOT alternatives:**
-
-| Alternative | Why Rejected |
-|-------------|-------------|
-| HTTP/TCP | Port allocation, firewall issues, connection lifecycle management. Over-engineered for local parent-child process IPC. |
-| gRPC | Proto file generation, build tool complexity. Symbol payloads are JSON-native. |
-| Named pipes | Platform-specific behavior (Windows vs Linux). stdin/stdout is universal and already proven in this codebase. |
-| StreamJsonRpc (Microsoft) | Good library but adds a NuGet dependency for a simple request/response pattern implementable in ~50 lines. Valid upgrade path if protocol complexity grows. |
-
-**Confidence:** HIGH -- stdin/stdout NDJSON is the same pattern used by the existing MCP stdio transport.
-
----
-
-## TypeScript Compiler API Surface (Node.js Side)
-
-These are the specific APIs from the `typescript` npm package used for symbol extraction:
-
-| API | Purpose | Maps To |
-|-----|---------|---------|
-| `ts.parseJsonConfigFileContent()` | Parse tsconfig.json including `extends` chains, `paths`, `include`/`exclude` globs | Project discovery (like MSBuildWorkspace for C#) |
-| `ts.createProgram(rootNames, options, host)` | Create type-checked program from resolved file list | Equivalent to Roslyn `Compilation` |
-| `program.getTypeChecker()` | Resolve types, symbols, and relationships | Equivalent to Roslyn `SemanticModel` |
-| `program.getSourceFiles()` | Get all parsed source files | File enumeration for walking |
-| `ts.forEachChild(node, visitor)` | Walk AST nodes to discover declarations | AST visitor pattern |
-| `checker.getSymbolAtLocation(node.name)` | Get Symbol for a declaration node | Maps to `SymbolNode` in existing graph |
-| `checker.getSignatureFromDeclaration(node)` | Extract function/method signatures (params, return type, generics) | Maps to `SymbolNode.Signature` |
-| `checker.typeToString(type)` | Serialize resolved type to string | Display type for documentation |
-| `ts.SyntaxKind` enum | Identify node types: `ClassDeclaration`, `InterfaceDeclaration`, `FunctionDeclaration`, `MethodDeclaration`, `PropertyDeclaration`, `EnumDeclaration`, `TypeAliasDeclaration`, `ModuleDeclaration`, `ExportDeclaration` | Maps to `SymbolKind` enum |
-| `symbol.getJsDocTags()` / `symbol.getDocumentationComment()` | Extract JSDoc comments | Maps to `DocComment` in existing graph |
-
-**Confidence:** HIGH -- TypeScript Compiler API is stable across major versions. Same core surface since TS 2.x with additive-only changes.
-
----
-
-## npm Dependencies (Node.js Sidecar)
-
-### Runtime Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `typescript` | ~5.9.x | TypeScript Compiler API -- the extraction engine |
-
-**That is the ONLY runtime dependency.** stdin/stdout uses built-in `process.stdin`/`process.stdout`. JSON uses built-in `JSON.parse`/`JSON.stringify`. File system uses built-in `fs` and `path`. Zero npm dependencies beyond TypeScript itself.
-
-### Dev Dependencies
+### New NuGet Packages Required
 
 | Package | Version | Purpose | Why This One |
 |---------|---------|---------|-------------|
-| `@types/node` | ^24 | Node.js type definitions for TypeScript | Match Node.js 24 LTS major version |
-| `vitest` | ^3 | Test runner | Fast, zero-config, native ESM+TS support. Standard for new Node.js projects in 2026. |
-| `tsx` | ^4 | TypeScript execution for development | Run .ts files directly without pre-compilation during dev |
-| `esbuild` | ^0.25 | Bundler for production build | Produces single `dist/index.js`. Sub-second builds. Zero config. |
+| `NuGet.ProjectModel` | 7.3.0 | Parse `packages.lock.json` via `PackagesLockFileFormat.Read()` | The first-party NuGet package that owns the `packages.lock.json` format. `PackagesLockFileFormat.Read(filePath)` returns a `PackagesLockFile` with `Targets` (one per TFM) containing `Libraries` with `PackageDependencyType` (Direct/Transitive/CentralTransitive), resolved version, and `ContentHash`. The alternative — manual `System.Text.Json` parsing — must be maintained as the format evolves; `PackagesLockFileFormat` is the canonical parser owned by the same team that writes the file. |
+| `NuGet.Configuration` | 7.3.0 | Cross-platform global cache path resolution via `SettingsUtility.GetGlobalPackagesFolder()` | The only correct way to find the NuGet cache. The default path (`~/.nuget/packages` on Windows/macOS, `/home/user/.nuget/packages` on Linux) can be overridden by the `NUGET_PACKAGES` environment variable or `globalPackagesFolder` in `nuget.config`. `Settings.LoadDefaultSettings(null)` + `SettingsUtility.GetGlobalPackagesFolder(settings)` traverses all override sources in the correct precedence order. Hardcoding the default path breaks CI environments and custom configurations. |
 
-### What NOT to Add
+**Version rationale:** 7.3.0 is the latest stable as of 2026-02-10, aligned with Visual Studio 2022 17.x/.NET SDK 9.x. Both packages share the same versioning cadence — always use matching versions. The project targets .NET 10; these packages ship a `net8.0` TFM which is binary-compatible with .NET 10.
 
-| Package | Why Avoid |
-|---------|-----------|
-| `ts-morph` | Unnecessary abstraction for read-only extraction. +4MB dependency. Its value is code modification (refactoring), not read-only symbol walking. Direct Compiler API is cleaner. |
-| `express` / `fastify` / any HTTP framework | Sidecar communicates via stdin/stdout, not HTTP. No web server needed. |
-| `@grpc/grpc-js` / `@grpc/proto-loader` | gRPC is over-engineering for parent-child IPC. |
-| `jest` | Heavier config, slower startup than vitest. Legacy choice. |
-| `webpack` | Over-engineered bundler for a CLI tool. esbuild is faster and simpler. |
-| `tree-sitter` / `tree-sitter-typescript` | Syntax-only parsing. No type resolution. Cannot extract resolved types, inferred return types, or generic instantiations. |
-| `node-ipc` / `zeromq` / IPC libraries | stdin/stdout NDJSON requires zero dependencies and matches the existing MCP pattern. |
+**Confidence:** HIGH — versions verified on NuGet.org (2026-02-10 release date confirmed).
 
----
+### No New Package: DLL Public API Extraction Uses Existing Roslyn
 
-## NuGet Package Addition (C# Side)
-
-| Package | Version | Target Project | Purpose |
-|---------|---------|---------------|---------|
-| `Aspire.Hosting.JavaScript` | 13.1.2 | `DocAgent.AppHost` only | `AddNodeApp()` extension method for Aspire resource registration |
-
-**No other C# package additions needed.** The IPC layer uses:
-- `System.Text.Json` -- built into .NET 10, already in dependency graph
-- `System.Diagnostics.Process` -- BCL, already available
-- `System.IO.Pipelines` -- built into .NET 10, for efficient stdin/stdout stream reading (optional optimization)
-
-Existing `DocAgent.Core` types (`SymbolNode`, `SymbolEdge`, `SymbolGraphSnapshot`) are language-agnostic and accommodate TypeScript symbols without modification.
-
----
-
-## Integration Architecture
-
-### Data Flow
-
-```
-tsconfig.json
-    |
-    v
-[Node.js Sidecar: DocAgent.TypeScriptExtractor]     <-- NEW project
-    | (NDJSON over stdin/stdout)
-    v
-[DocAgent.Ingestion: TypeScriptIngestionService]     <-- NEW C# class
-    | (deserialize JSON DTOs -> SymbolNode/SymbolEdge)
-    v
-[DocAgent.Core: SymbolGraphSnapshot]                 <-- EXISTING, unchanged
-    |
-    v
-[DocAgent.Indexing: BM25SearchIndex]                 <-- EXISTING, unchanged
-    |
-    v
-[DocAgent.McpServer: 15 MCP tools]                  <-- EXISTING 14 + new ingest_typescript
-```
-
-### Why Sidecar, Not Embedded JS
-
-| Approach | Verdict | Rationale |
-|----------|---------|-----------|
-| Node.js sidecar process | **CHOSEN** | TypeScript Compiler API is designed for Node.js. Full `fs` access, V8 JIT optimization for type-checking workloads, trivial TS version upgrades (`npm update`), Aspire-native orchestration. |
-| Jint (.NET JS interpreter) | Rejected | Cannot run the TypeScript compiler -- lacks full ES2020+ support, no `fs` module, inadequate performance for type-checking. |
-| ClearScript / V8 embedding | Rejected | +50MB native dependency, custom `fs` shims needed, harder to debug than process isolation. |
-
-### AppHost Integration
-
-Current `Program.cs` (unchanged lines shown for context):
+DLL reflection for public API extraction requires zero new packages. The approach:
 
 ```csharp
-// Add to DocAgent.AppHost/Program.cs:
-
-// NEW: TypeScript symbol extractor sidecar
-var tsExtractor = builder.AddNodeApp(
-    "ts-extractor",
-    "../DocAgent.TypeScriptExtractor",
-    "dist/index.js")
-    .WithEnvironment("NODE_ENV", "production");
-
-// Existing MCP server gets reference to sidecar
-mcpServer.WithReference(tsExtractor);
+// Already available in DocAgent.Ingestion via Microsoft.CodeAnalysis.CSharp 4.14.0
+var reference = MetadataReference.CreateFromFile(dllPath);
+var compilation = CSharpCompilation.Create(
+    assemblyName: "nuget-reflection",
+    references: new[] { reference });
+var assemblySymbol = (IAssemblySymbol)compilation.GetAssemblyOrModuleSymbol(reference)!;
+// Walk assemblySymbol.GlobalNamespace recursively via GetTypeMembers()
+// Filter: typeSymbol.DeclaredAccessibility == Accessibility.Public
 ```
 
-### IPC Message Protocol
+`MetadataReference.CreateFromFile` reads the PE file into native memory via Roslyn's metadata reader — no `System.Reflection` loading, no `AssemblyLoadContext` isolation needed, no runtime type conflicts. `IAssemblySymbol` and `GetTypeMembers()` are the same API surface already used for C# source symbol extraction. The extraction pipeline for DLL-sourced types is structurally identical to the existing Roslyn walker.
 
-Request (C# -> Node.js, one JSON object per line):
-```json
-{"id":"req-1","method":"extract","params":{"tsconfigPath":"/path/to/tsconfig.json"}}
-```
+**What NOT to add:**
+- `System.Reflection.MetadataLoadContext` — for runtime reflection isolation, not needed here; Roslyn's metadata reader is already available and produces compiler-typed symbols
+- `Mono.Cecil` — another PE reader; redundant with Roslyn already in the project
+- `dnlib` — same problem as Mono.Cecil
 
-Response (Node.js -> C#, one JSON object per line):
-```json
-{"id":"req-1","result":{"symbols":[...],"edges":[...],"fileHashes":{"src/index.ts":"sha256:abc..."}}}
-```
-
-Error:
-```json
-{"id":"req-1","error":{"code":-1,"message":"tsconfig.json not found at /path/to/tsconfig.json"}}
-```
-
-Correlation via `id` field. Simplified JSON-RPC 2.0 pattern (no full spec compliance needed).
+**Confidence:** HIGH — `MetadataReference.CreateFromFile` + `IAssemblySymbol` is the established Roslyn pattern, stable since Roslyn 1.x.
 
 ---
 
-## Node.js Sidecar Project Structure
+## Dependency Chain Warning: NuGet.ProjectModel Pulls NuGet.Protocol
 
-```
-src/DocAgent.TypeScriptExtractor/
-  package.json
-  tsconfig.json          # Sidecar's own build config (NOT target project config)
-  src/
-    index.ts             # NDJSON stdin/stdout entry point + message loop
-    extractor.ts         # Core symbol extraction via TS Compiler API
-    protocol.ts          # Request/response type definitions (mirrors C# DTOs)
-    jsdoc.ts             # JSDoc comment extraction helpers
-    symbol-mapper.ts     # Map TS Symbol -> SymbolNode JSON DTO
-  test/
-    extractor.test.ts    # Unit tests with fixture .ts projects
-    protocol.test.ts     # NDJSON serialization round-trip tests
-  fixtures/
-    simple-project/      # Minimal tsconfig.json + .ts files for testing
-  dist/
-    index.js             # esbuild output (single bundled file)
-```
+`NuGet.ProjectModel 7.3.0` depends on `NuGet.DependencyResolver.Core 7.3.0`, which depends on `NuGet.Protocol 7.3.0`. NuGet.Protocol is a heavy package (~3MB) that brings HTTP feed interaction APIs. These are not used, but they will appear in the dependency graph.
 
-### Sidecar tsconfig.json
+**Mitigation:** This is unavoidable with NuGet.ProjectModel. The transitive dependencies are passive — no initialization, no network calls, no startup cost unless explicitly invoked. Add `NuGet.ProjectModel` only to `DocAgent.Ingestion.csproj` (where lock file parsing belongs), not to Core or McpServer, to limit the blast radius.
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2024",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "declaration": false,
-    "sourceMap": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*.ts"]
-}
-```
-
-### package.json
-
-```json
-{
-  "name": "docagent-typescript-extractor",
-  "version": "2.0.0",
-  "type": "module",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --format=esm --external:typescript",
-    "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "typescript": "~5.9"
-  },
-  "devDependencies": {
-    "@types/node": "^24",
-    "vitest": "^3",
-    "tsx": "^4",
-    "esbuild": "^0.25"
-  }
-}
-```
-
-Note: `--external:typescript` in esbuild because the `typescript` package is large (~80MB) and should remain as a node_modules dependency, not bundled.
+**What NOT to add:**
+- `NuGet.Protocol` directly — it's a transitive dependency; direct reference adds nothing
+- `NuGet.Commands` — high-level CLI command wrappers, not needed
+- `NuGet.PackageManagement` — Visual Studio package management, not needed
 
 ---
 
-## Installation Commands
+## Assembly Location Convention
 
-### C# Side
+Once the global cache root is resolved, DLL paths follow a deterministic convention:
+
+```
+{globalPackagesFolder}/{packageId.ToLower()}/{version}/lib/{tfm}/{assemblyName}.dll
+```
+
+Example on Windows:
+```
+C:\Users\james\.nuget\packages\newtonsoft.json\13.0.3\lib\net6.0\Newtonsoft.Json.dll
+```
+
+TFM selection for .NET 10 projects follows NuGet compatibility rules (prefer `net10.0` > `net9.0` > `net8.0` > `net6.0` > `netstandard2.1` > `netstandard2.0`). The `packages.lock.json` resolved target already records which TFM was selected during restore; no TFM resolution logic is needed beyond reading the lock file's target key.
+
+**Edge cases to handle:**
+- Package has no `lib/` folder (tools-only packages, content-only packages) — skip DLL extraction gracefully
+- `ref/` folder vs `lib/` folder — prefer `lib/` for runtime assemblies; `ref/` contains compile-time reference assemblies which are suitable but less complete
+- DLL not present locally (package not yet restored) — emit warning, create stub node, do not fail ingestion
+
+---
+
+## PackageGraph Domain Type (No New Dependencies)
+
+The `PackageGraph` structure is a new domain type in `DocAgent.Core`. It requires no additional packages:
+
+```csharp
+// DocAgent.Core — pure domain, no IO dependencies
+public sealed record PackageIdentity(string Id, string Version);
+
+public enum DependencyKind { Direct, Transitive, CentralTransitive }
+
+public sealed record PackageDependency(
+    PackageIdentity Package,
+    DependencyKind Kind,
+    string TargetFramework,
+    string? ContentHash);
+
+public sealed class PackageGraph
+{
+    public string ProjectPath { get; init; } = "";
+    public IReadOnlyList<PackageDependency> Dependencies { get; init; } = [];
+    // Edges: which package depends on which (derived from lock file)
+    public IReadOnlyDictionary<PackageIdentity, IReadOnlyList<PackageIdentity>> DependencyEdges { get; init; }
+        = new Dictionary<PackageIdentity, IReadOnlyList<PackageIdentity>>();
+}
+```
+
+`PackageGraph` follows the same immutable record pattern as `SymbolGraphSnapshot`. It serializes cleanly with MessagePack's ContractlessStandardResolver (same pattern as existing diff types). No new MessagePack attributes needed.
+
+---
+
+## Target Project Placement
+
+| Component | Target Project | Rationale |
+|-----------|---------------|-----------|
+| `NuGet.ProjectModel` package reference | `DocAgent.Ingestion` | Lock file parsing is an ingestion concern, not a core domain concern |
+| `NuGet.Configuration` package reference | `DocAgent.Ingestion` | Cache path resolution is part of ingestion, not serving |
+| `PackageGraph`, `PackageDependency`, `DependencyKind` | `DocAgent.Core` | Domain types belong in Core; no IO, no NuGet SDK deps in Core |
+| `IPackageGraphBuilder` interface | `DocAgent.Core` | Follows existing interface pattern (`ISymbolGraphBuilder`, `ISearchIndex`) |
+| `PackageLockFileParser` | `DocAgent.Ingestion` | Implementation detail; uses NuGet.ProjectModel |
+| `NuGetCacheResolver` | `DocAgent.Ingestion` | Platform-specific path logic; uses NuGet.Configuration |
+| `DllPublicApiExtractor` | `DocAgent.Ingestion` | Uses `MetadataReference.CreateFromFile`; same layer as `RoslynSymbolWalker` |
+| New MCP tools (`get_dependencies`, `find_package_usages`) | `DocAgent.McpServer` | All tools live in McpServer; no SDK deps leak into Core |
+
+---
+
+## Installation
 
 Add to root `Directory.Packages.props`:
+
 ```xml
-<PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.1.2" />
+<!-- NuGet lock file parsing and cache path resolution -->
+<PackageVersion Include="NuGet.ProjectModel" Version="7.3.0" />
+<PackageVersion Include="NuGet.Configuration" Version="7.3.0" />
 ```
 
-Add to `DocAgent.AppHost/DocAgent.AppHost.csproj`:
+Add to `DocAgent.Ingestion/DocAgent.Ingestion.csproj`:
+
 ```xml
-<PackageReference Include="Aspire.Hosting.JavaScript" />
+<PackageReference Include="NuGet.ProjectModel" />
+<PackageReference Include="NuGet.Configuration" />
 ```
 
-### Node.js Side
-
-```bash
-mkdir -p src/DocAgent.TypeScriptExtractor
-cd src/DocAgent.TypeScriptExtractor
-npm init -y
-npm install typescript@"~5.9"
-npm install -D @types/node@24 vitest@^3 tsx@^4 esbuild@^0.25
-```
+No changes to `DocAgent.Core.csproj`, `DocAgent.McpServer.csproj`, or `DocAgent.AppHost.csproj`.
 
 ---
 
-## Version Compatibility Matrix
+## Alternatives Considered
 
-| Component | Version | Constraint | Status |
-|-----------|---------|------------|--------|
-| Aspire SDK | 13.1.2 | Must match existing project | Already in use |
-| Aspire.Hosting.JavaScript | 13.1.2 | Must match Aspire SDK | NEW -- verified on NuGet |
-| Node.js | 24.x LTS | Aspire manages lifecycle | Active LTS through Oct 2026 |
-| TypeScript | ~5.9.x | Pin minor; avoid TS 6.0 beta | Latest stable March 2026 |
-| @types/node | ^24 | Match Node.js major | Dev dependency only |
-| .NET | 10.0 | Existing constraint | Unchanged |
-| System.Text.Json | Built-in | .NET 10 BCL | Already available |
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| `NuGet.ProjectModel` for lock file parsing | Manual `System.Text.Json` parsing | `packages.lock.json` format is an internal NuGet implementation detail with three format versions (V1/V2/V3). `PackagesLockFileFormat` handles all versions. Manual parsing creates maintenance burden on every NuGet SDK update. |
+| `NuGet.Configuration` for cache path | Hardcode `~/.nuget/packages` | Breaks CI environments with `NUGET_PACKAGES` set, custom corporate cache locations, and Azure DevOps agents with non-standard home directories. |
+| Roslyn `MetadataReference.CreateFromFile` | `System.Reflection.MetadataLoadContext` | MetadataLoadContext requires an assembly resolver chain and loads into a live CLR context. Roslyn's metadata reader is purely structural, produces typed `ISymbol` objects directly, and doesn't risk type-loading conflicts. We already use `IAssemblySymbol` for C# sources — DLL extraction is the same API. |
+| Roslyn `MetadataReference.CreateFromFile` | `Mono.Cecil` or `dnlib` | These PE readers are alternatives to Roslyn's, not complements. Adding either creates a second symbol model that must be translated into `SymbolNode`. Roslyn produces `IAssemblySymbol` which maps directly to the existing `SymbolNode` extraction pattern. |
+
+---
+
+## What NOT to Add
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `NuGet.Protocol` (direct reference) | Heavy HTTP feed client; 3MB+ package; zero usage in this feature. Already pulled transitively — don't add a direct reference. | Implicit transitive dependency only |
+| `NuGet.Commands` | High-level restore/install commands; wraps MSBuild. We only read lock files, not run restore. | `NuGet.ProjectModel` directly |
+| `NuGet.PackageManagement` | Visual Studio integration layer; not for programmatic use outside VS. | Not needed |
+| `Mono.Cecil` / `dnlib` | Redundant PE readers when Roslyn is already present. | `MetadataReference.CreateFromFile` |
+| `System.Reflection.MetadataLoadContext` | Loads assemblies into CLR; risk of type conflicts with .NET 10 BCL types; requires resolver chain. | Roslyn metadata reader (structural only) |
+| `NuGet.Versioning` (direct reference) | Already a transitive dependency of `NuGet.ProjectModel`. `NuGetVersion.Parse()` is available without a direct reference. | Transitive; add direct reference only if `NuGetVersion` is used in `DocAgent.Core` |
+
+---
+
+## Version Compatibility
+
+| Package | Version | Compatible With | Notes |
+|---------|---------|-----------------|-------|
+| `NuGet.ProjectModel` | 7.3.0 | .NET 10 (net8.0 TFM) | Ships net8.0 and net472 TFMs; net8.0 is used on .NET 10 |
+| `NuGet.Configuration` | 7.3.0 | .NET 10 (net8.0 TFM) | Same versioning cadence as ProjectModel; must match |
+| `Microsoft.CodeAnalysis.CSharp` | 4.14.0 | `MetadataReference.CreateFromFile` stable since 1.x | Already in project; no change |
+| `NuGet.ProjectModel` 7.3.0 | `NuGet.Configuration` 7.3.0 | Must use same major.minor; different versions cause binding conflicts | Always update together |
 
 ---
 
 ## Sources
 
-- [Aspire.Hosting.JavaScript 13.1.2 on NuGet](https://www.nuget.org/packages/Aspire.Hosting.JavaScript) -- published 2026-02-26 (HIGH confidence)
-- [Aspire.Hosting.NodeJs deprecated on NuGet](https://www.nuget.org/packages/Aspire.Hosting.NodeJS) -- renamed to Aspire.Hosting.JavaScript in Aspire 13.0 (HIGH confidence)
-- [Aspire JavaScript integration docs](https://aspire.dev/integrations/frameworks/javascript/) -- official docs, `AddNodeApp()` API (HIGH confidence)
-- [Aspire Node.js extensions docs](https://aspire.dev/integrations/frameworks/nodejs-extensions/) -- community toolkit extensions (MEDIUM confidence)
-- [TypeScript Compiler API wiki](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- official Microsoft documentation (HIGH confidence)
-- [TypeScript 5.9 release notes](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-9.html) -- latest stable (HIGH confidence)
-- [TypeScript 6.0 beta announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0-beta/) -- upcoming major, compiler rewrite (HIGH confidence)
-- [Node.js release schedule](https://nodejs.org/en/about/previous-releases) -- Node 24 LTS "Krypton" (HIGH confidence)
-- [NDJSON specification](https://github.com/ndjson/ndjson-spec) -- protocol spec (HIGH confidence)
-- [Aspire 13 announcement](https://www.infoq.com/news/2025/11/dotnet-aspire-13-release/) -- polyglot platform rebranding (MEDIUM confidence)
-- Existing codebase: `Directory.Packages.props`, `DocAgent.AppHost.csproj`, `AppHost/Program.cs` -- direct file reads (HIGH confidence)
+- [NuGet.ProjectModel 7.3.0 on NuGet.org](https://www.nuget.org/packages/NuGet.ProjectModel/) — version and release date confirmed (HIGH confidence)
+- [NuGet.Configuration 7.3.0 on NuGet.org](https://www.nuget.org/packages/NuGet.Configuration/) — version and release date confirmed (HIGH confidence)
+- [NuGet Client SDK reference](https://learn.microsoft.com/en-us/nuget/reference/nuget-client-sdk) — package purpose descriptions (HIGH confidence)
+- [PackagesLockFileFormat.cs in NuGet.Client](https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.ProjectModel/ProjectLockFile/PackagesLockFileFormat.cs) — `Read()` overloads and parsing logic (HIGH confidence)
+- [PackagesLockFile.cs in NuGet.Client](https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.ProjectModel/ProjectLockFile/PackagesLockFile.cs) — `Targets`, `Version`, `Path` properties (HIGH confidence)
+- [NuGetEnvironment.cs in NuGet.Client](https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Common/PathUtil/NuGetEnvironment.cs) — cross-platform path resolution implementation (HIGH confidence)
+- [Managing global packages and cache folders](https://learn.microsoft.com/en-us/nuget/consume-packages/managing-the-global-packages-and-cache-folders) — NUGET_PACKAGES override, globalPackagesFolder config (HIGH confidence)
+- [MetadataReference.CreateFromFile on MSDN](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.metadatareference.createfromfile) — method signature and memory behavior (HIGH confidence)
+- Existing codebase: `Directory.Packages.props`, `DocAgent.Ingestion.csproj`, `DocAgent.Core.csproj` — direct file reads (HIGH confidence)
 
 ---
-*Stack research for: DocAgentFramework v2.0 TypeScript Language Support*
-*Researched: 2026-03-08*
+*Stack research for: DocAgentFramework v2.5 NuGet Package Mapping*
+*Researched: 2026-03-26*

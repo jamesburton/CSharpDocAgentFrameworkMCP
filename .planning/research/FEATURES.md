@@ -1,249 +1,182 @@
-# Feature Landscape
+# Feature Research
 
-**Domain:** TypeScript symbol extraction and graph generation for existing MCP doc server
-**Researched:** 2026-03-08
-**Confidence:** HIGH (existing model inspected, TS Compiler API well-documented)
+**Domain:** NuGet package dependency graph + DLL reflection + MCP tooling (additive milestone to DocAgentFramework v2.5)
+**Researched:** 2026-03-26
+**Confidence:** HIGH — core mechanisms (lock file parsing, Roslyn MetadataReference, NuGet cache layout) are well-documented; feature scope derived from PROJECT.md and confirmed against existing codebase
+
+---
 
 ## Scope Note
 
-This is a subsequent milestone (v2.0) research document. The 14 existing MCP tools and full C#/Roslyn pipeline are already shipped. Research focuses exclusively on what is needed to make TypeScript codebases queryable through the same tool surface via the existing `SymbolNode`/`SymbolEdge` graph model.
+This is a subsequent milestone (v2.5) research document. The 15 existing MCP tools, solution ingestion, and stub node pipeline are already shipped. Research focuses exclusively on what is needed to expose NuGet package dependency graphs and DLL-reflected public API surfaces through new MCP tools.
 
 ---
 
-## SymbolNode Model Mapping Analysis
+## Feature Landscape
 
-### Existing Model (from `DocAgent.Core/Symbols.cs`)
+### Table Stakes (Users Expect These)
 
-The current `SymbolNode` record carries: `SymbolId`, `SymbolKind` (14 values), `DisplayName`, `FullyQualifiedName`, `Accessibility`, `DocComment`, `SourceSpan`, `ReturnType`, `Parameters`, `GenericConstraints`, `ProjectOrigin`, `NodeKind`.
+Features that define minimum useful behavior for a "NuGet package mapping" milestone. Missing any of these makes the milestone feel incomplete.
 
-The `SymbolEdgeKind` enum has: `Contains`, `Inherits`, `Implements`, `Calls`, `References`, `Overrides`, `Returns`.
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Parse `packages.lock.json` for direct + transitive deps | Lock file is the authoritative pinned graph. TFM-keyed sections with `"Direct"` and `"Transitive"` type fields, resolved version, contentHash, and per-package dependency list. Every .NET project with `RestorePackagesWithLockFile=true` generates one. | LOW | JSON deserialize only — no MSBuild required. May not exist on every repo (opt-in property). |
+| Fallback to `project.assets.json` when lock file absent | `project.assets.json` is generated on every `dotnet restore` in `obj/`. Many repos do not opt in to `packages.lock.json`. Without fallback, the tool fails silently for most repos. | LOW | `project.assets.json` has a richer but noisier format. Parse the `libraries` section for package id/version/type. |
+| `PackageGraph` domain type | Structured representation of the dependency tree — package id, version, type (Direct/Transitive), assembly file paths per TFM, dependency links to other packages. Needed by both tools. | LOW | New type in DocAgent.Core. MessagePack-serializable. NOT embedded in SymbolGraphSnapshot — parallel metadata. |
+| DLL path resolution from NuGet global packages cache | Agents cannot query package APIs without knowing where the DLL lives. Path is deterministic: `{globalPackagesFolder}/{id}/{version}/lib/{tfm}/{assembly}.dll`. Default root: `~/.nuget/packages` (cross-platform). Overridable via `NUGET_PACKAGES` env var or `globalPackagesFolder` NuGet config. | LOW | TFM selection requires best-match logic (net10.0 descends to netstandard2.1 when exact TFM folder absent). |
+| TFM best-match DLL resolution | Many packages ship only `netstandard2.0` or `netstandard2.1` folders. A `net10.0` project uses them. Without best-match, DLL resolution fails silently for those packages. | MEDIUM | Hardcode the common compatibility descent order for net10.0: net10.0 → net9.0 → net8.0 → netstandard2.1 → netstandard2.0 → net461. NuGet.Frameworks package has CompatibilityTable but adds a new dep. |
+| Extract public API surface via Roslyn MetadataReference | This is how stub nodes get real content. Pattern: `MetadataReference.CreateFromFile(dllPath)` → add to throwaway `CSharpCompilation` → `compilation.GetAssemblyOrModuleSymbol(ref)` as `IAssemblySymbol` → walk `GlobalNamespace` with `SymbolVisitor`. Filter to `Accessibility.Public` / `Accessibility.Protected` only. | MEDIUM | One throwaway compilation per assembly. Must skip compiler-generated types. Parallel.ForEach over namespace members is safe. |
+| Enrich existing stub nodes with real type info from DLL reflection | Stub nodes (NodeKind.Stub) currently carry only FQN + minimal metadata. After reflection they should carry full DisplayName, ReturnType, Parameters, GenericConstraints, Accessibility — same fields as real nodes. Stub identity must be preserved (same SymbolId) so existing External edges remain valid. | MEDIUM | Stub node replacement in the flat graph. Post-walk pass in SolutionIngestionService or a new StubEnrichmentService. |
+| `PackageOrigin` field on SymbolNode | Annotates each enriched SymbolNode with the NuGet package id + version that provides it. Enables `find_package_usages` to group references by package without full graph traversal. | LOW | Append at end of SymbolNode record (MessagePack backward compat rule). |
+| `get_dependencies` MCP tool | Returns PackageGraph for a project — direct + transitive packages, resolved versions, TFM, assembly mappings. Analogous to `dotnet nuget why` (available since .NET 8.0.4xx SDK). Agents need to ask "what does this project depend on?" before any cross-reference query. | LOW | PathAllowlist enforcement on input path. Reads lock file at rest — no MSBuild invocation. Return json/markdown/tron consistent with existing tools. |
+| `find_package_usages` MCP tool | Given a package name (or specific type FQN), returns all source code references from the indexed symbol graph. Traverses External-scoped edges in the snapshot, matches stub nodes belonging to the package's assemblies (via PackageOrigin), collects referencing real nodes. | MEDIUM | Requires enriched stubs with PackageOrigin. Returns same response shape as `get_references`. |
+| PathAllowlist security on PackageTools | Established pattern for every tool class. Reject out-of-allowlist paths with opaque not_found response. No error detail leakage. | LOW | Copy existing pattern from DocTools/ChangeTools/SolutionTools. |
 
-### Natural Mappings (TypeScript to Existing SymbolKind)
+### Differentiators (Competitive Advantage)
 
-| TypeScript Concept | SymbolKind | Confidence | Notes |
-|-------------------|------------|------------|-------|
-| `class` declaration | `Type` | HIGH | Direct 1:1. TS classes have constructors, methods, properties like C#. |
-| `interface` declaration | `Type` | HIGH | Same as C# interface. Distinguish via metadata or naming convention in `DisplayName`. |
-| `enum` declaration | `Type` | HIGH | TS enums map directly. `const enum` is a compile-time variant but structurally identical. |
-| Enum member | `EnumMember` | HIGH | Direct 1:1. |
-| `function` declaration | `Method` | HIGH | Top-level functions are methods without a containing type. Use `Contains` edge from module. |
-| Method (class member) | `Method` | HIGH | Direct 1:1. |
-| Constructor | `Constructor` | HIGH | Direct 1:1. |
-| Property (class member) | `Property` | HIGH | Direct 1:1. Includes `readonly`, optional (`?`). |
-| Field (class member) | `Field` | HIGH | TS doesn't distinguish field vs property syntactically but `declare` fields exist. Map class fields to `Field`. |
-| Parameter | `Parameter` | HIGH | Direct 1:1. Includes destructured params (flatten to named params). |
-| Generic type parameter | `TypeParameter` | HIGH | `<T extends Foo>` maps to `GenericConstraint`. |
-| Getter/Setter | `Property` | HIGH | TS accessors map to `Property` with implicit get/set. |
-| Namespace (TS `namespace`) | `Namespace` | HIGH | Direct 1:1. |
-| Module (file-level) | `Namespace` | MEDIUM | ES modules are file-scoped. Treat each file as an implicit namespace node. |
-| `type` alias | `Delegate` | MEDIUM | Reuse `Delegate` kind (closest existing). See Gaps section for better option. |
-| Index signature | `Indexer` | HIGH | `[key: string]: T` maps to `Indexer`. |
-| Event (`on`/`emit` patterns) | `Event` | LOW | TS has no native event keyword. Only applicable for EventEmitter patterns. Likely skip. |
+Features beyond minimum that increase agent utility but are not assumed to exist.
 
-### Natural Edge Mappings
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Dependency path explanation ("why is X here?") | For a given package, return the shortest path from a direct dependency to it through the transitive chain. Analogous to `dotnet nuget why`. Useful for diagnosing unexpected deps or security advisories. | MEDIUM | BFS over PackageGraph edges. No external library needed. |
+| Snapshot-level package version diff | Given two snapshots, show which NuGet packages changed version (added, removed, bumped). Extends the existing `diff_snapshots` / `diff_solution_snapshots` pattern to the package dimension. | MEDIUM | Requires both snapshots to carry PackageGraph metadata. Aligns with ChangeTools philosophy. |
+| On-demand (lazy) reflection mode | Defer DLL reflection until `find_package_usages` is first called rather than doing it at ingestion time. Avoids slowing `ingest_solution` by reflecting 200+ packages eagerly. | MEDIUM | PackageReflectionCache alongside SnapshotStore, keyed by content hash. |
+| contentHash verification against lock file | Lock file records SHA-512 contentHash per package. Verify it against the DLL in cache before reflecting. Detects corrupted or tampered local caches. | LOW | Optional validation step. Log warning on mismatch, do not fail hard. |
 
-| TypeScript Relationship | SymbolEdgeKind | Notes |
-|------------------------|----------------|-------|
-| Class extends class | `Inherits` | Direct 1:1. |
-| Class implements interface | `Implements` | Direct 1:1. |
-| Interface extends interface | `Inherits` | Direct 1:1. |
-| Module contains declaration | `Contains` | Direct 1:1. Parent-child containment. |
-| Function returns type | `Returns` | Direct 1:1. |
-| Symbol references another | `References` | Import references, type references. |
-| Method overrides parent | `Overrides` | Direct 1:1. |
-| Function calls function | `Calls` | Requires deeper analysis; can be extracted from checker. |
+### Anti-Features (Commonly Requested, Often Problematic)
 
-### Accessibility Mapping
-
-| TypeScript | Accessibility Enum | Notes |
-|-----------|-------------------|-------|
-| `public` (default) | `Public` | TS class members default to public. |
-| `private` | `Private` | Direct 1:1. |
-| `protected` | `Protected` | Direct 1:1. |
-| `#private` (ES private) | `Private` | ES private fields map to Private. Distinguish via naming if needed. |
-| `export` (module-level) | `Public` | Exported = public API surface. |
-| Not exported | `Internal` | Non-exported module members = internal. |
-| `export default` | `Public` | Default exports are public. |
-
-### DocComment Mapping (JSDoc to DocComment)
-
-| JSDoc Tag | DocComment Field | Notes |
-|-----------|-----------------|-------|
-| `/** description */` | `Summary` | First paragraph before any tags. |
-| `@remarks` | `Remarks` | Direct 1:1. |
-| `@param name description` | `Params` dictionary | Direct 1:1. |
-| `@typeParam T description` | `TypeParams` dictionary | Direct 1:1. TSDoc standard. |
-| `@returns description` | `Returns` | Direct 1:1. |
-| `@example` | `Examples` list | Direct 1:1. |
-| `@throws` / `@exception` | `Exceptions` list | Direct 1:1. Type from `{ErrorType}` syntax. |
-| `@see` | `SeeAlso` list | Direct 1:1. |
-| `@deprecated` | No direct field | Store in `Remarks` or add to `Summary` with prefix. |
-| `@since`, `@version` | No direct field | Store in `Remarks`. |
-| `@internal` | Sets `Accessibility` to `Internal` | Semantic tag, not doc content. |
-
----
-
-## Table Stakes
-
-Features users expect. Missing = TypeScript support feels incomplete.
-
-| Feature | Why Expected | Complexity | Dependencies on Existing Model |
-|---------|--------------|------------|-------------------------------|
-| **Class extraction** (name, members, heritage) | Classes are the primary OOP building block in TS. Every doc tool handles them. | LOW | Direct mapping to `SymbolKind.Type` + `Contains` edges. No model changes. |
-| **Interface extraction** (name, members, extends) | Interfaces define API contracts. Widely used in TS codebases. | LOW | Direct mapping to `SymbolKind.Type` + `Inherits`/`Contains` edges. No model changes. |
-| **Function extraction** (standalone + methods) | Functions are fundamental. Top-level functions and class methods must be captured. | LOW | `SymbolKind.Method`. Parameters map to `ParameterInfo`. `ReturnType` field exists. No model changes. |
-| **Enum extraction** (regular + const enums) | Enums exist in TS and map directly. | LOW | `SymbolKind.Type` + `SymbolKind.EnumMember`. No model changes. |
-| **Module/export structure** | ES module exports define the public API surface. Without export tracking, you cannot determine what is public. | MEDIUM | Use `Namespace` kind for modules. `Accessibility.Public` for exported, `Internal` for non-exported. `Contains` edges for parent-child. No model changes needed. |
-| **Type alias extraction** | `type Foo = ...` is ubiquitous in TS. Must appear in symbol graph. | MEDIUM | Reuse `SymbolKind.Delegate` or add new `SymbolKind.TypeAlias`. Store RHS type string in `ReturnType` field. See Gaps section. |
-| **Generic type parameters and constraints** | `<T extends Foo>` is common. Must be captured for API comprehension. | LOW | `GenericConstraint` record exists and maps directly. No model changes. |
-| **Property and field extraction** | Class properties (including `readonly`, optional) are core members. | LOW | `SymbolKind.Property` / `SymbolKind.Field`. No model changes. |
-| **Constructor extraction** | `constructor()` must appear as a member. | LOW | `SymbolKind.Constructor`. `ParameterInfo` for params. No model changes. |
-| **Source spans** | File path + line numbers for each symbol. Required for "go to definition" workflows. | LOW | `SourceSpan` record exists and maps directly. No model changes. |
-| **JSDoc extraction** (summary, params, returns) | TSDoc/JSDoc is the standard documentation format. Without it, `DocComment` is always null. | MEDIUM | `DocComment` record maps well. TS Compiler API provides `symbol.getDocumentationComment(checker)`. Some edge cases with multiple JSDoc blocks. |
-| **Inheritance/implementation edges** | `extends` and `implements` relationships must be captured. | LOW | `SymbolEdgeKind.Inherits` and `Implements` exist. No model changes. |
-| **tsconfig.json as project entry point** | Standard TS project definition. Equivalent to `.csproj` for C#. | LOW | `ProjectName` from tsconfig path. `SourceFingerprint` from file hashes. No model changes. |
-| **Incremental ingestion** | SHA-256 file hashing already exists for C#. TS must use same pattern. | MEDIUM | Reuse existing `SourceFingerprint` / SHA-256 infrastructure. File change detection applies identically. |
-| **Deterministic snapshot output** | Same TS source must produce identical `SymbolGraphSnapshot`. Core contract. | MEDIUM | Sort nodes/edges deterministically via existing `SymbolSorter`. Same challenge as C# pipeline, same solution. |
-
----
-
-## Differentiators
-
-Features that set the tool apart from basic TS doc generators.
-
-| Feature | Value Proposition | Complexity | Dependencies on Existing Model |
-|---------|-------------------|------------|-------------------------------|
-| **Full JSDoc/TSDoc tag extraction** (all tags, not just summary) | Most tools extract only `@param`/`@returns`. Extracting `@example`, `@throws`, `@see`, `@deprecated`, `@remarks` gives agents richer context. | MEDIUM | `DocComment` already has fields for all of these. TS Compiler API `ts.getJSDocTags()` provides access. |
-| **Declaration merging resolution** | TS allows interfaces and namespaces to merge across files. Reporting the merged symbol is valuable and non-trivial. | HIGH | Single `SymbolNode` with merged members. Multiple `SourceSpan` values needed (model only supports one). |
-| **Ambient declaration support** (`.d.ts` files) | `.d.ts` files define types for JS libraries. Ingesting `.d.ts` gives agents visibility into the full type surface. | MEDIUM | Map to `NodeKind.Stub` (external reference nodes). Same pattern as NuGet stub nodes in C#. |
-| **Re-export tracking** (`export { X } from './y'`) | TS modules re-export extensively. Tracking the re-export chain shows the true public API surface. | MEDIUM | Model as `References` edges. |
-| **Overload signatures** | TS functions can have multiple overload signatures. Capturing all overloads gives agents the full API surface. | MEDIUM | Each overload becomes a separate `SymbolNode` with unique `SymbolId` per overload. |
-| **Monorepo / multi-tsconfig support** | Real-world TS projects use workspace monorepos with multiple `tsconfig.json`. | MEDIUM | Each tsconfig = one `SymbolGraphSnapshot`. Discovery logic in sidecar. |
-| **Cross-file reference edges** | Track which symbols reference which across files within a project. Enables `get_references` for TS. | MEDIUM | `SymbolEdgeKind.References` with `EdgeScope.IntraProject`. |
-
----
-
-## Anti-Features
-
-Features to explicitly NOT build in v2.0.
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Union type decomposition** | Union types are type expressions, not declarations. No stable identity, no members. Would create thousands of synthetic nodes. | Store as string in `ReturnType` or `TypeName` (e.g., `"string \| number"`). |
-| **Mapped type expansion** | Compile-time transformations. Expanded form depends on input type. | Store expression as string (e.g., `"Partial<User>"`). |
-| **Conditional type evaluation** | Polymorphic -- resolved form changes per call site. | Store expression as string. |
-| **Template literal type expansion** | Combinatorial explosion. | Store expression as string. |
-| **Type inference / hover resolution** | Requires full type checker per-expression. Expensive, non-deterministic. | Out of scope. |
-| **Cross-language edges (C# <-> TS)** | Requires semantic understanding of HTTP routes/RPCs. | Separate snapshots per language. |
-| **Runtime JavaScript analysis** | Without type info, extraction is unreliable. | Support `.ts`/`.tsx` + `.d.ts` only. |
-| **Decorator metadata extraction** | Evolving API (TC39 stage 3 vs legacy). Framework-specific. | Extract decorator names in `Remarks` or ignore. |
-| **Language-specific query tools** | Doubles tool surface. Existing 14 tools work on any `SymbolGraphSnapshot`. | Use `project` filter on existing tools. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Download packages from nuget.org at runtime | "What if the package isn't in the local cache?" | Introduces network dependency. Breaks air-gapped environments. Violates "No implicit network calls in tests" constraint. Security risk (package substitution). | Fail gracefully: "Package not in local cache — run `dotnet restore` first." |
+| Eager full transitive DLL reflection at ingestion time | Comprehensive coverage | 200+ packages on a real solution. Reflecting every DLL at `ingest_solution` time makes it take minutes. Creates massive node count. | Lazy/on-demand reflection. Reflect when `find_package_usages` is called or when agent requests enrichment explicitly. |
+| NuGet HTTP API queries for package metadata (license, README, deprecated flags) | Rich package provenance data | External HTTP in a tool designed for offline compiler-grade analysis. Adds latency, failure modes, auth complexity. | Stick to local cache data. NuGet.org metadata is out of scope for v2.5. |
+| npm/TypeScript package mapping | Symmetry with .NET | Explicitly deferred in PROJECT.md. Node module resolution is different (node_modules, package.json, barrel files). Different parsing approach entirely. | Keep deferred. Do .NET right first. |
+| Store full DLL reflection results inside SymbolGraphSnapshot | Persistent enrichment | Massively inflates snapshot size. Snapshot determinism would require DLL content hashes. Breaks "same input = identical output" if cache layout changes between runs. | Enrich stubs in-memory at ingestion; persist enriched nodes in the snapshot but not the raw reflection data. |
+| Vulnerability scanning / CVE integration | Package version awareness creates opportunity | Different domain entirely — SCA tooling, not a symbol graph server. NVD/OSV lookups, license checks. | PackageGraph data makes it easy for an agent to call a separate SCA tool. Not DocAgent's responsibility. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[tsconfig.json discovery]
-    |
-    v
-[TypeScript Compiler API program creation]
-    |
-    +---> [Symbol extraction: classes, interfaces, functions, enums]
-    |         |
-    |         +---> [Member extraction: methods, properties, fields, constructors]
-    |         |
-    |         +---> [Inheritance/implementation edge extraction]
-    |         |
-    |         +---> [Generic constraint extraction]
-    |
-    +---> [Module/export structure extraction]
-    |         |
-    |         +---> [Accessibility mapping (exported = public)]
-    |
-    +---> [JSDoc/TSDoc extraction]
-    |
-    +---> [Source span extraction]
-    |
-    +---> [SymbolId generation] (must be stable, deterministic)
-    |
-    v
-[SymbolGraphSnapshot assembly]
-    |
-    +---> [Incremental ingestion] (reuse SHA-256 file hashing)
-    |
-    +---> [Deterministic serialization] (reuse MessagePack pipeline)
-    |
-    v
-[All 14 existing MCP tools work against TS snapshots]
+packages.lock.json parsing (or project.assets.json fallback)
+    └──provides──> PackageGraph (id, version, direct/transitive, dep links, assembly paths)
+                       └──required by──> get_dependencies MCP tool
+                       └──required by──> dependency path explanation
+                       └──required by──> snapshot-level package version diff
+
+DLL path resolution (NuGet cache layout + TFM best-match)
+    └──required by──> Roslyn MetadataReference reflection
+                           └──provides──> public API surface per assembly
+                                              └──required by──> stub node enrichment
+                                                                     └──required by──> find_package_usages MCP tool
+
+PackageOrigin field on SymbolNode
+    └──required by──> find_package_usages (fast package→stubs lookup)
+    └──populated by──> stub node enrichment
+
+Existing stub nodes (NodeKind.Stub, EdgeScope.External)
+    └──already built, provide attachment points for──> stub enrichment
+
+Existing PathAllowlist pattern
+    └──replicated in──> PackageTools (new tool class)
 ```
 
----
+### Dependency Notes
 
-## Gaps Requiring Model Attention
-
-### Gap 1: Type Aliases Have No SymbolKind
-
-**Problem:** TypeScript `type Foo = string | number` is extremely common but has no natural `SymbolKind`. The closest existing kind is `Delegate`, which is semantically misleading.
-
-**Recommendation:** Add `SymbolKind.TypeAlias = 14`. One-line enum addition. All existing C# symbols remain unaffected. The `kindFilter` parameter on `search_symbols` already accepts string values, so "TypeAlias" works immediately.
-
-### Gap 2: Multiple Source Spans (Declaration Merging)
-
-**Problem:** TS interfaces can be declared across multiple files. Current `SymbolNode.Span` is a single `SourceSpan?`.
-
-**Recommendation:** Use primary declaration site for `Span` in v2.0. Declaration merging is a differentiator for later.
-
-### Gap 3: `export` as Accessibility
-
-**Recommendation:** Map `export` to `Accessibility.Public` and non-export to `Accessibility.Internal`.
-
-### Gap 4: Function Overloads
-
-**Recommendation:** One `SymbolNode` per overload with suffix in SymbolId (e.g., `proj:myFunc#0`, `proj:myFunc#1`). Defer to v2.1.
-
-### Gap 5: No Modifier Flags
-
-**Recommendation:** Defer `abstract`, `static`, `readonly` flags. Not essential for v2.0 symbol navigation.
+- `get_dependencies` can ship before DLL reflection is complete. PackageGraph is built from lock file alone, with no reflection needed.
+- Stub enrichment requires DLL resolution first. You cannot call `MetadataReference.CreateFromFile` without the DLL path.
+- `find_package_usages` requires enriched stubs with PackageOrigin. Without PackageOrigin, matching stubs to packages requires fragile assembly-name string matching.
+- Lock file is optional at repo level. `packages.lock.json` is generated only when `<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>` is set. Fallback to `project.assets.json` (always present after restore in `obj/`) is required.
+- TFM best-match is a prerequisite for reliable DLL resolution. Without it, packages targeting only `netstandard2.0` will not resolve on net10.0 projects.
 
 ---
 
-## MVP Recommendation
+## MVP Definition
 
-### Build in v2.0
+### Launch With (v2.5)
 
-1. Symbol extraction for all declaration types (classes, interfaces, functions, enums, type aliases, namespaces, constructors, methods, properties, fields)
-2. JSDoc extraction (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
-3. Inheritance and implementation edges (`extends`, `implements`)
-4. Module export structure (export = public, non-export = internal)
-5. Source spans (file path + line range for every symbol)
-6. Stable SymbolId generation
-7. tsconfig.json as entry point
-8. Incremental ingestion (reuse SHA-256 file hashing)
-9. `ingest_typescript` MCP tool
-10. Add `SymbolKind.TypeAlias` (one enum value)
+All of the following are in scope per PROJECT.md.
 
-### Defer to v2.1+
+- [ ] Parse `packages.lock.json` — direct + transitive dep tree, TFM-keyed — foundation for everything else
+- [ ] Fallback to `project.assets.json` when lock file absent — required for repos that do not opt in to lock files
+- [ ] `PackageGraph` domain type in DocAgent.Core — structured graph needed by both tools
+- [ ] DLL path resolution from NuGet global packages cache with TFM best-match — required before reflection
+- [ ] Roslyn MetadataReference reflection to extract public API surface per package — stub enrichment source
+- [ ] `PackageOrigin` field on SymbolNode appended for MessagePack compat — fast package-to-symbol lookup
+- [ ] Stub node enrichment pass (NodeKind.Stub nodes upgraded with real type info) — core value prop
+- [ ] `get_dependencies` MCP tool — query the dependency graph
+- [ ] `find_package_usages` MCP tool — cross-reference package exports with source references
+- [ ] PathAllowlist security on PackageTools — consistent security posture
 
-- Declaration merging (multi-span symbols)
-- `.d.ts` / ambient declaration ingestion (stub nodes)
-- Re-export chain tracking
-- Monorepo multi-tsconfig discovery
-- Function overload signatures
-- Modifier flags (`abstract`, `static`, `readonly`)
-- Decorator extraction
+### Add After Validation (v2.5.x)
+
+- [ ] Dependency path explanation ("why is X a dep") — add when agent feedback shows need to diagnose transitive dep chains
+- [ ] Snapshot-level package version diff in `diff_solution_snapshots` — add when agents use change tracking across releases
+
+### Future Consideration (v3+)
+
+- [ ] npm/TypeScript package mapping — deferred per PROJECT.md; different parsing approach
+- [ ] PackageReflectionCache as persistent sidecar — only if reflection performance becomes a problem at scale
+- [ ] Doc coverage metrics for package-provided types — complexity high, user value unclear
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Lock file parsing + PackageGraph type | HIGH | LOW | P1 |
+| project.assets.json fallback | HIGH | LOW | P1 |
+| DLL path resolution + TFM best-match | HIGH | LOW-MEDIUM | P1 |
+| Roslyn MetadataReference reflection | HIGH | MEDIUM | P1 |
+| Stub node enrichment | HIGH | MEDIUM | P1 |
+| PackageOrigin field on SymbolNode | MEDIUM | LOW | P1 |
+| get_dependencies MCP tool | HIGH | LOW | P1 |
+| find_package_usages MCP tool | HIGH | MEDIUM | P1 |
+| PathAllowlist on PackageTools | HIGH | LOW | P1 |
+| Dependency path explanation | MEDIUM | MEDIUM | P2 |
+| Package version diff in snapshots | MEDIUM | MEDIUM | P2 |
+| On-demand (lazy) reflection mode | MEDIUM | MEDIUM | P2 |
+| contentHash verification vs DLL | LOW | LOW | P2 |
+
+**Priority key:**
+- P1: Must have for v2.5 launch
+- P2: Should have, add when possible
+- P3: Nice to have, future consideration
+
+---
+
+## Existing System Integration Points
+
+Constraints and attach points from the already-built system that new features must respect.
+
+| Existing Mechanism | How NuGet Mapping Attaches |
+|--------------------|---------------------------|
+| `NodeKind.Stub = 1` on SymbolNode | Stub nodes are already synthesized during solution ingestion for external type references via `SolutionIngestionService.MaybeAddStubNode`. Enrichment upgrades their payload in-place while preserving SymbolId. |
+| `EdgeScope.External = 2` on SymbolEdge | External edges already connect source nodes to stub nodes. `find_package_usages` traverses these edges to find all references to a package's exported types. |
+| `SymbolGraphSnapshot` (flat node + edge lists) | PackageGraph is NOT embedded in the snapshot. It lives alongside as a separate metadata file. Avoids inflating snapshot size and breaking determinism. |
+| `SnapshotStore` (content-addressed, manifest.json) | PackageGraph stored as a companion file alongside each snapshot, keyed by the same content hash. |
+| Enum append-only rule (MessagePack compat, from project MEMORY) | `PackageOrigin` field on SymbolNode must be appended at the end of the record. Any new enum values must also be appended. |
+| BM25 stub filtering | BM25SearchIndex already filters NodeKind.Stub from search results. Enriched stubs remain filtered from search — agents query packages via `get_dependencies`, not free-text search. |
+| PathAllowlist opaque not_found pattern | PackageTools must replicate the established pattern: reject out-of-allowlist paths with not_found, no error detail leakage. |
+| Rate limiting (separate query/ingestion buckets) | `get_dependencies` and `find_package_usages` are query tools — use query bucket. Reflection during ingestion uses ingestion bucket. |
+| Primitive type filter in stub synthesis | `SolutionIngestionService.s_primitiveTypeNames` already prevents stub nodes for System.Object etc. Enrichment should skip the same set. |
 
 ---
 
 ## Sources
 
-- Existing codebase: `src/DocAgent.Core/Symbols.cs`, `src/DocAgent.Core/DiffTypes.cs` -- HIGH confidence (direct inspection)
-- `.planning/PROJECT.md` -- HIGH confidence (project requirements and scope)
-- [TypeScript Compiler API Wiki](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) -- HIGH confidence
-- [TSDoc Standard](https://tsdoc.org/) -- HIGH confidence
-- [TypeScript Declaration Merging](https://www.typescriptlang.org/docs/handbook/declaration-merging.html) -- HIGH confidence
-- [TypeDoc GitHub](https://github.com/TypeStrong/typedoc) -- MEDIUM confidence (reference for TS doc extraction)
+- [NuGet lock file implementation spec (NuGet/Home Wiki)](https://github.com/NuGet/Home/wiki/Repeatable-build-using-lock-file-implementation)
+- [Enable repeatable package restores using a lock file (.NET Blog)](https://devblogs.microsoft.com/dotnet/enable-repeatable-package-restores-using-a-lock-file/)
+- [Managing NuGet global packages and cache folders (Microsoft Learn)](https://learn.microsoft.com/en-us/nuget/consume-packages/managing-the-global-packages-and-cache-folders)
+- [MetadataReference Class — Roslyn (Microsoft Learn)](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.metadatareference?view=roslyn-dotnet-4.7.0)
+- [Getting all INamedTypeSymbols in a Roslyn compilation (dotnet/roslyn issue #6138)](https://github.com/dotnet/roslyn/issues/6138)
+- [dotnet nuget why command (Microsoft Learn)](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-nuget-why)
+- [NuGet Package Dependency Resolution (Microsoft Learn)](https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution)
+- Existing codebase: `DocAgent.Core/Symbols.cs`, `SolutionTypes.cs`, `SolutionIngestionService.cs` (stub node synthesis pattern, NodeKind/EdgeScope design)
+- `.planning/PROJECT.md` — v2.5 target feature list and out-of-scope constraints
 
 ---
-*Feature research for: DocAgentFramework v2.0 TypeScript Language Support*
-*Researched: 2026-03-08*
+*Feature research for: DocAgentFramework v2.5 NuGet Package Mapping milestone*
+*Researched: 2026-03-26*

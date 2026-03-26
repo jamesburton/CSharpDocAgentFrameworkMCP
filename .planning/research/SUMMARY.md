@@ -1,169 +1,215 @@
 # Project Research Summary
 
-**Project:** DocAgentFramework v2.0 -- TypeScript Language Support
-**Domain:** Polyglot symbol extraction and documentation analysis via MCP server
-**Researched:** 2026-03-08
+**Project:** DocAgentFramework v2.5 — NuGet Package Mapping
+**Domain:** .NET symbol graph server — additive milestone adding NuGet dependency graph + DLL reflection capabilities
+**Researched:** 2026-03-26
 **Confidence:** HIGH
 
 ## Executive Summary
 
-DocAgentFramework v2.0 adds TypeScript symbol extraction to an existing, production-stable C# symbol graph and MCP server. The recommended approach is a Node.js sidecar process that uses the TypeScript Compiler API (`ts.createProgram`, `TypeChecker`) to extract symbols, communicating with the C# host via NDJSON over stdin/stdout. This is the same IPC pattern the MCP server already uses with its clients. The existing `SymbolNode`/`SymbolEdge`/`SymbolGraphSnapshot` model maps naturally to TypeScript constructs -- 10 of 14 `SymbolKind` values have direct TypeScript equivalents, and all 7 `SymbolEdgeKind` values apply without modification. No existing MCP tools, indexes, or storage require changes; TypeScript snapshots flow through the same `SnapshotStore` and `BM25SearchIndex` as C# snapshots.
+DocAgentFramework v2.5 adds a lateral capability branch to the existing pipeline: after a solution is ingested, agents can query the NuGet dependency graph and cross-reference package-exported types against source code references. The core mechanisms are well-understood and reuse what is already in the project — `NuGet.ProjectModel` and `NuGet.Configuration` are the only new packages needed, and DLL reflection reuses the Roslyn `MetadataReference.CreateFromFile` API already present at 4.14.0. The recommended architecture keeps `PackageGraph` separate from `SymbolGraphSnapshot`, runs stub enrichment transparently inside `SolutionIngestionService`, and exposes two new MCP tools (`get_dependencies`, `find_package_usages`) that follow the established PathAllowlist and response-format patterns exactly.
 
-The integration surface is deliberately narrow: one new NuGet package (`Aspire.Hosting.JavaScript` 13.1.2), one new Node.js project with a single runtime dependency (`typescript ~5.9`), one new C# service class (`TypeScriptIngestionService`), and one new MCP tool (`ingest_typescript`). The sidecar uses cold-start process isolation (spawn per request, OS reclaims memory on exit), avoiding the memory management complexity of a long-lived TypeScript compiler process. This mirrors proven patterns already in the codebase.
+The primary risk cluster is in the dependency-source selection and DLL resolution layers. `packages.lock.json` is opt-in and absent from most repos including this one; `project.assets.json` (always present after restore) must be the primary source. NuGet cache path resolution requires `SettingsUtility.GetGlobalPackagesFolder()` rather than a hardcoded path to survive CI environments and custom configurations. DLL TFM selection requires a best-fit compatibility walk because many packages ship only `netstandard2.0` and have no `net10.0` subfolder. All three of these are correctness requirements that produce silent empty results when wrong — not clear errors.
 
-The primary risks are: (1) SymbolId instability -- TypeScript has no standard equivalent to C#'s `GetDocumentationCommentId()`, so a deterministic ID scheme must be designed and locked before any extraction code is written; (2) `.d.ts` phantom symbol pollution -- `ts.Program.getSourceFiles()` returns everything the compiler loaded, including all `node_modules` declarations, which must be filtered to project source files only; and (3) TypeScript 7's Go rewrite, which will eventually replace the JavaScript Compiler API. Pinning to TS 5.9.x and abstracting compiler interaction behind an interface limits the blast radius. All three risks are well-understood and have concrete mitigation strategies.
+The second risk cluster is memory management and matching correctness. Loading many DLLs via `MetadataReference.CreateFromFile` without an `AssemblyMetadata` cache produces a documented 250MB-per-call native heap growth in long-running server processes. Stub-to-reflected-type matching on display-string FQNs (e.g., `IEnumerable<T>`) produces zero matches for every generic type; the correct join key is `(ContainingAssemblyName, MetadataName)` using the CLR backtick format (`IEnumerable\`1`). Both must be addressed in the initial design, not retrofitted. The component build order is deterministic, parallel development opportunities are clear, and the existing test infrastructure (PipelineOverride seams, pure-static parser pattern, warning accumulation) provides solid attachment points for every new component.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing C# stack (Roslyn, Lucene.Net, MessagePack, MCP SDK, Aspire, OpenTelemetry) is unchanged. New additions are minimal and well-verified.
+The existing stack (Roslyn 4.14.0, Lucene.Net 4.8-beta, MessagePack 3.1.4, MCP SDK 1.0.0, Aspire 13.1.2) requires only two new NuGet packages. `NuGet.ProjectModel 7.3.0` provides `PackagesLockFileFormat.Read()` — the only correct parser for a format with three schema versions (V1/V2/V3). `NuGet.Configuration 7.3.0` provides `SettingsUtility.GetGlobalPackagesFolder()` for cross-platform cache path resolution that respects the full four-level override chain. Both packages must be pinned at matching versions and added only to `DocAgent.Ingestion.csproj`. DLL reflection uses `AssemblyMetadata.CreateFromFile` (IDisposable) from the existing Roslyn 4.14.0 reference — no additional PE reader is needed.
 
-**Core technologies:**
-- **Node.js 24.x LTS** (Krypton): Runtime for TypeScript sidecar -- Active LTS through Oct 2026, first-class Aspire orchestration via `AddNodeApp()`
-- **TypeScript ~5.9.x**: Compiler API for symbol extraction -- stable API surface since TS 2.x, pinned to avoid TS 6.0 breaking changes
-- **Aspire.Hosting.JavaScript 13.1.2**: Aspire integration for Node.js lifecycle management -- replaces deprecated `Aspire.Hosting.NodeJs`
-- **NDJSON over stdin/stdout**: IPC protocol -- zero dependencies, matches existing MCP stdio pattern, proven in codebase
-- **esbuild ^0.25**: Bundle sidecar to single `dist/index.js` -- sub-second builds, zero config
-- **vitest ^3**: Test runner for sidecar -- fast, native ESM+TS, standard for Node.js in 2026
+**Core technologies (new additions only):**
+- `NuGet.ProjectModel 7.3.0`: `packages.lock.json` parsing — first-party parser, handles all three format versions including v2 (CPM mode used by this repo)
+- `NuGet.Configuration 7.3.0`: NuGet cache path resolution — handles `NUGET_PACKAGES` env var, `nuget.config` overrides, CI environments; must version-match ProjectModel
+- `AssemblyMetadata.CreateFromFile` (Roslyn 4.14.0, existing): DLL reflection — IDisposable pattern prevents native heap leak; same API surface as existing `RoslynSymbolGraphBuilder`
+- `Microsoft.CodeAnalysis.CSharp` (4.14.0, existing): Must be added as direct reference to `DocAgent.Ingestion.csproj` — currently only in McpServer
 
-**Critical version constraint:** Do NOT use `Aspire.Hosting.NodeJs` (deprecated). Do NOT use `ts-morph` (unnecessary abstraction). Do NOT add HTTP/gRPC frameworks (stdin/stdout is sufficient).
+**What NOT to add:** `Mono.Cecil`, `dnlib`, `System.Reflection.MetadataLoadContext` (redundant with Roslyn), `NuGet.Protocol` direct reference (already a transitive dep), `NuGet.Commands` / `NuGet.PackageManagement` (wrong abstraction level).
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Symbol extraction for all declaration types (classes, interfaces, functions, enums, type aliases, constructors, methods, properties, fields)
-- JSDoc/TSDoc extraction (summary, `@param`, `@returns`, `@example`, `@throws`, `@see`, `@remarks`)
-- Inheritance and implementation edges (`extends`, `implements`)
-- Module export structure (export = public, non-export = internal)
-- Source spans (file path + line range for every symbol)
-- Stable, deterministic SymbolId generation
-- tsconfig.json as project entry point
-- Incremental ingestion via SHA-256 file hashing (reuse existing infrastructure)
-- `ingest_typescript` MCP tool
-- Deterministic snapshot output (same input = identical output)
+All v2.5 features are P1 (must-ship). The dependency source chain (`project.assets.json` primary, `packages.lock.json` supplement) is the foundation. `PackageGraph` is the core domain type. The two MCP tools are the user-visible deliverables. Stub node enrichment (`NodeKind.Enriched`) is the mechanism that makes `find_package_usages` produce meaningful results.
 
-**Should have (differentiators):**
-- Full JSDoc/TSDoc tag extraction (beyond just summary)
-- Ambient `.d.ts` declaration support (stub nodes)
-- Re-export tracking (`export { X } from './y'`)
-- Overload signature capture
-- Monorepo multi-tsconfig discovery
+**Must have (table stakes — v2.5):**
+- `project.assets.json` as primary dependency source with `packages.lock.json` as optional supplement — most repos do not opt in to lock files; `project.assets.json` is always present after restore
+- `PackageGraph` domain type in `DocAgent.Core` — structured, MessagePack-compatible dependency graph; NOT embedded in `SymbolGraphSnapshot`
+- DLL path resolution from NuGet global cache with TFM best-fit walk — required for any package predating .NET 10 (affects nearly every package)
+- Roslyn `AssemblyMetadata` reflection to extract public API surface — produces type metadata for stub enrichment; cached by `(packageId, version, tfm)`
+- `PackageOrigin` field on `SymbolNode` (appended, MessagePack compat) — enables fast package-to-symbol grouping in `find_package_usages`
+- Stub node enrichment pass (`NodeKind.Stub` → `NodeKind.Enriched`) — upgrades bare stubs with real type info; join key is `(AssemblyName, MetadataName)` tuples
+- `get_dependencies` MCP tool — query the dependency graph; PathAllowlist on tool parameters
+- `find_package_usages` MCP tool — cross-reference package exports with source references; requires enriched stubs with `PackageOrigin`
+- DLL path security validation — every derived DLL path validated against NuGet cache root before `CreateFromFile`
+- Graceful diagnostic when `project.assets.json` absent — structured message, not exception; suggest `dotnet restore`
 
-**Defer (v2.1+):**
-- Declaration merging (multi-span symbols)
-- Function overload signatures
-- Modifier flags (`abstract`, `static`, `readonly`)
-- Decorator extraction
-- Cross-language edges (C# <-> TS)
-- Union/intersection/mapped/conditional type decomposition
+**Should have (v2.5.x after validation):**
+- Dependency path explanation ("why is X a transitive dep") — BFS over `PackageGraph` edges; useful for diagnosing security advisories
+- Snapshot-level package version diff in `diff_solution_snapshots` — extends existing ChangeTools pattern to the package dimension
+
+**Defer (v3+):**
+- npm/TypeScript package mapping — different parsing approach entirely; deferred per PROJECT.md
+- `PackageReflectionCache` as persistent sidecar — only if reflection performance is a measured problem at scale
+
+**Anti-features (do not build):**
+- Downloading packages from nuget.org at runtime — violates "no implicit network calls" constraint; breaks air-gapped environments
+- Eager full transitive DLL reflection at ingestion time — reflecting 200+ packages per solution makes ingestion take minutes
+- `enrich_stubs` or `reflect_packages` as user-facing MCP tools — enrichment is an internal optimization pass, not a user operation
 
 ### Architecture Approach
 
-The architecture follows a sidecar pattern: C# spawns a Node.js child process per ingestion request, sends an NDJSON request on stdin with the tsconfig.json path, and receives a SymbolGraphSnapshot-shaped JSON response on stdout. The C# side deserializes into existing domain types, applies `SymbolSorter` for deterministic ordering, and feeds the snapshot into `SnapshotStore` and `BM25SearchIndex`. All 14 existing MCP tools work against TypeScript snapshots without modification. The only existing files that change are `AppHost/Program.cs` (3-5 lines), `ServiceCollectionExtensions.cs` (2-3 lines), `DocAgentServerOptions.cs` (1-2 lines), and `Directory.Packages.props` (1 line).
+v2.5 runs as a parallel branch alongside the existing pipeline rather than extending it. `SolutionIngestionService` (after the per-project stub synthesis pass) drives `LockFileParser` → `NuGetCacheReflector` → `StubNodeEnricher` conditionally when dependency sources are found. `PackageGraph` flows out via a new `PackageGraphs` field on the existing `SolutionIngestionResult` structure, is cached in a new `PackageQueryService`, and is never embedded in `SymbolGraphSnapshot`. The only Indexing layer change is a two-line filter update in `BM25SearchIndex` to include `NodeKind.Enriched`.
 
-**Major components:**
-1. **ts-symbol-extractor** (NEW Node.js project) -- reads tsconfig.json, walks TS Compiler API, emits SymbolGraphSnapshot JSON on stdout
-2. **TypeScriptIngestionService** (NEW C# class) -- spawns sidecar, sends request, deserializes response, feeds into SnapshotStore + SearchIndex
-3. **ingest_typescript MCP tool** (NEW C# tool handler) -- validates path via PathAllowlist, delegates to TypeScriptIngestionService
-4. **AppHost wiring** (MODIFIED) -- registers Node.js sidecar as Aspire resource via `AddNodeApp()`
+**Major components (all new unless noted):**
+1. `PackageTypes.cs` in `DocAgent.Core` — `PackageEntry`, `PackageGraph`, `AssemblyMapping` pure domain types; no IO; unblocks everything else
+2. `LockFileParser.cs` in `DocAgent.Ingestion` — pure static parser following existing `XmlDocParser` pattern; primary source is `project.assets.json` resolved versions
+3. `NuGetCacheReflector.cs` in `DocAgent.Ingestion` — DLL location + `AssemblyMetadata` reflection with TFM best-fit walk and bounded cache; critical path component
+4. `StubNodeEnricher.cs` in `DocAgent.McpServer/Ingestion` — matches stubs to reflected types on `(AssemblyName, MetadataName)` tuples; replaces `NodeKind.Stub` with `NodeKind.Enriched`
+5. `PackageQueryService.cs` in `DocAgent.McpServer` — `ConcurrentDictionary` cache of `PackageGraph` per snapshot hash; populated by ingestion, queried by tools
+6. `PackageTools.cs` in `DocAgent.McpServer/Tools` — `get_dependencies` and `find_package_usages`; PathAllowlist + DLL path validation
+7. `BM25SearchIndex.cs` (MODIFIED) — two-line filter change to include `NodeKind.Enriched` alongside `NodeKind.Real`
+8. `SolutionIngestionService.cs` (MODIFIED) — call enrichment pipeline post-stub-synthesis; add `PipelineOverride` seams for testability
 
-**Key patterns to follow (already established in codebase):**
-- `PipelineOverride` seam for testing without Node.js
-- `PathAllowlist` validation before any pipeline work
-- Deterministic output via `SymbolSorter`
-- Content hash computed by `SnapshotStore`, not the extractor
-- Per-path semaphore serialization for concurrent ingestion
+**Key patterns to follow:**
+- Pure static parsers (no DI, no IO abstractions) — matches `XmlDocParser`; testable with fixture files, no mocking needed
+- Soft failure with `List<string> warnings` accumulator — missing DLL = warning, not exception; matches existing `SolutionIngestionService` pattern
+- `PipelineOverride` seams for enrichment — matches existing MSBuild-free test isolation pattern
+- `AssemblyMetadata` (IDisposable) + cache keyed on `(packageId, version, tfm)` capped at ~200 entries — prevents native heap growth
+- `NodeKind.Enriched = 2` appended to enum — preserves MessagePack backward compatibility per project memory constraint
 
 ### Critical Pitfalls
 
-1. **SymbolId instability** -- TypeScript has no `GetDocumentationCommentId()` equivalent. Design a deterministic scheme from source-stable properties (file path + AST declaration chain + parameter types). Golden-file test required. Recovery cost is HIGH if wrong.
-2. **`.d.ts` phantom symbol pollution** -- `getSourceFiles()` includes all `node_modules` declarations. Filter to `getRootFileNames()` + check `isDeclarationFile`. Without this, snapshots bloat 10-100x.
-3. **stdout corruption** -- Any `console.log()` or library warning on stdout breaks NDJSON deserialization. Route ALL logging to stderr, use `--no-warnings` flag.
-4. **Module-to-namespace mapping** -- TypeScript modules (files) must map to `SymbolKind.Namespace` using relative file paths. Wrong choice here restructures the entire graph; recovery cost is HIGH.
-5. **Path alias resolution** -- `baseUrl`/`paths` in tsconfig.json create import aliases. Always use `sourceFile.fileName` (resolved absolute path), never import specifiers. Otherwise: duplicate or missing symbols.
+1. **`packages.lock.json` absent from most repos including this one** — use `project.assets.json` as the primary dependency source; `packages.lock.json` is opt-in via `RestorePackagesWithLockFile=true` which this repo does not set. Return a structured diagnostic when neither file exists rather than silently returning empty data.
+
+2. **TFM key in `packages.lock.json` is `.NETCoreApp,Version=v10.0`, not `net10.0`** — use `NuGetFramework.Parse().DotNetFrameworkName` to normalize before dictionary lookup; hand-crafted test fixtures will pass while real lock files from `dotnet restore` fail silently.
+
+3. **DLL TFM best-fit walk required — direct TFM substitution breaks for `netstandard2.0`-only packages** — enumerate `ref/` then `lib/` subfolders, filter by `DefaultCompatibilityProvider.IsCompatible`, take the highest compatible match. Affects `YamlDotNet`, `MessagePack`, and nearly every package predating .NET 10.
+
+4. **`MetadataReference.CreateFromFile` leaks 250MB native heap per ingestion cycle** — use `AssemblyMetadata.CreateFromFile` (IDisposable) with a bounded cache keyed on `(packageId, version, tfm)`; this is an architectural decision that is hard to add retrospectively. Documented in dotnet/runtime issue #13301.
+
+5. **Stub-to-reflected-type join on display-string FQN produces zero matches for all generic types** — join on `(ContainingAssemblyName, MetadataName)` tuples using `ITypeSymbol.MetadataName` (CLR format: `IEnumerable\`1`) not `ToDisplayString()` (`IEnumerable<T>`). The existing `SolutionIngestionService.MaybeAddStubNode` at line 544–571 uses `ToDisplayString()` for FQN — wrong key for enrichment.
+
+6. **DLL paths derived from lock/assets files bypass the existing PathAllowlist** — validate every derived DLL path is under `GetGlobalPackagesFolder()` result before calling `CreateFromFile`; also filter reflected types to `Type.IsPublic` / `Type.IsNestedPublic` only to prevent internal type leakage.
+
+7. **Assembly version conflicts when loading all transitive DLLs independently** — derive DLL paths exclusively from `project.assets.json` resolved versions (not the raw package list), to load exactly one DLL per unique assembly name per project.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+The component build order is deterministic from dependency analysis. Steps 2 and 3 can develop in parallel after Step 1. The critical path runs through `NuGetCacheReflector` (most complex new component). Research flags below identify where pitfall density is highest and verification effort is non-trivial.
 
-### Phase 1: Sidecar Scaffold and IPC Protocol
-**Rationale:** The Node.js project structure, NDJSON protocol, and C# process spawning are prerequisites for everything else. This phase establishes the communication contract and validates Node.js availability.
-**Delivers:** Working Node.js project that accepts an NDJSON request on stdin and returns a stub response on stdout; C# `TypeScriptIngestionService` that spawns the process and deserializes the response; startup validation for Node.js; PROTOCOL.md contract document.
-**Addresses:** tsconfig.json as entry point, NDJSON protocol, sidecar lifecycle
-**Avoids:** stdout pollution (establish stderr-only logging from first line of code), Node.js not found (startup validation)
+### Phase 1: Domain Types + Dependency Source Parsing
 
-### Phase 2: Core Symbol Extraction
-**Rationale:** This is the critical path and highest-risk phase. SymbolId design, SymbolKind mapping, source file filtering, and path normalization must all be correct here. Every downstream consumer depends on these decisions.
-**Delivers:** Complete symbol extraction for all declaration types; stable SymbolId generation; module-to-namespace mapping; JSDoc/TSDoc extraction; source spans; deterministic output.
-**Addresses:** All table-stakes features except incremental ingestion and MCP tool
-**Avoids:** SymbolId instability (golden-file tests), `.d.ts` phantom symbols (source file filtering), path alias bugs (resolved path normalization), SymbolKind mapping gaps (mapping table locked before coding)
+**Rationale:** `PackageTypes.cs` in `DocAgent.Core` unblocks every other component. Dependency source selection (primary: `project.assets.json`, secondary: `packages.lock.json`) is the most pitfall-dense area and must be established before any other parsing logic is written. Getting the TFM key format wrong here causes all downstream data to be silently empty.
 
-### Phase 3: MCP Integration and Incremental Ingestion
-**Rationale:** With extraction working, wire it into the MCP tool surface and add incremental ingestion for real-world usability.
-**Delivers:** `ingest_typescript` MCP tool; incremental ingestion via SHA-256 file hashing; Aspire AppHost wiring; full end-to-end pipeline from `ingest_typescript` call through all 14 query tools.
-**Addresses:** `ingest_typescript` tool, incremental ingestion, Aspire integration
-**Avoids:** Sidecar lifecycle issues (cold-start with timeout + CancellationToken), PathAllowlist bypass (validate tsconfig.json path before spawning)
+**Delivers:** `PackageEntry`, `PackageGraph`, `AssemblyMapping` types; `NodeKind.Enriched = 2` enum value in `Symbols.cs`; `LockFileParser` (pure static, tested with real `project.assets.json` output from this repo's `obj/` directory); `packages.lock.json` secondary parser with v2 CPM format support; graceful diagnostic when neither file is found.
 
-### Phase 4: Verification and Hardening
-**Rationale:** Determinism, search tokenization, cross-tool validation, and performance profiling require the full pipeline to be functional. This phase catches "looks done but isn't" issues.
-**Delivers:** Golden-file determinism tests; BM25 camelCase tokenization validation; diff/change review tool verification with TS snapshots; performance profiling with large (500+ file) projects; security validation (PathAllowlist, no absolute paths in SymbolNode.Span).
-**Addresses:** Deterministic snapshots, search quality, security hardening
-**Avoids:** IPC serialization bottlenecks on large projects, false diff results, search tokenization mismatches
+**Addresses features:** Lock file parsing, `project.assets.json` fallback, `PackageGraph` domain type, `PackageOrigin` field scaffold.
+
+**Avoids pitfalls:** `packages.lock.json` absent (#1), TFM key format (#2), missing assets file diagnostic.
+
+### Phase 2: DLL Path Resolution + AssemblyMetadata Cache
+
+**Rationale:** DLL resolution and the `AssemblyMetadata` cache must be designed as a unit — the cache architecture (keyed on `(packageId, version, tfm)`, bounded to ~200 entries, IDisposable disposal on eviction) is an architectural decision that is hard to retrofit. TFM best-fit walk and NuGet cache root resolution via `SettingsUtility` are correctness prerequisites. Security validation of derived DLL paths must be wired here before any DLL is ever loaded.
+
+**Delivers:** `NuGetCacheReflector.cs` with TFM best-fit walk (enumerate `ref/` then `lib/` subfolders, filter by compatibility), `AssemblyMetadata` bounded cache, NuGet cache root resolution via `NuGet.Configuration.SettingsUtility`, DLL path security validator (`IsUnder(GetGlobalPackagesFolder())` check), `NuGetCachePath` config option on `DocAgentServerOptions`. `Microsoft.CodeAnalysis.CSharp` added to `DocAgent.Ingestion.csproj`.
+
+**Uses:** `NuGet.ProjectModel 7.3.0`, `NuGet.Configuration 7.3.0` (both added to `Directory.Packages.props` and `DocAgent.Ingestion.csproj`), Roslyn 4.14.0 `AssemblyMetadata`.
+
+**Addresses features:** DLL path resolution, TFM best-match, DLL reflection public API extraction.
+
+**Avoids pitfalls:** NuGet cache path hard-coding (#3), DLL TFM best-fit (#4), MetadataReference memory leak (#5), DLL path security bypass (#6), assembly version conflicts (#7).
+
+### Phase 3: Stub Enrichment + BM25 Index Update
+
+**Rationale:** With reflected symbols available from Phase 2, stub node enrichment can be built and unit-tested in isolation before pipeline integration. The `(AssemblyName, MetadataName)` join key and the generic type matching issue are best validated against real stub nodes produced by the existing `SolutionIngestionService` — not fabricated fixtures — before any pipeline wiring.
+
+**Delivers:** `StubNodeEnricher.cs` with pre-built `Dictionary<(string assembly, string metadataName), SymbolNode>` matching index; `NodeKind.Enriched` nodes replacing matched stubs with real type info; `PackageOrigin` field populated on enriched nodes; one-line `BM25SearchIndex.cs` filter update to include `NodeKind.Enriched`. Development/test packages filtered out (by `PrivateAssets="All"` flag from assets file).
+
+**Addresses features:** Stub node enrichment, `PackageOrigin` field on `SymbolNode`.
+
+**Avoids pitfalls:** Generic type FQN mismatch (#5), O(n×m) enrichment scan without index (performance trap), dev-dependency package reflection inflation.
+
+### Phase 4: Pipeline Integration + Service Wiring
+
+**Rationale:** Once all components are independently tested, integrate into `SolutionIngestionService`. The `PipelineOverride` seams allow the test suite to remain free of real NuGet cache access. `SolutionIngestionResult` gets its `PackageGraphs` field. `PackageQueryService` is registered and populated via DI.
+
+**Delivers:** Modified `SolutionIngestionService.cs` (enrichment pipeline called post-stub-synthesis, with `LockFileParserOverride` and `ReflectorOverride` seams); modified `SolutionIngestionResult.cs` (`PackageGraphs: Dictionary<string, PackageGraph>` field); `PackageQueryService.cs` (in-memory `ConcurrentDictionary` cache, `StorePackageGraphs` / `GetPackageGraphs`); DI registration in `ServiceCollectionExtensions.cs`.
+
+**Implements architecture components:** `StubNodeEnricher` → `SolutionIngestionService` integration, `PackageQueryService` cache.
+
+### Phase 5: MCP Tools + Security Integration
+
+**Rationale:** MCP tools are the user-visible deliverable and come last because they depend on all other components. PathAllowlist enforcement on tool parameters plus the DLL path validator from Phase 2 must both be active. Response format (json/markdown/tron) must match existing tools exactly.
+
+**Delivers:** `PackageTools.cs` with `get_dependencies` (returns `PackageGraph` for a project) and `find_package_usages` (traverses External edges to find source symbols referencing package types); PathAllowlist on snapshot-store directory (same pattern as `SolutionTools`); rate-limiting bucket assignment (query bucket for both tools); `CLAUDE.md` update documenting the two new tools.
+
+**Addresses features:** `get_dependencies` MCP tool, `find_package_usages` MCP tool, PathAllowlist security, internal type filtering.
+
+**Avoids pitfalls:** DLL path security bypass (#6), internal type leakage in reflected results.
 
 ### Phase Ordering Rationale
 
-- **Phases 1-2 form the critical path.** Phase 2 (symbol extraction) is the largest and riskiest work. Phase 1 gives it a working scaffold to develop against. These cannot be reordered.
-- **Phase 3 depends on Phase 2** because the MCP tool needs working extraction. Aspire wiring (Phase 3) is independent of extraction logic but makes sense to group with the integration work.
-- **Phase 4 must come last** because verification requires the full pipeline. However, golden-file tests for SymbolId stability should be written IN Phase 2, not deferred.
-- **Architecture supports parallelism:** Phase 1's C# side (TypeScriptIngestionService) and Node.js side (project scaffold) can be built concurrently. Phase 2's JSON contract types (C#) can be built alongside the TS walker.
+- Phase 1 before everything: `PackageEntry`/`PackageGraph` types are consumed by every other component; correct dependency source selection prevents silent data failures that are hard to diagnose after downstream code is written.
+- Phase 2 before Phase 3: Reflection must produce symbols before enrichment can match them; the `AssemblyMetadata` cache architecture must be established before the enricher depends on it.
+- Phase 3 before Phase 4: Stub enrichment must be unit-tested in isolation (against real existing stub nodes) before pipeline integration; generic type matching is easiest to catch in a focused unit test, not an integration test.
+- Phase 4 before Phase 5: Tools depend on `PackageQueryService` which depends on ingestion wiring.
+- Phases 2 and 3 can begin in parallel once Phase 1 types compile — `NuGetCacheReflector` and `StubNodeEnricher` are independent modules with a clean interface boundary.
+- Step 8 (`BM25SearchIndex` filter update) requires only `NodeKind.Enriched` from Phase 1 and is independent of Phases 2–4.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 2:** SymbolId design is a critical, irreversible decision. Needs a design document and review before implementation begins. TSDoc vs JSDoc parsing strategy needs testing against real-world projects.
+Phases needing careful verification during execution (pitfall density high, non-trivial edge cases):
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1:** NDJSON stdin/stdout IPC and Process.Start are well-documented, established patterns already used in this codebase.
-- **Phase 3:** MCP tool registration, Aspire wiring, and incremental ingestion all follow existing patterns in the codebase (copy from `IngestionTools.cs`, `AppHost/Program.cs`, `IncrementalIngestionEngine`).
-- **Phase 4:** Standard testing and verification work. No novel patterns.
+- **Phase 1:** Verify TFM key normalizer against a real `packages.lock.json` generated by `dotnet restore --use-lock-file` on this repo (not a hand-crafted fixture). Confirm v2 CPM format key is `.NETCoreApp,Version=v10.0`, not `net10.0`. Verify `project.assets.json` parsing produces the correct resolved version per package.
+- **Phase 2:** Test DLL TFM best-fit against `YamlDotNet 16.3.0` (ships `netstandard2.0` only) and confirm correct DLL found for a `net10.0` project. Test with `NUGET_PACKAGES` env var pointing to a non-default path. Run 10 consecutive ingestion cycles and confirm process RSS is stable after the first cycle (proving cache works).
+- **Phase 3:** Verify generic type matching with `IEnumerable<T>`, `Task<TResult>`, `IReadOnlyDictionary<TKey, TValue>` stub nodes produced by the existing `SolutionIngestionService` against this solution — not fabricated stubs.
+
+Phases with well-established patterns (standard execution):
+
+- **Phase 4:** Pipeline wiring follows existing `PipelineOverride` seam pattern exactly; low risk once individual components are tested.
+- **Phase 5:** MCP tool structure is copy-adapt from `SolutionTools.cs`; PathAllowlist pattern is established. No novel patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All packages verified on npm/NuGet with published dates. Version compatibility matrix confirmed. Aspire.Hosting.JavaScript 13.1.2 published 2026-02-26. |
-| Features | HIGH | Existing SymbolNode/SymbolEdge model inspected directly. 10 of 14 SymbolKind values map naturally. Feature dependencies are clear. |
-| Architecture | HIGH | Sidecar + stdin/stdout NDJSON matches existing MCP pattern. Component boundaries defined. Build order dependencies mapped. Minimal changes to existing code. |
-| Pitfalls | HIGH | Pitfalls verified via TypeScript compiler issue trackers, official docs, and direct codebase analysis. SymbolId and .d.ts filtering risks are well-documented in the TS community. |
+| Stack | HIGH | NuGet package versions verified on NuGet.org (2026-02-10 release date confirmed); Roslyn `AssemblyMetadata` API stable since Roslyn 1.x; direct reads of `Directory.Packages.props` and project files confirm current versions and what needs adding |
+| Features | HIGH | Feature scope derived from `PROJECT.md` and confirmed against existing codebase direct reads; feature dependencies traced from existing `SolutionIngestionService` stub synthesis code; anti-features clearly motivated by existing project constraints |
+| Architecture | HIGH | Based on direct reads of all affected source files: `SolutionIngestionService.cs`, `BM25SearchIndex.cs`, `SolutionTools.cs`, `SnapshotStore.cs`, `Symbols.cs`; all integration points verified against actual code; build order dependencies are deterministic |
+| Pitfalls | HIGH | Lock file format from NuGet wiki + official docs; MetadataReference memory behavior from Roslyn docs and dotnet/runtime issue #13301 (250MB figure sourced); TFM key mismatch from NuGet/Home issues #10257 and #10901; stub FQN analysis from direct inspection of `SolutionIngestionService.MaybeAddStubNode` lines 544–571 |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **TypeAlias SymbolKind:** FEATURES.md recommends adding `SymbolKind.TypeAlias = 14`; ARCHITECTURE.md and PITFALLS.md recommend reusing `SymbolKind.Type` and deferring new enum values. Decision needed during Phase 2 planning -- leaning toward adding the enum value since it is a one-line, backward-compatible change.
-- **`@microsoft/tsdoc` package:** PITFALLS.md recommends it for JSDoc/TSDoc parsing; STACK.md does not list it as a dependency. Evaluate during Phase 2 whether TypeScript's built-in `symbol.getDocumentationComment()` + `ts.getJSDocTags()` are sufficient, or if `@microsoft/tsdoc` is needed.
-- **Aspire package name discrepancy:** ARCHITECTURE.md references the deprecated `Aspire.Hosting.NodeJs` in code examples while STACK.md correctly identifies `Aspire.Hosting.JavaScript` as the replacement. Use `Aspire.Hosting.JavaScript` exclusively.
-- **BM25 camelCase tokenization:** PITFALLS.md flags that the tokenizer must handle camelCase (TS convention) not just PascalCase (C# convention). Verify during Phase 4 that existing `CamelCaseTokenizer` handles both -- if it already splits on case transitions, this is a non-issue.
-- **TS Compiler `noCheck` viability:** PITFALLS.md mentions `noCheck: true` could skip type-checking for 2-3x speed gain, but the TypeChecker is needed for type resolution. Needs empirical testing during Phase 2.
+- **TFM compatibility table scope:** Research recommends `NuGet.Frameworks.DefaultCompatibilityProvider` for correct compatibility checks but notes a lightweight static table for the `net10.0 → netstandard2.0` descent is sufficient for v2.5. The exact threshold where the static table breaks (unusual TFMs, RID-specific packages) is an implementation detail — validate against the actual packages in this project's dependency graph during Phase 2 execution.
+- **`ref/` vs `lib/` folder preference for v2.5:** Research identifies `ref/` should be preferred for compile-time API surface accuracy, but also flags this as an acceptable known limitation for v2.5 (fix before v3.0). Decision: use `lib/` for v2.5, document the limitation in `PackageTools` response metadata.
+- **`project.assets.json` format stability:** The assets file schema is an MSBuild/NuGet internal format. If the schema changes in a future .NET SDK, the parser will break silently. Mitigate with integration tests that run against the actual restored assets from this project's `obj/` directory (not a committed fixture).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- TypeScript Compiler API Wiki -- symbol extraction API surface, `ts.createProgram`, `TypeChecker`
-- TypeScript 5.9 release notes -- latest stable compiler version
-- Node.js 24 LTS release schedule -- runtime version and support timeline
-- Aspire.Hosting.JavaScript 13.1.2 on NuGet -- published 2026-02-26, verified package
-- NDJSON specification -- protocol format
-- TypeScript native port announcement (Project Corsa) -- TS 7.0 Go rewrite impact
-- Direct codebase reads: `Symbols.cs`, `RoslynSymbolGraphBuilder.cs`, `IngestionService.cs`, `SnapshotStore.cs`, `AppHost/Program.cs`, `Directory.Packages.props`
+- `NuGet.ProjectModel 7.3.0` on NuGet.org — version and 2026-02-10 release date confirmed
+- `NuGet.Configuration 7.3.0` on NuGet.org — version confirmed; versioning cadence alignment with ProjectModel
+- [NuGet Client SDK reference — Microsoft Learn](https://learn.microsoft.com/en-us/nuget/reference/nuget-client-sdk) — `SettingsUtility.GetGlobalPackagesFolder()` API
+- [NuGet global packages and cache folders — Microsoft Learn](https://learn.microsoft.com/en-us/nuget/consume-packages/managing-the-global-packages-and-cache-folders) — four-level override chain, platform defaults (updated 2026-03-03)
+- [NuGet lock file implementation spec — NuGet/Home Wiki](https://github.com/NuGet/Home/wiki/Repeatable-build-using-lock-file-implementation) — TFM key format, v1/v2/v3 schema, `type: Direct/Transitive`
+- [packages.lock.json uses incorrect TFM — NuGet/Home #10257](https://github.com/NuGet/Home/issues/10257) — TFM key inconsistency between spec and generated output
+- [packages.lock.json broken with OS-specific TFMs — NuGet/Home #10901](https://github.com/NuGet/Home/issues/10901) — TFM key format variations across NuGet versions
+- [NuGet dependency resolution — Microsoft Learn](https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution) — `project.assets.json` as authoritative resolved graph
+- [Select assemblies referenced by projects — Microsoft Learn](https://learn.microsoft.com/en-us/nuget/create-packages/select-assemblies-referenced-by-projects) — `ref/` vs `lib/` folder preference
+- [AssemblyMetadata.CreateFromFile — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.assemblymetadata.createfromfile) — IDisposable pattern, module lifecycle
+- [MetadataReference.CreateFromFile — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.metadatareference.createfromfile) — native heap behavior
+- [Memory leak using MetadataReferences — dotnet/runtime #13301](https://github.com/dotnet/runtime/issues/13301) — documented 250MB-per-call native heap growth
+- [PackagesLockFileFormat.cs — NuGet.Client source](https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.ProjectModel/ProjectLockFile/PackagesLockFileFormat.cs) — `Read()` overloads and parsing logic
+- Direct codebase: `SolutionIngestionService.MaybeAddStubNode` lines 544–571 — stub nodes use `ITypeSymbol.OriginalDefinition.ToDisplayString()` for FQN
+- Direct codebase: `DocAgent.Core/Symbols.cs` lines 115–128 — `NodeKind`, `EdgeScope`, `SymbolNode` record shape
+- Direct codebase: `Directory.Packages.props` — `ManagePackageVersionsCentrally=true`, no `RestorePackagesWithLockFile`, no `packages.lock.json` files present
 
 ### Secondary (MEDIUM confidence)
-- Aspire JavaScript integration docs -- `AddNodeApp()` API patterns
-- TypeDoc GitHub -- reference for TS doc extraction approaches
-- TSDoc specification -- tag format differences from JSDoc
-- Community IPC patterns (C# to Node.js stdin/stdout) -- process lifecycle management
+- [Compiling with Roslyn without memory leaks — Carl Johansen blog](https://carljohansen.wordpress.com/2020/05/09/compiling-expression-trees-with-roslyn-without-memory-leaks-2/) — `AssemblyMetadata` disposal strategy and collectible ALC pattern
+- [dotnet nuget why command — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-nuget-why) — dependency path explanation reference for v2.5.x feature
 
 ---
-*Research completed: 2026-03-08*
+*Research completed: 2026-03-26*
 *Ready for roadmap: yes*
