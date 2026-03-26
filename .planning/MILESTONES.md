@@ -1,5 +1,14 @@
 # Milestones
 
+## v2.0 TypeScript Language Support (Shipped: 2026-03-26)
+
+**Phases completed:** 8 phases, 19 plans, 4 tasks
+
+**Key accomplishments:**
+- (none recorded)
+
+---
+
 ## v1.5 Robustness (Shipped: 2026-03-08)
 
 **Phases completed:** 5 phases, 7 plans, 13 tasks

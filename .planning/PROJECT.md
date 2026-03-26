@@ -2,11 +2,11 @@
 
 ## What This Is
 
-A .NET 10 / C# framework that turns code documentation (XML docs) and code structure (Roslyn symbols) into agent-consumable memory, exposed via a securable MCP server. Agents reason over compiler truth — not approximations — through a versioned, diffable symbol graph with solution-wide scope, 14-tool MCP surface, and production-grade operational infrastructure.
+A .NET 10 / C# framework that turns code documentation and code structure into agent-consumable memory, exposed via a securable MCP server. Supports both .NET (Roslyn) and TypeScript (Compiler API via Node.js sidecar) codebases. Agents reason over compiler truth — not approximations — through a versioned, diffable symbol graph with solution-wide scope, 15-tool MCP surface, and production-grade operational infrastructure.
 
 ## Core Value
 
-Agents can query a stable, compiler-grade symbol graph of any .NET codebase — from single projects to entire solutions — via MCP tools, getting precise answers about types, members, relationships, and documentation.
+Agents can query a stable, compiler-grade symbol graph of any .NET or TypeScript codebase — from single projects to entire solutions — via MCP tools, getting precise answers about types, members, relationships, and documentation.
 
 ## Requirements
 
@@ -48,45 +48,43 @@ Agents can query a stable, compiler-grade symbol graph of any .NET codebase — 
 - ✓ `find_implementations` tool for interface/base-class hierarchy navigation — v1.5
 - ✓ `get_doc_coverage` tool for documentation coverage metrics by project/namespace/kind — v1.5
 - ✓ CLAUDE.md complete 14-tool MCP reference with parameter signatures verified against source — v1.5
+- ✓ Node.js sidecar (`ts-symbol-extractor`) with NDJSON IPC, esbuild bundling, vitest tests — v2.0
+- ✓ TypeScript Compiler API walker extracting all declaration types, relationships, docs, source spans — v2.0
+- ✓ `ingest_typescript` MCP tool with PathAllowlist security and incremental SHA-256 hashing — v2.0
+- ✓ All 14 existing MCP tools produce correct results against TypeScript snapshots — v2.0
+- ✓ BM25 camelCase tokenizer for TypeScript symbol search alongside PascalCase C# — v2.0
+- ✓ JSON contract alignment: string enums, JsonPropertyName, DocCommentConverter for TS↔C# fidelity — v2.0
+- ✓ Aspire orchestration: Node.js sidecar as managed resource with health checks and dependency wiring — v2.0
+- ✓ 657 tests including determinism, stress, robustness, cross-tool verification, golden-file deserialization — v2.0
 
 ### Active
 
-## Current Milestone: v2.0 TypeScript Language Support
-
-**Goal:** Make TypeScript codebases queryable through the same 14 MCP tools via the existing symbol graph pipeline.
-
-**Target features:**
-- Node.js sidecar orchestrated by Aspire using TypeScript Compiler API
-- Symbol extraction (modules, interfaces, classes, functions, members, exports) into existing SymbolNode/SymbolEdge graph
-- `tsconfig.json` as project entry point with folder/monorepo selection
-- `ingest_typescript` MCP tool for TypeScript project ingestion
-- All 14 existing MCP tools work identically against TypeScript snapshots
-- Incremental ingestion, diffing, and change intelligence for TypeScript
-- Separate snapshots per language (no cross-language edges)
+(No active milestone — plan next with `/gsd:new-milestone`)
 
 ### Out of Scope
-- Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred to v2.0
+- Package mapping (csproj, lock files, nuspec → PackageRefGraph) — deferred
 - Embeddings/vector index — deferred; keep `IVectorIndex` interface only
 - Non-stdio MCP transports (HTTP, SSE) — no demand yet; security model not designed
-- Polyglot support (Tree-sitter, LSP bridge) — future tier; .NET-only for now
+- Polyglot support (Tree-sitter, LSP bridge) — future tier; .NET + TypeScript only for now
 - Source generators — V3
 - Query DSL over symbol graph — speculative/long-term
 - Streaming MCP responses — MCP spec doesn't support streaming tool responses
 - Per-client identity/auth — Stdio is single-client; auth not meaningful
 - Live Roslyn SymbolFinder queries — v1.5 uses snapshot edges; live queries deferred
-- Cross-language symbol graphs (C# ↔ TypeScript edges) — separate snapshots for v2.0
-- Vite/other framework config entry points — tsconfig.json only for v2.0; iterate later
-- TypeScript-specific model extensions (union types, mapped types, conditional types) — natural mappings first; gaps tracked
+- Cross-language symbol graphs (C# ↔ TypeScript edges) — separate snapshots; no integration needed
+- TypeScript declaration merging, re-export tracking, union/conditional type decomposition — tracked as v2.1 FUTR-01 through FUTR-08
+- Warm sidecar process pooling — cold-start per ingestion is simpler; avoids memory leak risk
+- Monorepo multi-tsconfig discovery — single tsconfig entry point for now
 
 ## Context
 
-Shipped v1.5 with ~20,400 LOC C#. 335+ tests. 5 milestones shipped over 12 days (2026-02-25 → 2026-03-08).
+Shipped v2.0 with ~21,000 LOC C# + 710 LOC TypeScript. 657 tests (+ 2 gated sidecar E2E). 6 milestones shipped over 30 days (2026-02-25 → 2026-03-26).
 
-Tech stack: .NET 10, Roslyn 4.14.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire, OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing, System.Threading.RateLimiting (TokenBucket). V2.0 adds: Node.js sidecar, TypeScript Compiler API.
+Tech stack: .NET 10, Roslyn 4.14.0, Lucene.Net 4.8 (BM25), MessagePack 3.1.4, MSBuildWorkspace, ModelContextProtocol SDK, Aspire (+ Aspire.Hosting.JavaScript 13.1.2), OpenTelemetry, BenchmarkDotNet, SHA-256 file hashing, System.Threading.RateLimiting (TokenBucket), Node.js sidecar (`ts-symbol-extractor`), TypeScript Compiler API, esbuild, vitest.
 
-Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers + Benchmarks project). V2.0 adds a Node.js sidecar project for TypeScript symbol extraction, orchestrated via Aspire.
+Architecture: discover → parse → normalize → index → serve → diff → review (6 projects: Core, Ingestion, Indexing, McpServer, AppHost, Analyzers + Benchmarks project + `ts-symbol-extractor` Node.js sidecar). TypeScript extraction via Node.js sidecar with NDJSON IPC, orchestrated by Aspire.
 
-Full pipeline operational: 14 MCP tools across 4 tool classes (DocTools: 7, ChangeTools: 3, IngestionTools: 2, SolutionTools: 2). Incremental ingestion at both file and solution levels. All tools secured with PathAllowlist enforcement. Performance baselined with BenchmarkDotNet regression guards. O(1) query path via SnapshotLookup dictionaries. Startup validation and rate limiting for operational safety.
+Full pipeline operational: 15 MCP tools across 4 tool classes (DocTools: 7, ChangeTools: 3, IngestionTools: 3, SolutionTools: 2). Incremental ingestion at file, solution, and TypeScript project levels. All tools secured with PathAllowlist enforcement. Performance baselined with BenchmarkDotNet regression guards. O(1) query path via SnapshotLookup dictionaries. Startup validation and rate limiting for operational safety. TypeScript symbols queryable through same 14 query/change/solution tools as C#.
 
 ## Constraints
 
@@ -139,4 +137,4 @@ Full pipeline operational: 14 MCP tools across 4 tool classes (DocTools: 7, Chan
 | Tool docs organized by source file category in CLAUDE.md | Easy cross-reference between docs and source | ✓ Good — 4 categories match 4 tool classes |
 
 ---
-*Last updated: 2026-03-08 after v2.0 TypeScript Language Support milestone started*
+*Last updated: 2026-03-26 after v2.0 TypeScript Language Support milestone shipped*
